@@ -1,0 +1,16 @@
+# Same line endings on Windows and macOS
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.glb binary
+*.fbx binary
+*.aseprite binary
+*.zip binary

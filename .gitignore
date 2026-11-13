@@ -1,0 +1,40 @@
+# Dependencies and build output
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# Python
+server/.venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+
+# Blender backups
+*.blend1
+
+# Third-party art packs live outside the repository (D:\projects\Phaser\NavalBattle\ext_resources).
+# Only the files we actually use are copied to client/public/assets/.
+ext_resources/
