@@ -43,7 +43,7 @@ export class TouchControls {
       .setDepth(100)
       .setInteractive();
     scene.add
-      .text(x, y, label, { fontFamily: 'monospace', fontSize: '28px', color: '#ffffff' })
+      .text(x, y, label, { fontFamily: 'monospace', fontSize: '28px', color: '#ffffff', resolution: 3 })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(101);

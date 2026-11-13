@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
 import { Simulation } from '../sim/simulation';
 import { createWorld } from '../sim/world';
+import { Hud } from './Hud';
 import { TouchControls } from './TouchControls';
+import { Wake } from './Wake';
 
 const SHIP_LENGTH = 30; // pixels
 const SHIP_WIDTH = 14; // pixels
-const PIXELS_PER_METRE = 2; // our scale rule: 1 m = 2 px
+const BASE_PIXELS_PER_METRE = 2; // our scale rule: 1 m = 2 px (at zoom 1)
+const ZOOMS = [1, 1.5, 2, 3]; // the steps for the Z / X keys
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X', Phaser.Input.Keyboard.Key>;
 
 /**
  * The sea. This scene only does three things:
@@ -22,11 +25,13 @@ export class SeaScene extends Phaser.Scene {
   private sim!: Simulation;
   private ship!: Phaser.GameObjects.Image;
   private water!: Phaser.GameObjects.TileSprite;
-  private hud!: Phaser.GameObjects.Text;
+  private wake!: Wake;
+  private hud!: Hud;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
   private touch: TouchControls | null = null;
   private lastRudder = 0;
+  private zoomIndex = 0;
 
   constructor() {
     super('Sea');
@@ -35,28 +40,30 @@ export class SeaScene extends Phaser.Scene {
   create(): void {
     this.sim = new Simulation(createWorld());
 
+    // Phones and tablets get a closer view and the big HUD.
+    const isTouch = this.sys.game.device.input.touch;
+    this.zoomIndex = isTouch ? ZOOMS.indexOf(2) : 0;
+
     this.makeWaterTexture();
     this.makeShipTexture();
 
     // The water is a tiled picture that stays on the screen and slides when the ship moves.
     this.water = this.add.tileSprite(0, 0, 640, 360, 'water').setOrigin(0, 0).setScrollFactor(0);
-    this.ship = this.add.image(0, 0, 'ship-placeholder');
+    this.wake = new Wake(this);
+    this.ship = this.add.image(0, 0, 'ship-placeholder').setDepth(2);
 
     const keyboard = this.input.keyboard;
     if (!keyboard) {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X') as KeyMap;
 
     // On phones and tablets there is no keyboard, so show buttons.
-    if (this.sys.game.device.input.touch) {
+    if (isTouch) {
       this.touch = new TouchControls(this, (direction) => this.changeSails(direction));
     }
-
-    this.hud = this.add
-      .text(8, 8, '', { fontFamily: 'monospace', fontSize: '10px', color: '#ffffff' })
-      .setScrollFactor(0);
+    this.hud = new Hud(this, isTouch);
   }
 
   update(_time: number, delta: number): void {
@@ -67,17 +74,25 @@ export class SeaScene extends Phaser.Scene {
     const alpha = this.sim.update(seconds);
 
     // 2. Draw the ship between the last two steps, so the motion looks smooth.
+    const zoom = ZOOMS[this.zoomIndex] ?? 1;
+    const pxPerMetre = BASE_PIXELS_PER_METRE * zoom;
     const pose = this.sim.pose(0, alpha);
-    this.ship.setPosition(pose.x * PIXELS_PER_METRE, pose.y * PIXELS_PER_METRE);
+    this.ship.setPosition(pose.x * pxPerMetre, pose.y * pxPerMetre);
     this.ship.setRotation(pose.heading);
+    this.ship.setScale(zoom);
+
+    const speed = this.sim.world.ships[0]?.speed ?? 0;
+    this.wake.update(seconds, pose.x, pose.y, pose.heading, speed, pxPerMetre);
 
     // 3. The camera follows the ship; the water slides under it.
     const cam = this.cameras.main;
     cam.centerOn(this.ship.x, this.ship.y);
-    this.water.tilePositionX = cam.scrollX;
-    this.water.tilePositionY = cam.scrollY;
+    this.water.setTileScale(zoom);
+    this.water.tilePositionX = cam.scrollX / zoom;
+    this.water.tilePositionY = cam.scrollY / zoom;
 
-    this.drawHud();
+    const ship = this.sim.world.ships[0];
+    if (ship) this.hud.update(ship, this.sim.world.tick);
   }
 
   /** Keys -> commands. Rudder is held; sails change one step per key press. */
@@ -94,6 +109,10 @@ export class SeaScene extends Phaser.Scene {
     const less = Phaser.Input.Keyboard.JustDown(this.keys.S) || Phaser.Input.Keyboard.JustDown(this.cursors.down);
     if (more) this.changeSails(1);
     if (less) this.changeSails(-1);
+
+    // Zoom is only about the picture, so it does not go through the simulation.
+    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.zoomIndex = Math.min(this.zoomIndex + 1, ZOOMS.length - 1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.zoomIndex = Math.max(this.zoomIndex - 1, 0);
   }
 
   /** One step more or less sail. Used by the keys and by the touch buttons. */
@@ -102,30 +121,16 @@ export class SeaScene extends Phaser.Scene {
     this.sim.queueCommand({ type: 'setSails', shipId: 1, value: sails + direction * SAIL_STEP });
   }
 
-  private drawHud(): void {
-    const s = this.sim.world.ships[0];
-    if (!s) return;
-    const degrees = ((s.heading * 180) / Math.PI + 360) % 360;
-    this.hud.setText(
-      [
-        'Naval-Battles M1 - sailing',
-        this.touch ? 'buttons: rudder < >   sails - +' : 'A / D rudder   W / S sails',
-        `sails ${Math.round(s.sailLevel * 100)}%   speed ${s.speed.toFixed(1)} m/s`,
-        `heading ${degrees.toFixed(0)} deg   tick ${this.sim.world.tick}`,
-      ].join('\n'),
-    );
-  }
-
   /** A 64x64 tile of blue water with a few light wave marks. */
   private makeWaterTexture(): void {
     const g = this.make.graphics(new Phaser.Math.Vector2(0, 0), false);
     g.fillStyle(0x1d5b8f, 1);
     g.fillRect(0, 0, 64, 64);
-    g.fillStyle(0x2f78ad, 1);
-    g.fillRect(6, 10, 8, 1);
-    g.fillRect(40, 22, 10, 1);
-    g.fillRect(18, 40, 8, 1);
-    g.fillRect(50, 54, 8, 1);
+    g.fillStyle(0x3a86b9, 1);
+    g.fillRect(6, 10, 12, 2);
+    g.fillRect(40, 22, 14, 2);
+    g.fillRect(18, 40, 12, 2);
+    g.fillRect(48, 54, 12, 2);
     g.generateTexture('water', 64, 64);
     g.destroy();
   }
