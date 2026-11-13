@@ -1,0 +1,9 @@
+{
+  "sloop": {
+    "name": "Sloop",
+    "maxSpeed": 8,
+    "acceleration": 1,
+    "turnRate": 0.8,
+    "steerSpeed": 2
+  }
+}
