@@ -61,7 +61,7 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 | R6 "Online" | Python backend | M9 |
 | R7 "iOS" | Capacitor, TestFlight | M10 |
 
-**Current status:** M0 (setup) in progress: creating the GitHub repository `naval-battles` and cloning it on the Windows PC and the MacBook. Phaser project not created yet.
+**Current status:** M0 (setup) done: repo `alxz/naval-battles`, `client/` runs on desktop and iPhone (Phaser 4.2 + TypeScript strict + Vite), Vitest works (`sim/angles.ts` with 5 tests). Next: M1 "Sailing" (sim step at 30 Hz, wind and polar, wind arrow, lil-gui).
 
 ## Stage 2 backlog
 Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer.
