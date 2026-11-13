@@ -1,6 +1,6 @@
 # Project Summary — "Naval-Battles" (working title)
 
-Use this as project instructions or as context for any AI assistant. It reflects plan v0.4 (12 Nov 2026). Full documents: `naval-game-plan-v0.4-en.md` and `art-and-tools-guide-v0.1.md`.
+Use this as project instructions or as context for any AI assistant. It reflects plan v0.5 (12 Nov 2026). Full documents: `naval-game-plan-v0.5-en.md` (Russian: `-ru`), `art-and-tools-guide-v0.2.md` and `dev-log-en.md` (what was done, problems and fixes).
 
 ## About the developer
 - Solo hobby developer. Native language: Russian (English is fine).
@@ -23,6 +23,10 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 - **Living Sea (provisions, contracts, sea events)** is its own release R4, after the campaign works.
 - **Factions:** England + Pirates. Spain and France come in Stage 2.
 - **Aiming:** manual gun elevation with random factors; bots use the same rules.
+- **Project setup (D22):** the client was created by hand (Vite `vanilla-ts` + `npm install phaser`).
+- **Loop (D23):** fixed 30 Hz step with interpolation; commands wait in a queue and run at the start of the next step.
+- **Touch (D24):** four temporary buttons now (rudder `<` `>`, sails `-` `+`); final touch controls in M8.
+- **View (D25):** own zoom scale (Z / X keys, phones start at ×2) and a separate large phone HUD; foam wake shows motion.
 
 ## Architecture rules
 1. All game rules live in `client/src/sim/`: pure TypeScript, **no Phaser imports**.
@@ -61,7 +65,7 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 | R6 "Online" | Python backend | M9 |
 | R7 "iOS" | Capacitor, TestFlight | M10 |
 
-**Current status:** M0 (setup) done: repo `alxz/naval-battles`, `client/` runs on desktop and iPhone (Phaser 4.2 + TypeScript strict + Vite), Vitest works (`sim/angles.ts` with 5 tests). Next: M1 "Sailing" (sim step at 30 Hz, wind and polar, wind arrow, lil-gui).
+**Current status:** M0 done. M1 "Sailing" in progress: steps 1, 1b, 1c done (fixed-step `sim/`, commands, ship with inertia, touch buttons, zoom, wake, phone HUD; 37 tests pass; works on desktop and iPhone). Next: M1 step 2 (wind, three polar tables in JSON, speed formula, compass with wind arrow and heading), then an island with collision and the lil-gui panel. iPad test still to do. Sloop numbers in `client/src/data/ships.json` (maxSpeed 8, acceleration 1, turnRate 0.8, steerSpeed 2).
 
 ## Stage 2 backlog
 Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer.
@@ -74,3 +78,7 @@ Spain and France with full reputation; more contract types (find a person, lost 
 - Add a unit test for every formula in `sim/`. Write TypeScript with types for all data and state.
 - Say so before proceeding if a request conflicts with a confirmed decision.
 - Suggest small Python helper scripts where they fit.
+- Reply in Russian when the developer writes in Russian; documents exist in EN and RU and both are updated together.
+- Every instruction lists `mkdir -p` for new folders. Remind to run `pwd` and `git rev-parse --show-toplevel` before `git add`; work only in `naval-battles`, add explicit paths.
+- Larger changes come as a zip unpacked into the repository root; the developer runs `npm test`, `npm run dev`, then commits. Test every change (Vitest, build, headless browser) before delivering.
+- Use Python 3.13 through uv for the backend (3.15 is too new for some libraries).
