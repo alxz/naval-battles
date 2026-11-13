@@ -18,4 +18,8 @@ describe('normalizeAngle', () => {
   it('treats a full turn as zero', () => {
     expect(normalizeAngle(2 * Math.PI)).toBeCloseTo(0);
   });
+
+  it('normalizeAngle(-Math.PI) returns Math.PI', () => {
+    expect(normalizeAngle(-Math.PI)).toBeCloseTo(Math.PI);
+  });
 });
