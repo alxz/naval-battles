@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Simulation } from '../sim/simulation';
 import { createWorld } from '../sim/world';
+import { TouchControls } from './TouchControls';
 
 const SHIP_LENGTH = 30; // pixels
 const SHIP_WIDTH = 14; // pixels
@@ -24,6 +25,7 @@ export class SeaScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
+  private touch: TouchControls | null = null;
   private lastRudder = 0;
 
   constructor() {
@@ -46,6 +48,11 @@ export class SeaScene extends Phaser.Scene {
     }
     this.cursors = keyboard.createCursorKeys();
     this.keys = keyboard.addKeys('W,A,S,D') as KeyMap;
+
+    // On phones and tablets there is no keyboard, so show buttons.
+    if (this.sys.game.device.input.touch) {
+      this.touch = new TouchControls(this, (direction) => this.changeSails(direction));
+    }
 
     this.hud = this.add
       .text(8, 8, '', { fontFamily: 'monospace', fontSize: '10px', color: '#ffffff' })
@@ -75,19 +82,24 @@ export class SeaScene extends Phaser.Scene {
 
   /** Keys -> commands. Rudder is held; sails change one step per key press. */
   private readInput(): void {
-    const left = this.keys.A.isDown || this.cursors.left.isDown;
-    const right = this.keys.D.isDown || this.cursors.right.isDown;
+    const left = this.keys.A.isDown || this.cursors.left.isDown || (this.touch?.left ?? false);
+    const right = this.keys.D.isDown || this.cursors.right.isDown || (this.touch?.right ?? false);
     const rudder = left === right ? 0 : right ? 1 : 0 - 1;
     if (rudder !== this.lastRudder) {
       this.lastRudder = rudder;
       this.sim.queueCommand({ type: 'setRudder', shipId: 1, value: rudder });
     }
 
-    const sails = this.sim.world.ships[0]?.sailLevel ?? 0;
     const more = Phaser.Input.Keyboard.JustDown(this.keys.W) || Phaser.Input.Keyboard.JustDown(this.cursors.up);
     const less = Phaser.Input.Keyboard.JustDown(this.keys.S) || Phaser.Input.Keyboard.JustDown(this.cursors.down);
-    if (more) this.sim.queueCommand({ type: 'setSails', shipId: 1, value: sails + SAIL_STEP });
-    if (less) this.sim.queueCommand({ type: 'setSails', shipId: 1, value: sails - SAIL_STEP });
+    if (more) this.changeSails(1);
+    if (less) this.changeSails(-1);
+  }
+
+  /** One step more or less sail. Used by the keys and by the touch buttons. */
+  private changeSails(direction: 1 | -1): void {
+    const sails = this.sim.world.ships[0]?.sailLevel ?? 0;
+    this.sim.queueCommand({ type: 'setSails', shipId: 1, value: sails + direction * SAIL_STEP });
   }
 
   private drawHud(): void {
@@ -97,7 +109,7 @@ export class SeaScene extends Phaser.Scene {
     this.hud.setText(
       [
         'Naval-Battles M1 - sailing',
-        'A / D rudder   W / S sails',
+        this.touch ? 'buttons: rudder < >   sails - +' : 'A / D rudder   W / S sails',
         `sails ${Math.round(s.sailLevel * 100)}%   speed ${s.speed.toFixed(1)} m/s`,
         `heading ${degrees.toFixed(0)} deg   tick ${this.sim.world.tick}`,
       ].join('\n'),
