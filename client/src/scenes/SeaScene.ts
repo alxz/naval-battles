@@ -3,6 +3,7 @@ import viewJson from '../data/view.json';
 import { Simulation } from '../sim/simulation';
 import type { ShipState } from '../sim/types';
 import { createWorld } from '../sim/world';
+import { autoZoom } from '../view/autoZoom';
 import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
@@ -46,6 +47,8 @@ export class SeaScene extends Phaser.Scene {
   private touch: TouchControls | null = null;
   private lastRudder = 0;
   private cameraCentre: Point | null = null; // metres
+  private zoomGoal = 1; // the whole zoom step we are heading for
+  private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
 
   constructor() {
     super('Sea');
@@ -95,6 +98,7 @@ export class SeaScene extends Phaser.Scene {
         logicalHeight: this.screenFit.targetHeight,
         speedScale: 1,
         combatCamera: true,
+        autoZoom: viewJson.autoZoom,
         rangeRings: true,
         targetClass: 'sloop',
       },
@@ -117,9 +121,16 @@ export class SeaScene extends Phaser.Scene {
     const seconds = Math.min(delta / 1000, MAX_FRAME_SECONDS);
     const alpha = this.sim.update(seconds);
 
-    // 2. Screen pixels per game metre = base scale x zoom (plan section 4.0).
-    const s = v.pixelsPerMetre * v.zoom;
+    // 2. Zoom. Sailing: your zoom (keys, button, slider). Enemy near and auto zoom on:
+    //    the largest whole step that shows both ships. The change is smoothed over ~0.25 s.
     const cam = this.cameras.main;
+    this.zoomGoal = this.chooseZoom();
+    const k = 1 - Math.exp(-seconds / viewJson.zoomSmoothing);
+    this.shownZoom += (this.zoomGoal - this.shownZoom) * k;
+    if (Math.abs(this.zoomGoal - this.shownZoom) < 0.01) this.shownZoom = this.zoomGoal;
+
+    // Screen pixels per game metre = base scale x zoom (plan section 4.0).
+    const s = v.pixelsPerMetre * this.shownZoom;
     const halfW = cam.width / 2 / s; // half the view, in metres
     const halfH = cam.height / 2 / s;
 
@@ -156,9 +167,10 @@ export class SeaScene extends Phaser.Scene {
     cam.centerOn(this.cameraCentre.x * s, this.cameraCentre.y * s);
 
     // The water slides under the camera. Whole zoom steps keep the water pixels even.
-    this.water.setTileScale(v.zoom);
-    this.water.tilePositionX = cam.scrollX / v.zoom;
-    this.water.tilePositionY = cam.scrollY / v.zoom;
+    const z = this.shownZoom;
+    this.water.setTileScale(z);
+    this.water.tilePositionX = cam.scrollX / z;
+    this.water.tilePositionY = cam.scrollY / z;
 
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
@@ -173,14 +185,34 @@ export class SeaScene extends Phaser.Scene {
     const layout = this.screenFit.layout;
     this.panel.info.pixelScale = `x${layout.pixelScale} (${layout.width} x ${layout.height})`;
     this.panel.info.view = `${Math.round(halfW * 2)} x ${Math.round(halfH * 2)}`;
+    this.panel.info.zoomNow = `x${this.zoomGoal}${this.zoomGoal !== v.zoom ? ' (auto)' : ''}`;
     this.hud.update(myShip, this.sim.world.tick, {
       viewWidthM: halfW * 2,
       viewHeightM: halfH * 2,
       pixelScale: layout.pixelScale,
       logicalWidth: layout.width,
       logicalHeight: layout.height,
-      zoom: v.zoom,
+      zoom: this.zoomGoal,
       targetDistance: this.targetDistance(),
+    });
+  }
+
+  /** Which whole zoom step to show now. */
+  private chooseZoom(): number {
+    const v = this.panel.values;
+    const me = this.ship(PLAYER_ID);
+    if (!v.autoZoom || !me) return v.zoom;
+    const others = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
+    const enemy = nearest(me, others);
+    if (!enemy || Math.hypot(enemy.x - me.x, enemy.y - me.y) > viewJson.combatCameraRange) return v.zoom;
+    const cam = this.cameras.main;
+    return autoZoom(this.zoomGoal, viewJson.zoomSteps, me, enemy, {
+      widthPx: cam.width,
+      heightPx: cam.height,
+      pixelsPerMetre: v.pixelsPerMetre,
+      keepInside: viewJson.combatCameraKeepInside,
+      marginPx: viewJson.autoZoomMarginPx,
+      spareToZoomInPx: viewJson.autoZoomSpareInPx,
     });
   }
 

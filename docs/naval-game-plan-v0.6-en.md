@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) and `dev-log-en.md` (what was done, problems and fixes). The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status:** M0 done · M1 in progress (steps 1, 1b, 1c done; next: the scale test, then wind and polar tables) · v0.6 answers the external review; two decisions wait for your answer (O2, O4) and one for the scale test (O3), see section 9.
+**Status:** M0 done · M1 in progress (steps 1, 1b, 1c done; next: the scale test, then wind and polar tables) · v0.6 answers the external review; O2 and O4 confirmed 13 Nov (Pirate only in Stage 1; net-gold score, port saves and suspend at sea); O3 waits for the scale test, see section 9.
 
 ---
 
@@ -31,10 +31,10 @@ All numbers in this plan are **starting values**. They live in JSON data files a
 
 ## 1. The game in brief
 
-**Naval-Battles** is a top-down pixel-art naval game set in the Caribbean in 1650–1720, the Golden Age of Piracy. You command one armed sailing ship. You read the wind, fight with broadsides, board and capture enemy ships, trade in ports and grow your captain. The campaign is open-ended; you save in port and can suspend the game at sea (proposed, O4).
+**Naval-Battles** is a top-down pixel-art naval game set in the Caribbean in 1650–1720, the Golden Age of Piracy. You command one armed sailing ship. You read the wind, fight with broadsides, board and capture enemy ships, trade in ports and grow your captain. The campaign is open-ended; you save in port and can suspend the game at sea (D30).
 
-- **Side:** you choose **English captain** (pirate hunter) or **Pirate** at the start. *Recommended (O2): Stage 1 has the **Pirate** side only; the English captain arrives in Stage 2 together with Spain, which gives him real targets.*
-- **Goal:** the highest score: gold gained (net: loot, prizes, bounties and trade profit) plus ships sunk and captured (proposed, O4).
+- **Side:** in Stage 1 you play a **Pirate** (D29). The English captain (pirate hunter) arrives in Stage 2 together with Spain, which gives him real targets.
+- **Goal:** the highest score: gold gained (net: loot, prizes, bounties and trade profit) plus ships sunk and captured (D30).
 - **Platforms:** web browser first, then iPhone and iPad from the same code.
 - **Stages:** Stage 1 is single player against bots (this plan). Stage 2 adds nations, fleets and weather. Stage 3 is multiplayer.
 
@@ -57,8 +57,8 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D5 | Backend | **Python + FastAPI + SQLite**; stores accounts, cloud saves, leaderboard | The game runs in the browser; Node.js is not needed in Stage 1 | Confirmed 12 Nov |
 | D6 | Game rules | All rules in a separate `sim/` module with no Phaser code | Testable, and can move to a server for multiplayer | Confirmed 12 Nov |
 | D7 | Setting | **Caribbean, 1650–1720** | Pirates against navies; ships of all nations were similar | Confirmed 12 Nov |
-| D8 | Factions | **England + Pirates**; player picks a side | Covers both scenarios with the least content | Confirmed 12 Nov · under review, see O2 |
-| D9 | Score | Total gold **earned** + ships sunk + ships captured | Your answer | Confirmed 12 Nov · definition of "earned" under review, see O4 |
+| D8 | Factions | **England + Pirates**; player picks a side | Covers both scenarios with the least content | Confirmed 12 Nov · changed 13 Nov by D29: Pirate only in Stage 1 |
+| D9 | Score | Total gold **earned** + ships sunk + ships captured | Your answer | Confirmed 12 Nov · "earned" defined 13 Nov by D30 as net gold gained |
 | D10 | Losing your ship | Captain survives, loses part of the gold, restarts with a sloop | Your answer | Confirmed 12 Nov |
 | D11 | Captured ships | You can **take a captured ship as your own**, or sell it as a prize | Main way to get a bigger ship; no shipyard purchases needed | Confirmed 12 Nov |
 | D12 | Work style | **Mix:** I write the larger pieces and explain them; you write small parts and tune numbers | Your answer | Confirmed 12 Nov |
@@ -78,8 +78,8 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D26 | World scale and camera | **Game metres:** ship lengths and speeds are about 2× real (sloop 30 m, frigate 70 m). At zoom ×1, 1 game metre = 1 px, so the 30–70 px sprites show ships at their game length. Zoom uses whole steps only: ×1 for combat, ×2 for sailing close-ups. A **combat camera** shifts toward the nearest enemy, and ships outside the view get edge markers. The zoomed-out tactical view shows icons, not shrunk sprites. The old "speed scale ×2" is folded in | At 2 px/m the view (320 × 180 m) is smaller than the gun range, so the enemy is off-screen in most broadsides. Whole zoom steps keep pixel art sharp | Proposed (O3) · the M1 scale test decides |
 | D27 | Display | Integer pixel scaling on every device, no blurry scaling. The logical **height** is about 360 px on a computer and about 240 px on a phone in landscape; the width follows the screen shape (no black bars). The HUD is anchored to the screen edges | A fixed 640 × 360 picture is scaled by non-whole factors on most screens (uneven pixels) and is too small on a phone | Proposed (O3) · refines D18 |
 | D28 | Combat tuning | Set **targets first** (duel 2–4 min; 1–2 hits per 4-gun salvo at 150 m), then measure hit rates with a Monte Carlo script (`tools/hit_table.py`), then derive damage per hit | Hit rates depend strongly on ship size and range; damage chosen by feel would be unbalanced | Adopted 13 Nov (review) |
-| D29 | Player side in Stage 1 | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain as the enemy nation | An English captain has only pirate bots as targets, and their loot is thin. One side removes the side choice, a set of port types and the admiralty screen; saves about 1 week in M5 | Proposed (O2) · would change D8 |
-| D30 | Score and saving | The score counts **net gold gained**: loot, prize money, bounties and trade profit (sale price minus purchase cost). Manual saves in port; at sea you can **suspend** (save and quit; the save is deleted when loaded). Autosave on entering port | "Gold earned" counted every sale, so buying and selling the same goods inflated the score. Unlimited saves at sea remove the risk of losing the ship | Proposed (O4) · clarifies D9 |
+| D29 | Player side in Stage 1 | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain as the enemy nation | An English captain has only pirate bots as targets, and their loot is thin. One side removes the side choice, a set of port types and the admiralty screen; saves about 1 week in M5 | Confirmed 13 Nov (O2) · changes D8 |
+| D30 | Score and saving | The score counts **net gold gained**: loot, prize money, bounties and trade profit (sale price minus purchase cost). Manual saves in port; at sea you can **suspend** (save and quit; the save is deleted when loaded). Autosave on entering port | "Gold earned" counted every sale, so buying and selling the same goods inflated the score. Unlimited saves at sea remove the risk of losing the ship | Confirmed 13 Nov (O4) · clarifies D9 |
 | D31 | Economy guards | Prices change **per unit** as you buy or sell; the sell price is 10–15% below the buy price (spread); off-map imports slowly refill each stock to at least 30% of its target. A headless run of 1,000 game days checks the market before R3 | Stops endless profit on one route, and stops the market from emptying when many merchants are sunk | Adopted 13 Nov (review) |
 | D32 | Phaser version | Phaser **4.2.1** pinned exactly (no `^` in `package.json`); upgrades are deliberate. Phaser calls only in `scenes/` and `render/`. The notes in 5.9 are copied into the project summary | Phaser 4 is new; most tutorials and AI answers describe Phaser 3 | Adopted 13 Nov (review) |
 | D33 | Ship directions | Draft art uses **16 directions**. The art spike (a full day, M2) compares 16, 16 plus a small rotation, and 32, and fixes the number | Half the rendering and file size; at 30–70 px the difference may not show. The spike decides by looking | Adopted 13 Nov (review) · final at the spike |
@@ -128,7 +128,7 @@ Each idea is split into a small first version and a deeper later version.
 | **More kinds of enemies** | Bot skill tiers, armed merchantman, navy sloop-of-war (R2). **Outlaw rule** (R4) | Full reputation with every faction |
 | **Food and water** | **Provisions** bought in port; **fishing** at sea (R4) | Fresh water on islands, rum rations and crew morale |
 | **Meaningful trade** | Port stocks set prices; merchants carry real goods; a sunk merchant causes a shortage (R3) | Guilds that hire pirates, seasons, convoys |
-| **Player roles** | Pirate (English captain under review, O2) | English captain together with Spain (if O2 is accepted); merchant |
+| **Player roles** | Pirate (D29) | English captain together with Spain; merchant |
 
 ---
 
@@ -437,7 +437,7 @@ Any state → (land ahead)  → Avoid land
 
 ### 4.12 Score
 
-*Proposed (O4, D30):*
+*Confirmed (D30):*
 
 ```
 score = net gold gained + (500 × ships sunk + 1000 × ships captured) × class multiplier
@@ -449,7 +449,7 @@ Gold lost when your ship sinks does not reduce the score; it only reduces what y
 
 ### 4.13 Saving
 
-A save is one JSON file with a `version` field. It holds the **whole world state**, not a list of commands (see D23). *Proposed (O4, D30):*
+A save is one JSON file with a `version` field. It holds the **whole world state**, not a list of commands (see D23). *Confirmed (D30):*
 
 - **In port:** save by hand at any time; the game also autosaves when you enter port.
 - **At sea:** **Suspend** saves and closes the game; loading the suspend save deletes it. You can stop at any moment, but you cannot reload to undo a lost fight.
@@ -678,7 +678,7 @@ Based on 8–10 hours per week. Each release is a version you can play.
 
 **R1 stays the fast first version you asked for.** It uses placeholder art and one bot, and it answers the most important question: is the sailing and shooting fun?
 
-**Stage 1 is now estimated at about 44 weeks** (likely; range about 38–55). The review estimated 45–55 weeks for the v0.5 scope; v0.6 cuts some work (the Pirate side only if O2 is accepted, 16 ship directions, a map built by script, no second sprite size).
+**Stage 1 is now estimated at about 44 weeks** (likely; range about 38–55). The review estimated 45–55 weeks for the v0.5 scope; v0.6 cuts some work (the Pirate side only, 16 ship directions, a map built by script, no second sprite size).
 
 ### 6.2 Milestones
 
@@ -747,18 +747,17 @@ If a criterion fails, we tune for up to one week before M3. If the core is still
 
 #### M5 — World and ports (5 weeks; 6 with both sides)
 - [ ] Map from a small land/sea mask: `tools/build_map.py` creates the Tiled map and the bots' navigation grid; you paint details by hand only near the ports.
-- [ ] 6 ports (fewer port types if O2 is accepted); harbour zones; minimap; tactical view with icons.
+- [ ] 6 ports (fewer port types: no admiralty screen in Stage 1); harbour zones; minimap; tactical view with icons.
 - [ ] Port screen: market, shipyard, tavern, armory, admiralty or council.
 - [ ] Game clock; port stocks, production, consumption and off-map imports; per-unit prices with a spread (D31); cargo.
 - [ ] Bot spawner; merchants that carry real goods; pirate bots that keep their loot; time acceleration and pause.
 - [ ] Headless economy run over 1,000 game days and `tools/plot_economy.py`; no route gives endless profit.
-- [ ] Side choice on New Game (only if O2 keeps both sides).
 - **Done when:** the full loop works: sail, fight, loot, sell, repair, recruit.
 
 #### M6 — Captain, score and saves (3 weeks)
 - [ ] Experience, levels, 3 skills connected to the formulas; captain screen.
-- [ ] Score as net gold gained (O4) and a statistics screen.
-- [ ] Save in port, autosave, suspend at sea (O4), export and import; main menu with Continue.
+- [ ] Score as net gold gained (D30) and a statistics screen.
+- [ ] Save in port, autosave, suspend at sea (D30), export and import; main menu with Continue.
 - [ ] Difficulty setting.
 - **Done when:** you close the browser, return the next day and continue. **→ Release R3 "Campaign".**
 
@@ -848,7 +847,7 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 | Art takes too long | High | Placeholders until R4; 16 directions; a full-day art spike; rendering by script |
 | Pixel art looks uneven on phones | Medium | Integer pixel scaling (D27); whole zoom steps only |
 | Economy exploits or collapse | Medium | Per-unit prices, spread, imports (D31); 1,000-day headless run |
-| The English side has little to do | Medium | Pirate only in Stage 1 (O2) |
+| The English side has little to do | Medium | Pirate only in Stage 1 (D29) |
 | Bots get stuck when tacking | Medium | Hysteresis and cooldown; headless bot scenarios (M3) |
 | The map takes weeks to paint | Medium | Mask plus `tools/build_map.py` (M5) |
 | Phaser 4 is new; AI tools suggest Phaser 3 code | Medium | Exact version pinned; notes in 5.9 and in the summary (D32) |
@@ -863,18 +862,18 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 
 ## 9. Open decisions
 
-Four decisions are open. Each has a default and a deadline. O2 and O4 need your answer; O3 is answered by the scale test; O1 is unchanged.
+Two decisions are open. O3 is answered by the scale test; O1 is unchanged. O2 and O4 were closed on 13 Nov.
 
 | # | Question | Recommended default | Alternative | Decide by |
 |---|---|---|---|---|
 | **O1** | When is the Python backend built? (D15) | After the web alpha (M9) | Right after the campaign (R3); R4 and R5 move about 3 weeks later | Before M7 |
-| **O2** | Which side does the player take in Stage 1? (D29 against D8) | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain | Keep both sides (D8). Pirate bots that keep their loot (4.11) and Admiralty bounties give the English captain an income; M5 takes about 1 week longer | Before M5 |
+| **O2** | Which side does the player take in Stage 1? (D29 against D8) | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain | Keep both sides (D8). Pirate bots that keep their loot (4.11) and Admiralty bounties give the English captain an income; M5 takes about 1 week longer | **Closed 13 Nov: Pirate only (D29)** |
 | **O3** | World scale and display (D26, D27) | Game metres with 1 px/m at zoom ×1; whole zoom steps; logical height about 360 (computer) and 240 (phone) with integer scaling | Keep 2 px/m and real ship sizes, shorten the gun range to about 120 m and rely on the combat camera | End of M1 step 2 |
-| **O4** | Score and saving (D30 against D9) | Net gold gained; save in port, suspend at sea | Keep "gold earned" and saving anywhere, and accept that the score can be inflated | Before M6 |
+| **O4** | Score and saving (D30 against D9) | Net gold gained; save in port, suspend at sea | Keep "gold earned" and saving anywhere, and accept that the score can be inflated | **Closed 13 Nov: accepted (D30)** |
 
-Until you decide O2 and O4, nothing changes in the code: the side matters only from M5, the score and saves only from M6. The time estimates in 6.1 use the recommended defaults.
+O2 and O4 change no code yet: the side matters only from M5, the score and saves only from M6.
 
-Closed earlier: aiming (D16), client language TypeScript (D17), art style (D18), Living Sea as its own release (D19), Apple Developer Program at M10 (D21).
+Closed earlier: side in Stage 1 (D29, 13 Nov), score and saving (D30, 13 Nov), aiming (D16), client language TypeScript (D17), art style (D18), Living Sea as its own release (D19), Apple Developer Program at M10 (D21).
 
 ---
 
@@ -905,9 +904,9 @@ Closed earlier: aiming (D16), client language TypeScript (D17), art style (D18),
 | Two sprite sizes (LODs) | **Partly.** Zoom-in reuses the same sprite at a whole step; the zoomed-out view uses icons, so a second sprite size is not needed | D26 |
 | 16 directions instead of 32; art spike a full day | **Agreed.** The spike compares 16, 16 plus rotation, and 32 | D33, M2 |
 | The timeline is optimistic (45–55 weeks) | **Agreed in direction.** New estimate about 44 weeks (range 38–55) after cuts; hours logged; recompute after each release | 6, 6.1, D36 |
-| The English captain has no targets | **Agreed.** Recommended: Pirate only in Stage 1 (O2). For either option, pirate bots now keep their loot | D29, 4.11, 9 |
+| The English captain has no targets | **Agreed.** Decided: Pirate only in Stage 1 (D29). For either option, pirate bots now keep their loot | D29, 4.11, 9 |
 | Combat has no tuning targets; 10–25% hits per ball | **Confirmed by our own simulation** (0.9 hits per salvo at 150 m with v0.5 sizes). We also found that doubling ship size doubles the hit rate, so σ is tuned after the scale test | 4.4, D28 |
-| Score and economy exploits | **Agreed.** Net gold score and suspend save at sea (O4); per-unit prices, spread, imports (D31) | 4.9, 4.12, 4.13 |
+| Score and economy exploits | **Agreed.** Net gold score and suspend save at sea (D30); per-unit prices, spread, imports (D31) | 4.9, 4.12, 4.13 |
 | 1,000-day economy simulation in Python | **Changed:** the run uses the real TypeScript `sim/` code, so there is no second copy of the rules to drift apart; Python reads and plots the CSV | 4.9, 5.6 |
 | Determinism across browser engines | **Agreed.** D23 wording corrected; saves hold the full state | D23, 4.13 |
 | Off-screen contacts | **Agreed.** Edge markers, sighting range 1,500 m | 4.1, 4.15 |

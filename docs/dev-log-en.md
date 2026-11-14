@@ -4,6 +4,55 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 13 Nov 2026 (evening) — O2 and O4 confirmed; M1 step 2 (scale test) built
+
+**Decisions:** O2 → **D29 confirmed**: the player is a Pirate in Stage 1; the English captain comes in Stage 2 with Spain. O4 → **D30 confirmed**: score = net gold gained + ships; manual saves in port, autosave on entering port, suspend at sea. Plan v0.6 (EN + RU) and the project summary are updated. No code depends on them before M5/M6.
+
+### What was built (waiting for your device checks)
+
+- **Integer pixel scaling** (`scenes/ScreenFit.ts`, `view/pixelLayout.ts`): every logical pixel is a whole number of device pixels; the logical height is about 360 px on a computer and tablet, about 240 px on a phone; the width follows the screen. Phaser runs in `Scale.NONE` mode; we set the canvas size and CSS zoom ourselves.
+- **Ship data in game metres** (`data/ships.json`): all four classes with `length` and `beam`; sloop 30 m, 11.5 m/s, acceleration 1.5, turn 0.8, steerSpeed 3.
+- **Moored target** (ship 2) on your starboard beam at 150 m; `placeShip` command (test setup only).
+- **Range rings** 100/150/200 m and a light preview of the ±25° broadside arcs.
+- **Combat camera** (`view/combatCamera.ts`): pulled toward the nearest ship within 400 m; your ship stays in the middle 80%.
+- **Edge markers** (`view/edgeMarker.ts`): red triangle and distance for ships off the screen within 1,500 m.
+- **lil-gui panel**: pixels per metre, zoom 1–4, logical height, combat camera, rings, speed scale, target class and distance.
+- **Phaser pinned** to exactly 4.2.1; lil-gui 0.21.0.
+- 62 tests in the sandbox (63 with your own angle test); build clean; headless check on a computer window and an iPhone 13 landscape emulation, no errors.
+
+### Problem found and fixed
+
+| Problem | Cause | Fix |
+|---|---|---|
+| In about 1 of 4 frames, the rotated player ship was drawn as half a triangle | In the headless test with Phaser 4.2.1, a Text drawn right after a Graphics broke the next sprite (only in the full scene; a small repro did not show it) | Ring labels moved above the ships (depth 3). Rule: don't put text directly between a Graphics and sprites; watch for it on real devices |
+
+### Your test results (computer and iPhone)
+
+| Check | Computer (Chrome) | iPhone |
+|---|---|---|
+| Both ships at 150 m visible at x1 | Yes | Yes (logical height 240) |
+| Ship size at x1 | Small; wanted 2–3x bigger | Not too small, but details hard to see; wanted 1.5–2x |
+| Target at 200 m, x1 | Still on screen | Only part of the hull; red marker shown |
+| Logical height | 400 good; 240 too big and close | 240 good; 400 too small for combat, fine for overview |
+| 1 px/m vs 2 px/m | 1 for sailing, 2 for combat | Same |
+| Combat camera motion | No discomfort | No discomfort |
+| Pixel sharpness | — | Fine |
+
+**Conclusion:** 1 px/m is the base (zoom x1 for sailing); combat wants x2. At x2 a 200 m broadside does not fit, so we added step 2b.
+
+### Step 2b: auto combat zoom
+
+- `view/autoZoom.ts` (6 tests): when an enemy is within 400 m, the view takes the **largest whole zoom step that still shows both ships**; zooming in needs extra room (no flip-flop); the change is smoothed over about 0.25 s.
+- `view.json`: computer logical height 400; `autoZoom`, `autoZoomMarginPx` 36, `autoZoomSpareInPx` 24, `zoomSmoothing` 0.25. Panel: "auto combat zoom" checkbox and "zoom now".
+- Headless: computer (384 px high) x2 at 100 and 150 m, x1 at 200 m. iPhone (234 px high): x1 at 100 m abeam; x2 only below about 70 m abeam, or farther when the enemy lies along the long screen side.
+- 68 tests in the sandbox (69 with your angle test).
+
+### Next
+
+Try step 2b on the computer, iPhone and iPad (the iPad is still untested). Then we fix the values in plan section 4.0 and close O3. Then M1 step 3 (wind and polars).
+
+---
+
 ## 13 Nov 2026 — External review of plan v0.5; plan v0.6
 
 **Result:** the review (`Project_plan_v.0.5_Review`) was checked point by point. Its main finding was right: at 2 px/m the screen shows 320 × 180 m, but the guns reached 250 m, so in a broadside the enemy was off-screen. Plan v0.6 (EN + RU) answers every finding (Appendix B of the plan). No code changed today.
@@ -20,7 +69,7 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 ### Decisions
 
 - **Adopted:** combat targets and hit table (D28), economy guards (D31), Phaser 4.2.1 pinned (D32), 16 directions for draft art (D33), one angle module with unit names (D34), fun checks with criteria (D35), likely dates and hour logging (D36), corrected determinism wording (D23).
-- **Waiting for your answer:** O2 Pirate only in Stage 1; O4 net-gold score and port saves with suspend at sea.
+- **Confirmed by you the same evening:** O2 → D29, Pirate only in Stage 1; O4 → D30, net-gold score, saves in port and suspend at sea.
 - **Answered by the next step:** O3 world scale and display, by the M1 scale test.
 - **Where we did not follow the review:** the 1,000-day economy simulation runs the real TypeScript code (Python only plots the CSV), so the rules exist once; no second sprite size, because the zoomed-out view uses icons.
 

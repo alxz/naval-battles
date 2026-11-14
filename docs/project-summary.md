@@ -11,7 +11,7 @@ Use this as project instructions or as context for any AI assistant. It reflects
 - Principle: **simple first, deeper later.** Every new idea gets a small first version and a release; it never enters a milestone that has already started.
 
 ## The game
-Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaign against bots, with saves. Side: **English captain (pirate hunter)** or **Pirate** (under review: Pirate only in Stage 1, see O2). Score = gold gained + ships sunk + ships captured (net-gold definition proposed, see O4). Sailing must never be boring: contracts, sea events, provisions and a market that reacts fill the time between fights.
+Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaign against bots, with saves. Side in Stage 1: **Pirate** (D29); the English captain arrives in Stage 2 with Spain. Score = net gold gained + ships sunk + ships captured (D30). Sailing must never be boring: contracts, sea events, provisions and a market that reacts fill the time between fights.
 
 ## Confirmed decisions (do not change without discussion)
 - **Engine:** Phaser 4 (2D), **version 4.2.1 pinned exactly** (D32). Top-down world math. Phaser code only in `scenes/` and `render/`.
@@ -21,7 +21,8 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 - **Backend:** Python 3.12–3.13 (via uv), FastAPI, SQLModel, SQLite; only accounts, cloud saves and leaderboard. Built after the web alpha (O1 default).
 - **iOS:** installable web app first, then Capacitor. Apple Developer Program is bought at M10.
 - **Living Sea** is its own release R4; **fun check 2 after R3 decides which parts are built** (D35).
-- **Factions:** England + Pirates; Spain and France in Stage 2 (D8, under review in O2).
+- **Factions:** England + Pirates as factions; the player is a Pirate in Stage 1 (D29). Spain and France in Stage 2.
+- **Score and saving (D30, confirmed 13 Nov):** score counts net gold gained (loot, prizes, bounties, trade profit); manual saves in port, autosave on entering port, suspend save at sea (deleted when loaded).
 - **Aiming:** manual gun elevation with random factors; bots use the same rules.
 - **Project setup (D22):** the client was created by hand (Vite `vanilla-ts` + `npm install phaser`).
 - **Loop (D23):** fixed 30 Hz step with interpolation; commands wait in a queue and run at the start of the next step. Deterministic per browser engine only (Chrome and Safari may differ in the last digits), so saves store the full world state and tests use tolerances.
@@ -33,8 +34,6 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 
 ## Proposed decisions (waiting; do not build on them until confirmed)
 - **O3 — World scale and display (D26, D27), decided by the M1 scale test:** game metres with ship sizes and speeds about 2× real (sloop 30 m, frigate 70 m); 1 px per game metre at zoom ×1; whole zoom steps only (×1 combat, ×2 close-up; tactical view with icons); integer pixel scaling with logical height about 360 px (computer) and 240 px (phone), width follows the screen; combat camera that shifts toward the nearest enemy; edge markers for ships outside the view. Replaces D25's ×1/×1.5/×2/×3 zoom.
-- **O2 — Pirate only in Stage 1 (D29):** English captain becomes the first Stage 2 role with Spain. Decide before M5.
-- **O4 — Score and saving (D30):** score counts net gold gained (loot, prizes, bounties, trade profit); manual saves in port, suspend save at sea (deleted when loaded). Decide before M6.
 
 ## Architecture rules
 1. All game rules live in `client/src/sim/`: pure TypeScript, **no Phaser imports**.
@@ -86,16 +85,14 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 | R6 "Online" | Python backend; privacy check | M9 | late Aug 2027 |
 | R7 "iOS" | Capacitor, TestFlight, App Store guideline check | M10 | mid Sep 2027 |
 
-**Current status:** M0 done. M1 "Sailing" in progress: steps 1, 1b, 1c done (fixed-step `sim/`, commands, ship with inertia, touch buttons, zoom, wake, phone HUD; 37 tests pass; works on desktop and iPhone). **Next: M1 step 2, the scale test** (lil-gui moved here; integer pixel scaling; ship data in game metres; moored target with range rings 100/150/200 m; first combat camera and edge markers; check on computer, iPhone, iPad → closes O3). Then step 3 (wind, polars, plan formulas, angle module, compass) and step 4 (island). Current code: `ships.json` sloop maxSpeed 8, acceleration 1, turnRate 0.8, steerSpeed 2, at 2 px/m.
+**Current status:** M0 done. M1 "Sailing" in progress: steps 1, 1b, 1c done; **step 2, the scale test, is built and waits for device checks** (integer pixel scaling via `Scale.NONE`; `data/view.json`; ship data in game metres for all 4 classes; moored target with `placeShip`; range rings 100/150/200 m; combat camera; edge markers; lil-gui panel; Phaser pinned 4.2.1, lil-gui 0.21.0; 62 tests in sandbox, 63 with the developer's angle test). After the checks: write the chosen values into plan 4.0 and close O3. Then step 3 (wind, polars, plan formulas, angle module, compass) and step 4 (island). Current code: sloop 30 m, maxSpeed 11.5, acceleration 1.5, turnRate 0.8, steerSpeed 3, at 1 px/m.
 
 ## Stage 2 backlog
-English captain with Spain as enemy nation (if O2 is accepted); Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer, server-authoritative.
+English captain with Spain as enemy nation; Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer, server-authoritative.
 
-## Open decisions (defaults in use)
+## Open decisions (defaults in use; O2 and O4 closed 13 Nov → D29, D30)
 - **O1** backend order: after the web alpha (M9), default. Decide before M7.
-- **O2** Pirate only in Stage 1 (recommended) or both sides. Decide before M5.
 - **O3** world scale and display (D26, D27): answered by the M1 scale test.
-- **O4** net-gold score and port saves with suspend at sea (recommended). Decide before M6.
 
 ## Phaser 4 notes (most tutorials and AI answers describe Phaser 3)
 - 4.2.x ships its own types; check every call against `node_modules/phaser/types`.
@@ -105,6 +102,8 @@ English captain with Spain as enemy nation (if O2 is accepted); Spain and France
 - Touch: `input.addPointer(2)`; `sys.game.device.input.touch`; CSS `touch-action: none`.
 - iOS Safari: unlock audio on the first tap; no fullscreen API on iPhone; respect `env(safe-area-inset-*)`.
 - Automated key tests must hold a key about 80 ms (`JustDown` misses shorter taps).
+- A Text drawn right after a Graphics broke the next sprite in our headless test (4.2.1): keep text labels above sprites, not between a Graphics and sprites.
+- Integer pixel scaling: `Scale.NONE`, then `scale.setZoom(pixelScale / devicePixelRatio)` and `scale.resize(w, h)` on every window resize.
 
 ## How to help
 - Work on the current milestone only. Give complete, runnable code with exact file paths and commands.

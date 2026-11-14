@@ -1,12 +1,16 @@
 {
   "pixelsPerMetre": 1,
   "zoomSteps": [1, 2],
-  "logicalHeightComputer": 360,
+  "logicalHeightComputer": 400,
   "logicalHeightPhone": 240,
   "phoneMaxShortSide": 500,
   "combatCameraRange": 400,
   "combatCameraKeepInside": 0.8,
   "combatCameraSmoothing": 0.4,
+  "autoZoom": true,
+  "autoZoomMarginPx": 36,
+  "autoZoomSpareInPx": 24,
+  "zoomSmoothing": 0.25,
   "sightingRange": 1500,
   "rangeRings": [100, 150, 200],
   "fireArcPreviewDeg": 25

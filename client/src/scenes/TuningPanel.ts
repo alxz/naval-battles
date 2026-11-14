@@ -8,6 +8,7 @@ export interface TuningValues {
   logicalHeight: number;
   speedScale: number;
   combatCamera: boolean;
+  autoZoom: boolean;
   rangeRings: boolean;
   targetClass: string;
 }
@@ -16,6 +17,7 @@ export interface TuningValues {
 export interface TuningInfo {
   pixelScale: string;
   view: string;
+  zoomNow: string;
 }
 
 export interface TuningCallbacks {
@@ -33,7 +35,7 @@ export interface TuningCallbacks {
  */
 export class TuningPanel {
   readonly values: TuningValues;
-  readonly info: TuningInfo = { pixelScale: '', view: '' };
+  readonly info: TuningInfo = { pixelScale: '', view: '', zoomNow: '' };
   private readonly gui: GUI;
   private readonly zoomController;
 
@@ -44,15 +46,17 @@ export class TuningPanel {
 
     const view = this.gui.addFolder('View');
     view.add(v, 'pixelsPerMetre', 0.5, 3, 0.5).name('pixels / metre');
-    this.zoomController = view.add(v, 'zoom', 1, 4, 1).name('zoom');
+    this.zoomController = view.add(v, 'zoom', 1, 4, 1).name('zoom (sailing)');
     view
       .add(v, 'logicalHeight', 160, 480, 20)
       .name('logical height')
       .onFinishChange((h: number) => callbacks.onLogicalHeight(h));
     view.add(v, 'combatCamera').name('combat camera');
+    view.add(v, 'autoZoom').name('auto combat zoom');
     view.add(v, 'rangeRings').name('range rings');
     view.add(this.info, 'pixelScale').name('pixel scale').listen().disable();
     view.add(this.info, 'view').name('view (m)').listen().disable();
+    view.add(this.info, 'zoomNow').name('zoom now').listen().disable();
 
     const sailing = this.gui.addFolder('Sailing');
     sailing
