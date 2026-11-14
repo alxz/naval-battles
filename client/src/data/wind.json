@@ -1,4 +1,10 @@
 {
   "startFromBearingDeg": 67.5,
-  "startStrength": 0.7
+  "startStrength": 0.7,
+  "driftEverySeconds": 10,
+  "driftMaxStepDeg": 3,
+  "driftMaxOffsetDeg": 25,
+  "driftMaxStrengthStep": 0.05,
+  "minStrength": 0.4,
+  "maxStrength": 0.9
 }

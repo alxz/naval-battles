@@ -14,6 +14,7 @@ export interface TuningValues {
   targetClass: string;
   windFromBearingDeg: number; // compass degrees, where the wind comes from
   windStrength: number; // 0..1
+  windDrift: boolean;
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -32,6 +33,7 @@ export interface TuningCallbacks {
   onTargetClass: () => void;
   /** The wind sliders moved. */
   onWind: (fromBearingDeg: number, strength: number) => void;
+  onWindDrift: (on: boolean) => void;
 }
 
 /**
@@ -66,8 +68,9 @@ export class TuningPanel {
 
     const wind = this.gui.addFolder('Wind');
     const windChanged = (): void => callbacks.onWind(v.windFromBearingDeg, v.windStrength);
-    wind.add(v, 'windFromBearingDeg', 0, 359, 1).name('from (compass deg)').onChange(windChanged);
+    wind.add(v, 'windFromBearingDeg', 0, 359, 1).name('from (base, deg)').onChange(windChanged);
     wind.add(v, 'windStrength', 0, 1, 0.05).name('strength').onChange(windChanged);
+    wind.add(v, 'windDrift').name('drift').onChange((on: boolean) => callbacks.onWindDrift(on));
 
     const sailing = this.gui.addFolder('Sailing');
     sailing

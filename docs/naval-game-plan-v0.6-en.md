@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) and `dev-log-en.md` (what was done, problems and fixes). The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status:** M0 done · M1 in progress (steps 1, 1b, 1c and 2 done; next: wind and polar tables) · v0.6 answers the external review; O2, O3 and O4 confirmed 13 Nov (Pirate only in Stage 1; scale and display from the scale test; net-gold score, port saves and suspend at sea), see section 9.
+**Status:** M0 done · M1 done (14 Nov) · M2 in progress (step 1: guns and ballistics) · v0.6 answers the external review; O2, O3 and O4 confirmed 13 Nov (Pirate only in Stage 1; scale and display from the scale test; net-gold score, port saves and suspend at sea), see section 9.
 
 ---
 
@@ -113,7 +113,7 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 
 New ideas go here, not into the current milestone.
 
-- **Stage 2:** Spain, France, the Dutch; full reputation and letters of marque; fleets; crew morale and experience, rum rations; buying and upgrading ships; storms, fog, regional wind, shallows, day and night; seasons; merchant guilds; more quest types; playable merchant role; fire, flooding, mast loss; repairs at sea; bow and stern guns; treasure fleets and galleons; new maps (Mediterranean, Atlantic); Ironman mode.
+- **Stage 2:** Spain, France, the Dutch; full reputation and letters of marque; fleets; crew morale and experience, rum rations; buying and upgrading ships; storms, fog, regional wind, shallows, day and night; seasons; merchant guilds; more quest types; playable merchant role; fire, flooding, mast loss; repairs at sea; bow and stern guns; treasure fleets and galleons; new maps (Mediterranean, Atlantic); Ironman mode; kedging off (the crew rows an anchor out and hauls the ship off a shore; slow, costs time).
 - **Stage 3:** real-time multiplayer.
 
 ### 3.3 Your ideas, staged
@@ -692,19 +692,21 @@ Based on 8–10 hours per week. Each release is a version you can play.
 - **You learn:** scenes, the game loop, sprites, Git basics, how TypeScript is checked.
 - **Done when:** `npm run dev` shows a moving ship on the PC and on a phone. **Reached.**
 
-#### M1 — Sailing (3 weeks) — **in progress**
+#### M1 — Sailing (3 weeks) — **done 14 Nov**
 - [x] Step 1: fixed-step loop (30 Hz) with interpolation; `sim/` with world, commands (`setRudder`, `setSails`), ship step with inertia; ship numbers in `data/ships.json`; tests (D23).
 - [x] Step 1b: temporary touch buttons (D24).
 - [x] Step 1c: zoom keys Z / X, foam wake, large phone HUD (D25).
 - [x] **Step 2: scale test (new; decides O3).** lil-gui panel (moved here from step 4) with live sliders for pixels per metre, zoom, logical height and `speedScale`; integer pixel scaling with a logical height per device (D27); ship data in game metres (D26); a moored target ship with range rings at 100, 150 and 200 m; a first combat camera and edge markers. Test on the computer, the iPhone and the iPad, then fix the values in 4.0. **Done 13 Nov:** values in 4.0; step 2b added auto combat zoom.
-- [ ] Step 3: wind in the world state; three polar tables in JSON; the speed and turn formulas from 4.3; the angle module with bearings and wind angle, fields named with units (D34); compass with wind arrow and heading in the HUD (text on a computer, icons on a phone).
-- [ ] Step 4: one island with collision; slow wind drift (4.2) with a seeded random generator in the world state.
-- [ ] A unit test for every new formula (polar interpolation, speed formula, angle conversions).
+- [x] Step 3: wind in the world state; three polar tables in JSON; the speed and turn formulas from 4.3; the angle module with bearings and wind angle, fields named with units (D34); compass with wind arrow and heading in the HUD (text on a computer, icons on a phone). **Done 14 Nov** (plus 3b: close-fight range 120 m for auto zoom; the panel gives the keyboard back).
+- [x] Step 4: one island with collision (polygon in `data/islands.json`, five hull points, aground = back to the last position, speed 0; the crew pushes off while turning away); slow wind drift (4.2) with a seeded random generator in the world state. **Done 14 Nov.** The push-off tries back, forward and both sides, so a ship in irons with its stern on the sand can still turn free.
+- [x] A unit test for every new formula (polar interpolation, speed formula, angle conversions).
 - **You learn:** vectors, angles, sin and cos, delta time, unit tests, how screen scaling works.
 - **Done when:** you can tack upwind, the ship stops in irons, sailing feels good, and on every device you can see a target 150 m abeam.
 
-#### M2 — Guns and the first duel (3.5 weeks)
-- [ ] Broadsides, reload timers, elevation control, landing marker (it includes your ship's own velocity).
+#### M2 — Guns and the first duel (3.5 weeks) — **in progress**
+
+Steps: 1 guns and ballistics · 2 hit test, hit zones, damage, sinking · 3 accuracy (salvo and gun error, ellipse) and `tools/hit_table.py` · 4 the bot · 5 HUD bars, win and lose, restart, touch buttons · 6 juice · 7 art spike.
+- [x] Broadsides, reload timers, elevation control, landing marker (it includes your ship's own velocity). **Step 1, 14 Nov:** `data/guns.json`, commands `fire` and `setElevation`, ripple fire, balls with height and shadow, splashes; keys Q / E fire, R / F elevation; `tools/range_table.py`.
 - [ ] Ball physics with height; shadow and arc; splashes; hit test along the segment of each step.
 - [ ] Hit zones; hull damage; sinking.
 - [ ] One simple bot: chase, turn its side, fire. Edge marker when it is outside the view; combat camera.

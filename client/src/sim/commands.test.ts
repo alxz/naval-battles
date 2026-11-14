@@ -50,7 +50,7 @@ describe('applyCommand', () => {
   it('setWind changes the wind and keeps the strength within 0..1', () => {
     const w = createWorld();
     applyCommand(w, { type: 'setWind', fromRad: 1, strength: 3 });
-    expect(w.wind).toEqual({ fromRad: 1, strength: 1 });
+    expect(w.wind).toEqual({ fromRad: 1, strength: 1, baseFromRad: 1 });
   });
 
   it('setWind wraps the direction into (-PI, PI]', () => {

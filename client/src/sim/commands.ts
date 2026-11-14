@@ -1,6 +1,8 @@
 import { normalizeAngle } from './angles';
-import { SHIP_CLASSES } from './data';
+import { GUNS, SHIP_CLASSES } from './data';
+import { orderBroadside } from './guns';
 import { clamp } from './math';
+import { STEP_SECONDS } from './step';
 import type { Command, World } from './types';
 
 /** Change the world according to one command. Unknown ships are ignored. */
@@ -8,6 +10,7 @@ export function applyCommand(world: World, command: Command): void {
   // The wind belongs to the whole sea, not to one ship.
   if (command.type === 'setWind') {
     world.wind.fromRad = normalizeAngle(command.fromRad);
+    world.wind.baseFromRad = world.wind.fromRad; // the drift now wanders around the new direction
     world.wind.strength = clamp(command.strength, 0, 1);
     return;
   }
@@ -27,9 +30,16 @@ export function applyCommand(world: World, command: Command): void {
       ship.y = command.y;
       ship.headingRad = command.headingRad;
       ship.speed = 0;
+      ship.aground = false;
       if (command.shipClass !== undefined && SHIP_CLASSES[command.shipClass]) {
         ship.shipClass = command.shipClass;
       }
+      break;
+    case 'setElevation':
+      ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);
+      break;
+    case 'fire':
+      orderBroadside(world, ship, command.side, STEP_SECONDS);
       break;
   }
 }

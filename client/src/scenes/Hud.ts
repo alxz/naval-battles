@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
+import { GUNS, SHIP_CLASSES } from '../sim/data';
+import { predictLanding } from '../sim/guns';
 import type { SailingInfo } from '../sim/step';
+import { STEP_SECONDS } from '../sim/step';
 import type { ShipState, Wind } from '../sim/types';
 import { TEXT_RESOLUTION } from './text';
 
@@ -72,13 +75,16 @@ export class Hud {
     const deg = (n: number): string => String(Math.round(n) % 360).padStart(3, '0');
     this.text.setText(
       [
-        'Naval-Battles M1 - sailing',
+        'Naval-Battles M2 - guns',
         'A / D rudder   W / S sails   Z / X zoom',
+        'Q / E fire port / starboard   R / F elevation',
         `sails ${Math.round(ship.sailLevel * 100)}%   speed ${ship.speed.toFixed(1)} m/s`,
         `heading ${deg(bearing)} ${compassPoint(bearing)}   tick ${tick}`,
         `wind from ${deg(windFrom)} ${compassPoint(windFrom)}, strength ${wind.strength.toFixed(2)}`,
         `wind angle ${Math.round(sailing.twaDeg)} deg   sail power ${Math.round(sailing.share * 100)}%`,
         inIrons ? 'IN IRONS - turn away from the wind' : '',
+        ship.aground ? 'AGROUND - turn away from the shore' : '',
+        this.gunsLine(ship),
         `target ${Math.round(info.targetDistance)} m`,
         `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
         `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
@@ -88,16 +94,30 @@ export class Hud {
     );
   }
 
+  /** "guns 6.0 deg -> 150 m   port READY   starboard 12 s" */
+  private gunsLine(ship: ShipState): string {
+    const params = SHIP_CLASSES[ship.shipClass];
+    if (!params) return '';
+    const range = Math.hypot(...((): [number, number] => {
+      const p = predictLanding({ ...ship, speed: 0 }, params, 'starboard', STEP_SECONDS);
+      return [p.x - ship.x, p.y - ship.y];
+    })());
+    const state = (left: number): string => (left <= 0 ? 'READY' : `${Math.ceil(left)} s`);
+    return `guns ${ship.elevationDeg.toFixed(1)}/${GUNS.maxElevationDeg} deg -> ${Math.round(range)} m   port ${state(ship.reloadPort)}   starboard ${state(ship.reloadStarboard)}`;
+  }
+
   private updateTouch(ship: ShipState, info: ScaleInfo, sailing: SailingInfo, inIrons: boolean): void {
     const g = this.gfx;
     if (!g || !this.speed || !this.unit) return;
     this.speed.setText(ship.speed.toFixed(1));
     this.text.setText(
-      inIrons
+      ship.aground
+        ? `target ${Math.round(info.targetDistance)} m\nAGROUND!`
+        : inIrons
         ? `target ${Math.round(info.targetDistance)} m\nIN IRONS!`
         : `target ${Math.round(info.targetDistance)} m\nwind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`,
     );
-    this.text.setColor(inIrons ? '#ff8070' : '#ffffff');
+    this.text.setColor(inIrons || ship.aground ? '#ff8070' : '#ffffff');
 
     g.clear();
     // Dark panel behind the numbers.

@@ -1,7 +1,7 @@
 import { applyCommand } from './commands';
 import { lerp, lerpAngle } from './interpolate';
 import { STEP_SECONDS, stepWorld } from './step';
-import type { Command, Tuning, World } from './types';
+import type { Command, SimEvent, Tuning, World } from './types';
 
 /** Never run more than this many steps in one frame (protects after a long pause). */
 export const MAX_STEPS_PER_UPDATE = 10;
@@ -21,10 +21,11 @@ export interface Pose {
 export class Simulation {
   readonly world: World;
   /** Live tuning (lil-gui). Change the fields; the next step uses them. */
-  readonly tuning: Tuning = { speedScale: 1 };
+  readonly tuning: Tuning = { speedScale: 1, windDrift: true };
   private previous: Pose[] = [];
   private accumulator = 0;
   private queue: Command[] = [];
+  private events: SimEvent[] = [];
 
   constructor(world: World) {
     this.world = world;
@@ -45,11 +46,19 @@ export class Simulation {
       for (const command of this.queue) applyCommand(this.world, command);
       this.queue = [];
       stepWorld(this.world, STEP_SECONDS, this.tuning);
+      this.events.push(...this.world.events);
       this.accumulator -= STEP_SECONDS;
       steps += 1;
     }
     if (steps === MAX_STEPS_PER_UPDATE) this.accumulator = 0; // too far behind: drop the rest
     return this.accumulator / STEP_SECONDS;
+  }
+
+  /** Events since the last call (gun flashes, splashes), oldest first. The screen plays them. */
+  takeEvents(): SimEvent[] {
+    const e = this.events;
+    this.events = [];
+    return e;
   }
 
   /** The smooth drawing position of a ship, for a given alpha. */

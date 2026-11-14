@@ -1,0 +1,10 @@
+{
+  "muzzleSpeed": 75,
+  "gravity": 9.81,
+  "gunHeight": 3,
+  "maxElevationDeg": 10,
+  "rippleSeconds": 0.4,
+  "inheritVelocity": 1.0,
+  "gunSpreadShare": 0.6,
+  "maxBallSeconds": 6
+}

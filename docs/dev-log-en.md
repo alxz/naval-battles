@@ -4,6 +4,54 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 14 Nov 2026 (night, later) — M1 done; stuck-on-the-shore fix; M2 step 1 built
+
+**M1 tested by you, all OK; M1 is done.** You added a second island (x + 600) without changing code.
+
+### Your question: a ship in irons on a lee shore
+
+You found that a sloop that runs aground and then turns into the wind can stay stuck. Real ships feared a lee shore, and sailing physics should stay honest: in irons the sails give no drive. But the game must never leave you without a way out. Two separate things were going on:
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Fully stuck while turning through the wind with the stern on the sand | The push-off only slid the ship **backward**, and backward was the shore | The push-off now tries back, forward, port and starboard and takes the first free place. A test reproduces the case (fails with the old push-off, passes now) |
+| In irons the sails give no drive | Intended: the polar has a no-go zone | Keep turning until the compass needle leaves the red wedge (a reach), then sail away. Rotating on the spot still works at 30% of the turn rate |
+
+Idea for later (Stage 2 backlog): **kedging off**: the crew rows an anchor out and hauls the ship off the shore; slow and costs time. Hull damage from grounding comes with hull points in M3.
+
+### M2 step 1: guns and ballistics (waiting for your test)
+
+- `data/guns.json`: muzzle speed 75 m/s, gravity 9.81, gun height 3 m, elevation 0–10°, ripple 0.4 s, `inheritVelocity` 1.0. `ships.json`: `gunsPerSide` (sloop 4) and `reloadSeconds` (sloop 15).
+- `sim/guns.ts`: gun positions along the hull; ball launch (ship velocity + muzzle velocity, raised by the elevation); ball steps with gravity; `predictLanding` runs the same steps, so marker and shot always agree; ripple fire via `pendingShots`; reload timers.
+- New world data: `balls`, `pendingShots`, `nextBallId`, `events` (`gunFired`, `splash`); `ShipState.elevationDeg`, `reloadPort`, `reloadStarboard`; commands `fire` and `setElevation`. `Simulation.takeEvents()` hands the events to the screen.
+- Screen: balls drawn above their shadow by their height; splashes and muzzle flashes; a landing cross for each side (yellow = loaded, grey = reloading); HUD line with elevation, range and reload. Keys: Q / E fire port / starboard, R / F raise / lower.
+- `tools/range_table.py`: your first Python script; it prints range, flight time and highest point for 0–10° with the same steps as the game (10° → 212 m, 2.87 s).
+- 117 tests in the sandbox (118 with your angle test). No hits yet: balls fly through ships until step 2.
+
+---
+
+## 14 Nov 2026 (night) — Step 3b tested and pushed; M1 step 4 built
+
+**Step 3b:** tested by you, all OK; committed and pushed.
+
+### Step 4: island and wind drift (waiting for your test)
+
+- **Pelican Cay** (`data/islands.json`): a polygon of 10 corners about 450 m south of the start. Drawn once into a texture (shallow rim, sand, trees) at 1 px per metre and scaled like the ships.
+- **Collision** (`sim/geometry.ts`, `sim/land.ts`): point-in-polygon by ray casting; five hull points (bow, stern, middle, both sides). A ship that would touch land goes back to its last position, stops and is **aground** (HUD: "AGROUND"). It keeps a turn that does not touch land; if the turn touches land too, the crew **pushes off** 0.1 m per step (3 m/s). Hull damage comes with hull points in M3.
+- **Seeded random generator** (`sim/random.ts`, mulberry32): its state `rngState` lives in the world; the same seed gives the same game. Never `Math.random()` in `sim/`.
+- **Wind drift** (`sim/wind.ts`, `data/wind.json`): every 10 s the wind turns by up to ±3° (never more than 25° from its base direction) and its strength changes by up to ±0.05 (limits 0.4–0.9). lil-gui: "drift" checkbox; the direction slider now sets the base direction.
+- New types: `WindNow` (what a ship feels) and `Wind` (plus `baseFromRad`); `ShipState.aground`; `World.rngState`; `Tuning.windDrift`.
+
+### Problem found and fixed
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Headless: after a second aground with sails set, turning to starboard did nothing | The bow creeps right up to the sand; the shore is not square to the bow, so every small turn touched land and was undone | Push-off: if the turn alone touches land, the ship slides back 0.1 m per step while turning. A test reproduces the case (fails without the fix, passes with it) |
+
+107 tests in the sandbox (108 with your angle test).
+
+---
+
 ## 14 Nov 2026 — Step 3 tested; fixes (step 3b)
 
 **Your test of step 3:** turning into the wind slows the ship and stops it in the no-go zone; the sloop is fastest at 135° to the wind; the wind sliders move the compass and change the speed. The 5 s speed-up feel is not judged yet. **Your tuning:** fore-and-aft polar share at 180° changed from 0.65 to 0.8 (more speed with the wind from astern).

@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { SHIP_CLASSES } from './data';
 import { STEP_SECONDS, sailingInfo, stepShip, stepWorld, targetSpeed, windFactor } from './step';
-import type { ShipState, Wind } from './types';
+import type { ShipState, WindNow } from './types';
 import { createWorld } from './world';
 
 const sloop = SHIP_CLASSES['sloop']!;
 const EAST = 0;
 const NORTH = -Math.PI / 2;
 // For these tests: a full wind from the north. A ship heading east has it on the beam (TWA 90).
-const northWind: Wind = { fromRad: NORTH, strength: 1 };
+const northWind: WindNow = { fromRad: NORTH, strength: 1 };
 
 function newShip(headingRad = EAST): ShipState {
-  return { id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0 };
+  return { id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 0, reloadPort: 0, reloadStarboard: 0 };
 }
 
 /** Run `seconds` of fixed steps. */
-function run(ship: ShipState, seconds: number, wind: Wind = northWind, speedScale = 1): void {
+function run(ship: ShipState, seconds: number, wind: WindNow = northWind, speedScale = 1): void {
   const steps = Math.round(seconds / STEP_SECONDS);
-  for (let i = 0; i < steps; i++) stepShip(ship, sloop, wind, STEP_SECONDS, { speedScale });
+  for (let i = 0; i < steps; i++) stepShip(ship, sloop, wind, STEP_SECONDS, { speedScale, windDrift: false });
 }
 
 describe('windFactor', () => {

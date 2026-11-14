@@ -1,5 +1,5 @@
 import { bearingDegToHeadingRad } from './angles';
-import { WIND_START } from './data';
+import { WIND } from './data';
 import type { World } from './types';
 
 /** How far the moored target lies from the player at the start, in game metres. */
@@ -10,18 +10,24 @@ const START_HEADING_RAD = Math.PI / 2;
 
 /**
  * A new world for M1:
- *  - the trade wind from the east-north-east (data/wind.json);
+ *  - the trade wind from the east-north-east (data/wind.json), drifting slowly;
+ *  - Pelican Cay (data/islands.json) about 450 m ahead;
  *  - ship 1: your sloop, standing still, heading south;
  *  - ship 2: a moored target sloop, 150 m to your starboard (west), same heading,
  *    so it lies right on your beam, where a broadside would hit it.
  */
-export function createWorld(): World {
+/** Any whole number. The same seed gives the same wind drift (and later the same gun errors). */
+export const DEFAULT_SEED = 20261114;
+
+export function createWorld(seed: number = DEFAULT_SEED): World {
+  const wind = bearingDegToHeadingRad(WIND.startFromBearingDeg);
   const side = START_HEADING_RAD + Math.PI / 2; // starboard = 90 deg clockwise from the bow
   return {
     tick: 0,
-    wind: { fromRad: bearingDegToHeadingRad(WIND_START.startFromBearingDeg), strength: WIND_START.startStrength },
+    rngState: seed,
+    wind: { fromRad: wind, strength: WIND.startStrength, baseFromRad: wind },
     ships: [
-      { id: 1, shipClass: 'sloop', x: 160, y: 90, headingRad: START_HEADING_RAD, speed: 0, rudder: 0, sailLevel: 0 },
+      { id: 1, shipClass: 'sloop', x: 160, y: 90, headingRad: START_HEADING_RAD, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0 },
       {
         id: 2,
         shipClass: 'sloop',
@@ -31,7 +37,15 @@ export function createWorld(): World {
         speed: 0,
         rudder: 0,
         sailLevel: 0,
+        aground: false,
+        elevationDeg: 5,
+        reloadPort: 0,
+        reloadStarboard: 0,
       },
     ],
+    balls: [],
+    pendingShots: [],
+    nextBallId: 1,
+    events: [],
   };
 }
