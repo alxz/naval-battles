@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) and `dev-log-en.md` (what was done, problems and fixes). The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status:** M0 done · M1 in progress (steps 1, 1b, 1c done; next: the scale test, then wind and polar tables) · v0.6 answers the external review; O2 and O4 confirmed 13 Nov (Pirate only in Stage 1; net-gold score, port saves and suspend at sea); O3 waits for the scale test, see section 9.
+**Status:** M0 done · M1 in progress (steps 1, 1b, 1c and 2 done; next: wind and polar tables) · v0.6 answers the external review; O2, O3 and O4 confirmed 13 Nov (Pirate only in Stage 1; scale and display from the scale test; net-gold score, port saves and suspend at sea), see section 9.
 
 ---
 
@@ -67,16 +67,16 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D15 | Roadmap order | Game first, **backend after the web alpha** | Gets you a playable game sooner; Python learning starts early through helper scripts (5.6) | Proposed (open decision O1) |
 | D16 | Aiming | **Manual gun elevation** with a landing marker, plus random factors so that no shot is certain. The same rules apply to bots | Your note: aiming must stay partly a matter of luck after the player has learned it | Confirmed 12 Nov |
 | D17 | Client language | **TypeScript** (compiled by Vite), using the gentle rules in 5.8 | You want to learn better practices; you know Java and C#, so types feel familiar. The gentle rules keep the cost low | Confirmed 12 Nov |
-| D18 | Art path | Step 1: Kenney Pirate Pack placeholders. Step 2: **3D look from pre-rendered sprites** (Kenney Pirate Kit or your own models), as a **pixel look at 640 × 360** | You want a 3D look without a 3D engine. Small files, hides modelling flaws, easy to retouch by hand. The art spike in M2 may still change the camera angle, and we can revisit the style if the spike looks wrong | Confirmed 12 Nov · refined by D27 (proposed, O3) |
+| D18 | Art path | Step 1: Kenney Pirate Pack placeholders. Step 2: **3D look from pre-rendered sprites** (Kenney Pirate Kit or your own models), as a **pixel look at 640 × 360** | You want a 3D look without a 3D engine. Small files, hides modelling flaws, easy to retouch by hand. The art spike in M2 may still change the camera angle, and we can revisit the style if the spike looks wrong | Confirmed 12 Nov · refined by D27 (13 Nov) |
 | D19 | Living world | Your new ideas are staged (section 3.3). The cheapest, most valuable parts form their own release **R4 "Living Sea"**, after the campaign works | Sailing must not be boring, but R1–R3 must stay fast | Confirmed 12 Nov |
 | D20 | Quests | One small **contract system** carries all quest ideas; new quest types are added as data and small scripts | Bounties, treasure, person hunts, ghost ships and guild jobs share one structure | Proposed |
 | D21 | Apple Developer Program | Join at milestone **M10**; until then a free Apple ID is enough to test on your own devices | Saves about 99 USD per year for months | Confirmed 12 Nov |
 | D22 | Project setup | The client project is created **by hand**: Vite `vanilla-ts` template + `npm install phaser`; `host: true` in the Vite config so phones can reach the dev server | `npm create @phaserjs/game` quits when its recording question is answered "No"; the manual setup is short and we control every file | Confirmed 12 Nov |
 | D23 | Simulation loop | Fixed step of 30 per second, with **interpolation** for drawing. Commands wait in a queue and are applied at the start of the next step. A pause longer than 10 steps is dropped. **Deterministic for the same inputs on the same browser engine.** Chrome (V8) and Safari (JavaScriptCore) may differ in the last digits of `Math.sin` and similar functions, so saves store the whole world state, tests compare with tolerances, and multiplayer (Stage 3) runs the simulation on the server | The same result at every frame rate; bots and tests can be repeated; no jumps after a tab switch | Confirmed 12 Nov · wording corrected 13 Nov (review) |
 | D24 | Touch controls | A **temporary** set of four buttons (rudder `<` `>`, sails `-` `+`) arrives in M1 so that phones can be tested early. The final touch controls stay in M8 | The iPhone has no keyboard; the test devices are part of the plan (D14) | Confirmed 12 Nov |
-| D25 | View scale and phone HUD | Zoom is our own scale (pixels per metre × zoom: ×1, ×1.5, ×2, ×3; Z / X keys; phones start at ×2), not the Phaser camera zoom. Phones get a separate large HUD: big numbers and icons instead of small text. A foam wake shows motion | A 640 × 360 picture is small on a phone; the HUD stays sharp and unscaled | Confirmed 12 Nov · zoom steps replaced by D26 (proposed) |
-| D26 | World scale and camera | **Game metres:** ship lengths and speeds are about 2× real (sloop 30 m, frigate 70 m). At zoom ×1, 1 game metre = 1 px, so the 30–70 px sprites show ships at their game length. Zoom uses whole steps only: ×1 for combat, ×2 for sailing close-ups. A **combat camera** shifts toward the nearest enemy, and ships outside the view get edge markers. The zoomed-out tactical view shows icons, not shrunk sprites. The old "speed scale ×2" is folded in | At 2 px/m the view (320 × 180 m) is smaller than the gun range, so the enemy is off-screen in most broadsides. Whole zoom steps keep pixel art sharp | Proposed (O3) · the M1 scale test decides |
-| D27 | Display | Integer pixel scaling on every device, no blurry scaling. The logical **height** is about 360 px on a computer and about 240 px on a phone in landscape; the width follows the screen shape (no black bars). The HUD is anchored to the screen edges | A fixed 640 × 360 picture is scaled by non-whole factors on most screens (uneven pixels) and is too small on a phone | Proposed (O3) · refines D18 |
+| D25 | View scale and phone HUD | Zoom is our own scale (pixels per metre × zoom: ×1, ×1.5, ×2, ×3; Z / X keys; phones start at ×2), not the Phaser camera zoom. Phones get a separate large HUD: big numbers and icons instead of small text. A foam wake shows motion | A 640 × 360 picture is small on a phone; the HUD stays sharp and unscaled | Confirmed 12 Nov · zoom steps replaced by D26 (13 Nov) |
+| D26 | World scale and camera | **Game metres:** ship lengths and speeds are about 2× real (sloop 30 m, frigate 70 m). At zoom ×1, 1 game metre = 1 px. Whole zoom steps: **×1 for sailing and long-range fights, ×2 for close fights.** When an enemy is within the **close-fight range** (120 m, tunable), **auto combat zoom** picks the largest step that still shows both ships (with spare room before zooming in, smoothed over about 0.25 s). A **combat camera** shifts toward the nearest enemy, and ships outside the view get edge markers. The zoomed-out tactical view shows icons, not shrunk sprites | Scale test 13 Nov on computer, iPhone and iPad: 1 px/m is right for sailing, 2 px/m for combat; at ×2 a 200 m broadside does not fit, so the zoom follows the distance. On a phone ×2 applies only to close fights (about 70 m abeam); edge markers cover the rest | Confirmed 13 Nov (O3) |
+| D27 | Display | Integer pixel scaling on every device, no blurry scaling (`Scale.NONE`; we set canvas size and CSS zoom). The logical **height** is about **400 px on a computer and tablet** and about **240 px on a phone** in landscape; the width follows the screen shape (no black bars). The HUD is anchored to the screen edges | A fixed 640 × 360 picture is scaled by non-whole factors on most screens (uneven pixels) and is too small on a phone. Scale test: 400 suits the computer, 240 the iPhone; the iPad is comfortable | Confirmed 13 Nov (O3) · refines D18 |
 | D28 | Combat tuning | Set **targets first** (duel 2–4 min; 1–2 hits per 4-gun salvo at 150 m), then measure hit rates with a Monte Carlo script (`tools/hit_table.py`), then derive damage per hit | Hit rates depend strongly on ship size and range; damage chosen by feel would be unbalanced | Adopted 13 Nov (review) |
 | D29 | Player side in Stage 1 | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain as the enemy nation | An English captain has only pirate bots as targets, and their loot is thin. One side removes the side choice, a set of port types and the admiralty screen; saves about 1 week in M5 | Confirmed 13 Nov (O2) · changes D8 |
 | D30 | Score and saving | The score counts **net gold gained**: loot, prize money, bounties and trade profit (sale price minus purchase cost). Manual saves in port; at sea you can **suspend** (save and quit; the save is deleted when loaded). Autosave on entering port | "Gold earned" counted every sale, so buying and selling the same goods inflated the score. Unlimited saves at sea remove the risk of losing the ship | Confirmed 13 Nov (O4) · clarifies D9 |
@@ -136,15 +136,15 @@ Each idea is split into a small first version and a deeper later version.
 
 ### 4.0 Key constants
 
-The single source for the numbers that other documents repeat. Values marked *proposed* wait for the M1 scale test (O3).
+The single source for the numbers that other documents repeat. Scale and display values were confirmed by the M1 scale test on 13 Nov (O3).
 
 | Constant | Value | Where it lives |
 |---|---|---|
 | Simulation step | 30 per second | `sim/step.ts` |
-| World unit | game metre; ship sizes and speeds about 2× real (*proposed*, D26) | `data/*.json` |
-| Pixels per game metre at zoom ×1 | 1 (*proposed*; was 2) | `data/view.json` |
-| Zoom steps | ×1 combat, ×2 close-up; tactical view with icons (*proposed*) | `data/view.json` |
-| Logical screen height | about 360 px on a computer, about 240 px on a phone (*proposed*, D27) | `data/view.json` |
+| World unit | game metre; ship sizes and speeds about 2× real (D26) | `data/*.json` |
+| Pixels per game metre at zoom ×1 | 1 (was 2) | `data/view.json` |
+| Zoom steps | ×1 sailing and long range, ×2 close combat; auto combat zoom within the close-fight range (120 m); tactical view with icons | `data/view.json` |
+| Logical screen height | about 400 px on a computer and tablet, about 240 px on a phone (D27) | `data/view.json` |
 | Tile | 32 × 32 px (32 game metres at ×1) | Tiled map |
 | Map | about 6 × 4 km | Tiled map |
 | Muzzle speed / max elevation / gravity | 75 m/s / 10° / 9.81 m/s² → max range about 200 m, flight about 2.7 s | `data/guns.json` |
@@ -158,11 +158,11 @@ The single source for the numbers that other documents repeat. Values marked *pr
 
 | Item | Starting value |
 |---|---|
-| World scale | Game metres: ship lengths and speeds about 2× real (D26, *proposed*) |
+| World scale | Game metres: ship lengths and speeds about 2× real (D26) |
 | Pixels per game metre | 1 at zoom ×1 |
-| Logical screen | Height about 360 px on a computer, about 240 px on a phone; the width follows the screen; integer pixel scale (D27, *proposed*) |
-| View at zoom ×1 | Computer about 640 × 360 m; iPhone in landscape about 520 × 240 m |
-| Zoom | Whole steps: ×1 (combat) and ×2 (sailing close-up), keys Z / X. A tactical view (key V) shows icons on a zoomed-out sea |
+| Logical screen | Height about 400 px on a computer and tablet, about 240 px on a phone; the width follows the screen; integer pixel scale (D27) |
+| View at zoom ×1 | Computer about 700 × 400 m; iPhone in landscape about 500 × 240 m |
+| Zoom | Whole steps: ×1 (sailing, long-range fights) and ×2 (close fights), keys Z / X and a touch button. Auto combat zoom within 400 m (D26). A tactical view (key V) shows icons on a zoomed-out sea |
 | Combat camera | When an enemy is within 400 m, the camera shifts toward it so both ships fit; your ship stays inside the middle 80% of the screen |
 | Contacts | Ships within the sighting range (1,500 m) but outside the view get a marker at the screen edge with their distance |
 | Map size | About 6 × 4 km |
@@ -206,7 +206,7 @@ turnRate  = baseTurnRate × (0.3 + 0.7 × min(1, speed / (0.5 × maxSpeed)))
 
 Inside the no-go zone the ship slows and stops ("in irons"). Touching land stops the ship and damages the hull a little.
 
-**Current code and this formula.** M1 step 1 uses a simpler version: speed changes at a fixed rate (`acceleration`), and the rudder has no effect at standstill (`steerSpeed`). M1 step 3 switches to the formulas above, with the time constant (5 s) and the minimum steering share (0.3) as numbers in `ships.json`.
+**Current code.** Since M1 step 3 (13 Nov) the code uses these formulas (`sim/step.ts`, `sim/polar.ts`), with the time constant (`speedTimeConstant`, sloop 5 s) and the minimum steering share (`minSteerShare`, 0.3) per class in `ships.json` and the polar tables in `polars.json`. Sail condition (M3) and the Navigation skill (M6) join the formula later. Wind drift arrives in M1 step 4 together with the seeded random generator.
 
 ### 4.4 Guns and ballistics
 
@@ -388,7 +388,7 @@ price = basePrice × (targetStock / currentStock), limited to 0.4 … 2.5 × bas
 
 ### 4.10 Ships
 
-Game units (D26, *proposed*): lengths and speeds are about 2× real. Speeds in m/s and turn rates in rad/s, as in `ships.json`.
+Game units (D26): lengths and speeds are about 2× real. Speeds in m/s and turn rates in rad/s, as in `ships.json`.
 
 | Class | Length | Rig | Guns per side | Crew | Hold | Top speed | Turn rate | Hull | Role |
 |---|---|---|---|---|---|---|---|---|---|
@@ -696,9 +696,9 @@ Based on 8–10 hours per week. Each release is a version you can play.
 - [x] Step 1: fixed-step loop (30 Hz) with interpolation; `sim/` with world, commands (`setRudder`, `setSails`), ship step with inertia; ship numbers in `data/ships.json`; tests (D23).
 - [x] Step 1b: temporary touch buttons (D24).
 - [x] Step 1c: zoom keys Z / X, foam wake, large phone HUD (D25).
-- [ ] **Step 2: scale test (new; decides O3).** lil-gui panel (moved here from step 4) with live sliders for pixels per metre, zoom, logical height and `speedScale`; integer pixel scaling with a logical height per device (D27); ship data in game metres (D26); a moored target ship with range rings at 100, 150 and 200 m; a first combat camera and edge markers. Test on the computer, the iPhone and the iPad, then fix the values in 4.0.
+- [x] **Step 2: scale test (new; decides O3).** lil-gui panel (moved here from step 4) with live sliders for pixels per metre, zoom, logical height and `speedScale`; integer pixel scaling with a logical height per device (D27); ship data in game metres (D26); a moored target ship with range rings at 100, 150 and 200 m; a first combat camera and edge markers. Test on the computer, the iPhone and the iPad, then fix the values in 4.0. **Done 13 Nov:** values in 4.0; step 2b added auto combat zoom.
 - [ ] Step 3: wind in the world state; three polar tables in JSON; the speed and turn formulas from 4.3; the angle module with bearings and wind angle, fields named with units (D34); compass with wind arrow and heading in the HUD (text on a computer, icons on a phone).
-- [ ] Step 4: one island with collision.
+- [ ] Step 4: one island with collision; slow wind drift (4.2) with a seeded random generator in the world state.
 - [ ] A unit test for every new formula (polar interpolation, speed formula, angle conversions).
 - **You learn:** vectors, angles, sin and cos, delta time, unit tests, how screen scaling works.
 - **Done when:** you can tack upwind, the ship stops in irons, sailing feels good, and on every device you can see a target 150 m abeam.
@@ -862,13 +862,13 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 
 ## 9. Open decisions
 
-Two decisions are open. O3 is answered by the scale test; O1 is unchanged. O2 and O4 were closed on 13 Nov.
+One decision is open (O1). O2, O3 and O4 were closed on 13 Nov.
 
 | # | Question | Recommended default | Alternative | Decide by |
 |---|---|---|---|---|
 | **O1** | When is the Python backend built? (D15) | After the web alpha (M9) | Right after the campaign (R3); R4 and R5 move about 3 weeks later | Before M7 |
 | **O2** | Which side does the player take in Stage 1? (D29 against D8) | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain | Keep both sides (D8). Pirate bots that keep their loot (4.11) and Admiralty bounties give the English captain an income; M5 takes about 1 week longer | **Closed 13 Nov: Pirate only (D29)** |
-| **O3** | World scale and display (D26, D27) | Game metres with 1 px/m at zoom ×1; whole zoom steps; logical height about 360 (computer) and 240 (phone) with integer scaling | Keep 2 px/m and real ship sizes, shorten the gun range to about 120 m and rely on the combat camera | End of M1 step 2 |
+| **O3** | World scale and display (D26, D27) | Game metres with 1 px/m at zoom ×1; whole zoom steps; logical height about 360 (computer) and 240 (phone) with integer scaling | Keep 2 px/m and real ship sizes, shorten the gun range to about 120 m and rely on the combat camera | **Closed 13 Nov: scale test (D26, D27)** |
 | **O4** | Score and saving (D30 against D9) | Net gold gained; save in port, suspend at sea | Keep "gold earned" and saving anywhere, and accept that the score can be inflated | **Closed 13 Nov: accepted (D30)** |
 
 O2 and O4 change no code yet: the side matters only from M5, the score and saves only from M6.

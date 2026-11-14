@@ -29,11 +29,13 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 - **Touch (D24):** four temporary buttons now (rudder `<` `>`, sails `-` `+`); final touch controls with an assisted-aim option in M8.
 - **Combat tuning (D28):** targets first (duel 2–4 min; 1–2 hits per 4-gun salvo at 150 m), then a Monte Carlo hit table (`tools/hit_table.py`), then damage per hit.
 - **Economy guards (D31):** per-unit price impact, 10–15% buy/sell spread, off-map imports refill stock to at least 30% of target; a 1,000-day headless run (real TS `sim/` code, CSV plotted in Python) before R3.
-- **Angles (D34):** one tested module `sim/angles.ts` converts sim heading (rad, 0 = east, clockwise), compass bearing (deg, 0 = north) and wind angle TWA (deg off the wind). Fields carry units: `headingRad`, `bearingDeg`, `twaDeg`, `windFromRad`.
+- **Angles (D34):** one tested module `sim/angles.ts` (`headingRadToBearingDeg`, `bearingDegToHeadingRad`, `twaDeg`, `compassPoint`) converts sim heading (rad, 0 = east, clockwise), compass bearing (deg, 0 = north) and wind angle TWA (deg off the wind). Fields carry units: `ShipState.headingRad`, `Wind.fromRad`, `twaDeg`.
 - **Fun checks (D35)** with written pass/fail criteria after R1 and R3. **Schedule (D36):** dates are likely estimates; hours logged per session; recompute after each release.
 
-## Proposed decisions (waiting; do not build on them until confirmed)
-- **O3 — World scale and display (D26, D27), decided by the M1 scale test:** game metres with ship sizes and speeds about 2× real (sloop 30 m, frigate 70 m); 1 px per game metre at zoom ×1; whole zoom steps only (×1 combat, ×2 close-up; tactical view with icons); integer pixel scaling with logical height about 360 px (computer) and 240 px (phone), width follows the screen; combat camera that shifts toward the nearest enemy; edge markers for ships outside the view. Replaces D25's ×1/×1.5/×2/×3 zoom.
+## Scale and display (D26, D27, confirmed 13 Nov by the M1 scale test, O3 closed)
+- Game metres: ship sizes and speeds about 2× real (sloop 30 m, frigate 70 m); 1 px per game metre at zoom ×1.
+- Whole zoom steps: ×1 sailing and long-range fights, ×2 close fights. **Auto combat zoom** within the close-fight range (120 m) picks the largest step that shows both ships (spare room before zooming in; smoothed 0.25 s). Combat camera shifts toward the nearest enemy (your ship stays in the middle 80%); edge markers for ships off screen.
+- Integer pixel scaling (`Scale.NONE`): logical height about 400 px on computer and tablet, 240 px on phone; width follows the screen. Values in `data/view.json`.
 
 ## Architecture rules
 1. All game rules live in `client/src/sim/`: pure TypeScript, **no Phaser imports**.
@@ -43,14 +45,14 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 5. All balance numbers and content (ships, goods, ports, contracts) live in JSON data files.
 6. Units: game metres, seconds; x east, y south; sim angle 0 = east, clockwise. Wind direction = where it comes from.
 
-## Key constants (copied from plan section 4.0; *proposed* values wait for O3)
+## Key constants (copied from plan section 4.0)
 | Constant | Value |
 |---|---|
 | Simulation step | 30 per second |
-| World unit | game metre; ships about 2× real (*proposed*) |
-| Pixels per game metre at zoom ×1 | 1 (*proposed*; current code still uses 2) |
-| Zoom | ×1 combat, ×2 close-up, tactical icon view (*proposed*) |
-| Logical screen height | about 360 px computer, 240 px phone (*proposed*) |
+| World unit | game metre; ships about 2× real |
+| Pixels per game metre at zoom ×1 | 1 |
+| Zoom | ×1 sailing/long range, ×2 close combat, auto combat zoom; tactical icon view later |
+| Logical screen height | about 400 px computer and tablet, 240 px phone |
 | Tile / map | 32 × 32 px / about 6 × 4 km |
 | Guns | muzzle 75 m/s, elevation 0–10°, g 9.81 → max range about 200 m, flight about 2.7 s; fire arc ±25° |
 | Sighting range | 1,500 m |
@@ -59,7 +61,7 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 
 ## Stage 1 rules (starting values)
 - **Wind:** one global wind, default trade wind from the ENE, slow drift.
-- **Sailing:** rudder + sail level 0–100%. `speed = maxSpeed × polar(TWA) × sailLevel × wind × sail condition × Navigation bonus`, exponential approach (time constant 5 s); turn rate has a 0.3 minimum share. Three polars: fore-and-aft (no-go below 40°), mixed (48°), square (55°). Current M1 step 1 code uses a simpler linear version; step 3 aligns it.
+- **Sailing:** rudder + sail level 0–100%. `speed = maxSpeed × polar(TWA) × sailLevel × wind × sail condition × Navigation bonus`, exponential approach (time constant 5 s); turn rate has a 0.3 minimum share. Three polars: fore-and-aft (no-go below 40°), mixed (48°), square (55°). Code matches since M1 step 3 (sail condition and Navigation join later).
 - **Guns:** broadsides only, ±25° arc, manual elevation 0–10°, landing marker shown as an ellipse. The ball keeps `inheritVelocity` (start 1.0) × ship velocity. Hit test along the segment of each step.
 - **Accuracy:** salvo error (ship roll, whole broadside) plus gun error per ball; both depend on Battle skill, wind, crew shortage and gun wear. Seeded random numbers. σ is tuned after the scale test (bigger ships double the hit rate).
 - **Hit zones:** hull (low, about 5 m on a sloop) and rigging (high).
@@ -85,14 +87,13 @@ Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaig
 | R6 "Online" | Python backend; privacy check | M9 | late Aug 2027 |
 | R7 "iOS" | Capacitor, TestFlight, App Store guideline check | M10 | mid Sep 2027 |
 
-**Current status:** M0 done. M1 "Sailing" in progress: steps 1, 1b, 1c done; **step 2, the scale test, is built and waits for device checks** (integer pixel scaling via `Scale.NONE`; `data/view.json`; ship data in game metres for all 4 classes; moored target with `placeShip`; range rings 100/150/200 m; combat camera; edge markers; lil-gui panel; Phaser pinned 4.2.1, lil-gui 0.21.0; 62 tests in sandbox, 63 with the developer's angle test). After the checks: write the chosen values into plan 4.0 and close O3. Then step 3 (wind, polars, plan formulas, angle module, compass) and step 4 (island). Current code: sloop 30 m, maxSpeed 11.5, acceleration 1.5, turnRate 0.8, steerSpeed 3, at 1 px/m.
+**Current status:** M0 done. M1 "Sailing": steps 1, 1b, 1c and 2 (+2b auto combat zoom) done and tested on computer, iPhone, iPad. **Step 3 done and tested (14 Nov), plus 3b fixes (close-fight range 120 m for auto zoom; panel releases keyboard focus):** wind in the world (`Wind {fromRad, strength}`, trade wind from ENE 67.5°, strength 0.7, `setWind` command, lil-gui sliders); `data/polars.json` (3 rigs) and `sim/polar.ts`; plan 4.3 formulas (exponential speed, time constant per class, `minSteerShare` 0.3, wind factor 0.4 + 0.6 × strength); angle module; `heading` renamed `headingRad`; compass (no-go wedge, wind arrow, heading needle; bottom left on computer, right side on phone); start course south (beam reach). 89 tests in the sandbox (90 with the developer's angle test). Developer tuned fore-and-aft polar share at 180° to 0.8. Next: step 4 (island with collision, wind drift with seeded random). Sloop: 30 m, maxSpeed 11.5, speedTimeConstant 5, turnRate 0.8, minSteerShare 0.3.
 
 ## Stage 2 backlog
 English captain with Spain as enemy nation; Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer, server-authoritative.
 
-## Open decisions (defaults in use; O2 and O4 closed 13 Nov → D29, D30)
+## Open decisions (defaults in use; O2, O3, O4 closed 13 Nov → D29, D26/D27, D30)
 - **O1** backend order: after the web alpha (M9), default. Decide before M7.
-- **O3** world scale and display (D26, D27): answered by the M1 scale test.
 
 ## Phaser 4 notes (most tutorials and AI answers describe Phaser 3)
 - 4.2.x ships its own types; check every call against `node_modules/phaser/types`.

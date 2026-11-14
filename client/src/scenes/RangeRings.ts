@@ -26,7 +26,7 @@ export class RangeRings {
   }
 
   /** x, y in game metres; s = screen pixels per metre. */
-  update(x: number, y: number, heading: number, s: number): void {
+  update(x: number, y: number, headingRad: number, s: number): void {
     const g = this.g;
     g.clear();
     for (const label of this.labels) label.setVisible(this.visible);
@@ -41,7 +41,7 @@ export class RangeRings {
     const arc = (viewJson.fireArcPreviewDeg * Math.PI) / 180;
     g.fillStyle(0xffe08a, 0.1);
     for (const side of [Math.PI / 2, -Math.PI / 2]) {
-      const centre = heading + side;
+      const centre = headingRad + side;
       g.beginPath();
       g.slice(px, py, maxRange * s, centre - arc, centre + arc, false);
       g.fillPath();

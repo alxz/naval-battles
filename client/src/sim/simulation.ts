@@ -10,7 +10,7 @@ export const MAX_STEPS_PER_UPDATE = 10;
 export interface Pose {
   x: number;
   y: number;
-  heading: number;
+  headingRad: number;
 }
 
 /**
@@ -57,15 +57,15 @@ export class Simulation {
     const now = this.world.ships[shipIndex];
     const before = this.previous[shipIndex];
     if (!now) throw new Error(`No ship with index ${shipIndex}`);
-    if (!before) return { x: now.x, y: now.y, heading: now.heading };
+    if (!before) return { x: now.x, y: now.y, headingRad: now.headingRad };
     return {
       x: lerp(before.x, now.x, alpha),
       y: lerp(before.y, now.y, alpha),
-      heading: lerpAngle(before.heading, now.heading, alpha),
+      headingRad: lerpAngle(before.headingRad, now.headingRad, alpha),
     };
   }
 
   private snapshot(): Pose[] {
-    return this.world.ships.map((s) => ({ x: s.x, y: s.y, heading: s.heading }));
+    return this.world.ships.map((s) => ({ x: s.x, y: s.y, headingRad: s.headingRad }));
   }
 }

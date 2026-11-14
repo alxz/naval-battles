@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import type { ShipState } from '../sim/types';
+import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
+import type { SailingInfo } from '../sim/step';
+import type { ShipState, Wind } from '../sim/types';
 import { TEXT_RESOLUTION } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
@@ -59,30 +61,43 @@ export class Hud {
     }
   }
 
-  update(ship: ShipState, tick: number, info: ScaleInfo): void {
+  update(ship: ShipState, tick: number, info: ScaleInfo, sailing: SailingInfo, wind: Wind): void {
+    const inIrons = sailing.twaDeg < sailing.noGoDeg;
     if (this.touch) {
-      this.updateTouch(ship, info);
+      this.updateTouch(ship, info, sailing, inIrons);
       return;
     }
-    const degrees = ((ship.heading * 180) / Math.PI + 360) % 360;
+    const bearing = headingRadToBearingDeg(ship.headingRad);
+    const windFrom = headingRadToBearingDeg(wind.fromRad);
+    const deg = (n: number): string => String(Math.round(n) % 360).padStart(3, '0');
     this.text.setText(
       [
-        'Naval-Battles M1 - scale test',
+        'Naval-Battles M1 - sailing',
         'A / D rudder   W / S sails   Z / X zoom',
         `sails ${Math.round(ship.sailLevel * 100)}%   speed ${ship.speed.toFixed(1)} m/s`,
-        `heading ${degrees.toFixed(0)} deg   tick ${tick}`,
+        `heading ${deg(bearing)} ${compassPoint(bearing)}   tick ${tick}`,
+        `wind from ${deg(windFrom)} ${compassPoint(windFrom)}, strength ${wind.strength.toFixed(2)}`,
+        `wind angle ${Math.round(sailing.twaDeg)} deg   sail power ${Math.round(sailing.share * 100)}%`,
+        inIrons ? 'IN IRONS - turn away from the wind' : '',
         `target ${Math.round(info.targetDistance)} m`,
         `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
         `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
-      ].join('\n'),
+      ]
+        .filter((line) => line !== '')
+        .join('\n'),
     );
   }
 
-  private updateTouch(ship: ShipState, info: ScaleInfo): void {
+  private updateTouch(ship: ShipState, info: ScaleInfo, sailing: SailingInfo, inIrons: boolean): void {
     const g = this.gfx;
     if (!g || !this.speed || !this.unit) return;
     this.speed.setText(ship.speed.toFixed(1));
-    this.text.setText(`target ${Math.round(info.targetDistance)} m\nview ${Math.round(info.viewWidthM)}x${Math.round(info.viewHeightM)} m`);
+    this.text.setText(
+      inIrons
+        ? `target ${Math.round(info.targetDistance)} m\nIN IRONS!`
+        : `target ${Math.round(info.targetDistance)} m\nwind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`,
+    );
+    this.text.setColor(inIrons ? '#ff8070' : '#ffffff');
 
     g.clear();
     // Dark panel behind the numbers.

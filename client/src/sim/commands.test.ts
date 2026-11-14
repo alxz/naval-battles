@@ -36,14 +36,26 @@ describe('applyCommand', () => {
   it('placeShip moves a ship, stops it and can change its class', () => {
     const w = createWorld();
     w.ships[1]!.speed = 5;
-    applyCommand(w, { type: 'placeShip', shipId: 2, x: 10, y: 20, heading: 1, shipClass: 'frigate' });
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: 10, y: 20, headingRad: 1, shipClass: 'frigate' });
     const s = w.ships[1]!;
-    expect([s.x, s.y, s.heading, s.speed, s.shipClass]).toEqual([10, 20, 1, 0, 'frigate']);
+    expect([s.x, s.y, s.headingRad, s.speed, s.shipClass]).toEqual([10, 20, 1, 0, 'frigate']);
   });
 
   it('placeShip keeps the old class if the new one is unknown', () => {
     const w = createWorld();
-    applyCommand(w, { type: 'placeShip', shipId: 2, x: 0, y: 0, heading: 0, shipClass: 'galleon' });
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: 0, y: 0, headingRad: 0, shipClass: 'galleon' });
     expect(w.ships[1]!.shipClass).toBe('sloop');
+  });
+
+  it('setWind changes the wind and keeps the strength within 0..1', () => {
+    const w = createWorld();
+    applyCommand(w, { type: 'setWind', fromRad: 1, strength: 3 });
+    expect(w.wind).toEqual({ fromRad: 1, strength: 1 });
+  });
+
+  it('setWind wraps the direction into (-PI, PI]', () => {
+    const w = createWorld();
+    applyCommand(w, { type: 'setWind', fromRad: 2 * Math.PI + 0.5, strength: 0.5 });
+    expect(w.wind.fromRad).toBeCloseTo(0.5);
   });
 });

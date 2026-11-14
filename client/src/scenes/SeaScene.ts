@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
+import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
+import { SHIP_CLASSES } from '../sim/data';
 import { Simulation } from '../sim/simulation';
+import { sailingInfo } from '../sim/step';
 import type { ShipState } from '../sim/types';
 import { createWorld } from '../sim/world';
 import { autoZoom } from '../view/autoZoom';
 import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
+import { Compass } from './Compass';
 import { EdgeMarkers } from './EdgeMarkers';
 import type { Contact } from './EdgeMarkers';
 import { Hud } from './Hud';
@@ -14,7 +18,7 @@ import { RangeRings } from './RangeRings';
 import { ScreenFit } from './ScreenFit';
 import { PLAYER_HULL, TARGET_HULL, makeShipTextures, shipTextureKey } from './ShipArt';
 import { TouchControls } from './TouchControls';
-import { TuningPanel } from './TuningPanel';
+import { TuningPanel, releaseFocus } from './TuningPanel';
 import { Wake } from './Wake';
 
 const PLAYER_ID = 1;
@@ -42,6 +46,7 @@ export class SeaScene extends Phaser.Scene {
   private rings!: RangeRings;
   private markers!: EdgeMarkers;
   private hud!: Hud;
+  private compass!: Compass;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
   private touch: TouchControls | null = null;
@@ -87,6 +92,7 @@ export class SeaScene extends Phaser.Scene {
       );
     }
     this.hud = new Hud(this, isTouch);
+    this.compass = new Compass(this); // last: drawn on top of everything
 
     // Integer pixel scaling: measure the screen now and after every resize.
     this.screenFit = new ScreenFit(this, (layout) => this.onLayout(layout));
@@ -99,18 +105,26 @@ export class SeaScene extends Phaser.Scene {
         speedScale: 1,
         combatCamera: true,
         autoZoom: viewJson.autoZoom,
+        closeFightRange: viewJson.closeFightRange,
         rangeRings: true,
         targetClass: 'sloop',
+        windFromBearingDeg: Math.round(headingRadToBearingDeg(this.sim.world.wind.fromRad) * 10) / 10,
+        windStrength: this.sim.world.wind.strength,
       },
       {
         onLogicalHeight: (h) => this.screenFit.setTargetHeight(h),
         onSpeedScale: (s) => (this.sim.tuning.speedScale = s),
         onPlaceTarget: (d) => this.placeTarget(d),
         onTargetClass: () => this.placeTarget(this.targetDistance()),
+        onWind: (fromBearingDeg, strength) =>
+          this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(fromBearingDeg), strength }),
       },
       isTouch,
     );
     this.screenFit.apply();
+
+    // A click or tap on the sea gives the keyboard back to the game (see releaseFocus).
+    this.input.on('pointerdown', () => releaseFocus());
   }
 
   update(_time: number, delta: number): void {
@@ -143,15 +157,15 @@ export class SeaScene extends Phaser.Scene {
       const hull = ship.id === PLAYER_ID ? PLAYER_HULL : TARGET_HULL;
       const key = shipTextureKey(ship.shipClass, hull);
       if (image.texture.key !== key) image.setTexture(key);
-      image.setPosition(pose.x * s, pose.y * s).setRotation(pose.heading).setScale(s);
+      image.setPosition(pose.x * s, pose.y * s).setRotation(pose.headingRad).setScale(s);
     });
 
     const me = poses[0];
     const myShip = this.sim.world.ships[0];
     if (!me || !myShip) return;
-    this.wake.update(seconds, me.x, me.y, me.heading, myShip.speed, s);
+    this.wake.update(seconds, me.x, me.y, me.headingRad, myShip.speed, s);
     this.rings.visible = v.rangeRings;
-    this.rings.update(me.x, me.y, me.heading, s);
+    this.rings.update(me.x, me.y, me.headingRad, s);
 
     // 4. The camera: at your ship, or pulled toward the nearest enemy (combat camera).
     const enemies = poses.slice(1);
@@ -186,6 +200,16 @@ export class SeaScene extends Phaser.Scene {
     this.panel.info.pixelScale = `x${layout.pixelScale} (${layout.width} x ${layout.height})`;
     this.panel.info.view = `${Math.round(halfW * 2)} x ${Math.round(halfH * 2)}`;
     this.panel.info.zoomNow = `x${this.zoomGoal}${this.zoomGoal !== v.zoom ? ' (auto)' : ''}`;
+    const wind = this.sim.world.wind;
+    const params = SHIP_CLASSES[myShip.shipClass];
+    const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
+    this.compass.update({
+      headingRad: me.headingRad,
+      windFromRad: wind.fromRad,
+      windStrength: wind.strength,
+      noGoDeg: sailing.noGoDeg,
+      twaDeg: sailing.twaDeg,
+    });
     this.hud.update(myShip, this.sim.world.tick, {
       viewWidthM: halfW * 2,
       viewHeightM: halfH * 2,
@@ -194,7 +218,7 @@ export class SeaScene extends Phaser.Scene {
       logicalHeight: layout.height,
       zoom: this.zoomGoal,
       targetDistance: this.targetDistance(),
-    });
+    }, sailing, wind);
   }
 
   /** Which whole zoom step to show now. */
@@ -213,6 +237,8 @@ export class SeaScene extends Phaser.Scene {
       keepInside: viewJson.combatCameraKeepInside,
       marginPx: viewJson.autoZoomMarginPx,
       spareToZoomInPx: viewJson.autoZoomSpareInPx,
+      closeFightRange: v.closeFightRange,
+      closeFightRangeSpare: viewJson.closeFightRangeSpare,
     });
   }
 
@@ -221,6 +247,7 @@ export class SeaScene extends Phaser.Scene {
     this.cameras.main.setSize(layout.width, layout.height);
     this.water.setSize(layout.width, layout.height);
     this.touch?.layout(layout.width, layout.height);
+    this.compass.layout(layout.width, layout.height, this.screenFit.isPhone);
   }
 
   /** Keys -> commands. Rudder is held; sails change one step per key press. */
@@ -266,13 +293,13 @@ export class SeaScene extends Phaser.Scene {
   private placeTarget(distance: number): void {
     const me = this.ship(PLAYER_ID);
     if (!me) return;
-    const side = me.heading + Math.PI / 2; // starboard (clockwise from the bow)
+    const side = me.headingRad + Math.PI / 2; // starboard (clockwise from the bow)
     this.sim.queueCommand({
       type: 'placeShip',
       shipId: TARGET_ID,
       x: me.x + Math.cos(side) * distance,
       y: me.y + Math.sin(side) * distance,
-      heading: me.heading,
+      headingRad: me.headingRad,
       shipClass: this.panel.values.targetClass,
     });
   }

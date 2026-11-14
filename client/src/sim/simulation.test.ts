@@ -57,8 +57,9 @@ describe('Simulation', () => {
     const alpha = sim.update(STEP_SECONDS * 0.5);
     const ship = sim.world.ships[0]!;
     const pose = sim.pose(0, alpha);
-    expect(pose.x).toBeLessThan(ship.x);
-    expect(pose.x).toBeGreaterThan(ship.x - 1);
+    // The start course is south, so the ship moves along y.
+    expect(pose.y).toBeLessThan(ship.y);
+    expect(pose.y).toBeGreaterThan(ship.y - 1);
   });
 
   it('keeps the world plain JSON data', () => {

@@ -4,6 +4,39 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 14 Nov 2026 — Step 3 tested; fixes (step 3b)
+
+**Your test of step 3:** turning into the wind slows the ship and stops it in the no-go zone; the sloop is fastest at 135° to the wind; the wind sliders move the compass and change the speed. The 5 s speed-up feel is not judged yet. **Your tuning:** fore-and-aft polar share at 180° changed from 0.65 to 0.8 (more speed with the wind from astern).
+
+| Problem | Cause | Fix |
+|---|---|---|
+| The computer started at zoom ×2, too close | The target now starts 150 m to the west, along the wide screen side, so auto combat zoom found that both ships fit at ×2 | New **close-fight range** (120 m, lil-gui slider "close fight (m)"): ×2 only when the enemy is that close; stays ×2 up to 20 m farther (no flip-flop). 2 new tests |
+| After changing the target class you could not steer | The drop-down list kept the keyboard focus, and lil-gui keeps those keys from the game | After any panel change, focus goes back to the game; a click or tap on the sea does the same (`releaseFocus`). Checked headless with and without the fix |
+
+89 tests in the sandbox (90 with your angle test).
+
+---
+
+## 13 Nov 2026 (late evening) — Scale test closed (O3); M1 step 3 built
+
+**Scale test result:** step 2b (auto combat zoom) works on the computer, iPad and iPhone; the iPad view is the most comfortable. O3 closed: D26 and D27 confirmed with logical height 400 (computer and tablet) and 240 (phone), ×1 for sailing, ×2 for close fights with auto combat zoom. Plan 4.0, 4.1 and the summary are updated.
+
+### Step 3: wind and sailing (waiting for your test)
+
+- **Wind** in the world state: `wind: { fromRad, strength }`; start: trade wind from the ENE (67.5°), strength 0.7 (`data/wind.json`). `setWind` command; lil-gui "Wind" folder.
+- **Polar tables** in `data/polars.json` (fore-and-aft, mixed, square) and `sim/polar.ts` (no-go zone, straight lines between points).
+- **Plan 4.3 formulas** in `sim/step.ts`: target speed = maxSpeed × polar(TWA) × sails × (0.4 + 0.6 × wind); speed approaches it exponentially (`speedTimeConstant`, sloop 5 s); a slow ship keeps 30% of its turn rate (`minSteerShare`), full steering from half of top speed. `acceleration` and `steerSpeed` were removed from `ships.json`.
+- **Angle module** (D34): `headingRadToBearingDeg`, `bearingDegToHeadingRad`, `twaDeg`, `compassPoint`; `heading` renamed `headingRad` everywhere.
+- **Compass**: red no-go wedge, blue wind arrow, white heading needle (red when in irons). HUD text on the computer: heading, wind, wind angle, sail power, "IN IRONS".
+- Start course is now south (a beam reach), the target 150 m to starboard (west).
+- 87 tests in the sandbox (88 with your angle test); build clean; headless check on computer and iPhone, no errors.
+
+### Next
+
+Your test of step 3. Then step 4: an island with collision and slow wind drift with a seeded random generator.
+
+---
+
 ## 13 Nov 2026 (evening) — O2 and O4 confirmed; M1 step 2 (scale test) built
 
 **Decisions:** O2 → **D29 confirmed**: the player is a Pirate in Stage 1; the English captain comes in Stage 2 with Spain. O4 → **D30 confirmed**: score = net gold gained + ships; manual saves in port, autosave on entering port, suspend at sea. Plan v0.6 (EN + RU) and the project summary are updated. No code depends on them before M5/M6.

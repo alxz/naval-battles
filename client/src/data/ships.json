@@ -1,38 +1,42 @@
 {
   "sloop": {
     "name": "Sloop",
+    "rig": "foreAndAft",
     "length": 30,
     "beam": 10,
     "maxSpeed": 11.5,
-    "acceleration": 1.5,
+    "speedTimeConstant": 5,
     "turnRate": 0.8,
-    "steerSpeed": 3
+    "minSteerShare": 0.3
   },
   "brigantine": {
     "name": "Brigantine",
+    "rig": "mixed",
     "length": 40,
     "beam": 12,
     "maxSpeed": 10.5,
-    "acceleration": 1.2,
+    "speedTimeConstant": 6,
     "turnRate": 0.63,
-    "steerSpeed": 3
+    "minSteerShare": 0.3
   },
   "merchantman": {
     "name": "Merchantman",
+    "rig": "square",
     "length": 56,
     "beam": 16,
     "maxSpeed": 6,
-    "acceleration": 0.6,
+    "speedTimeConstant": 9,
     "turnRate": 0.29,
-    "steerSpeed": 2
+    "minSteerShare": 0.3
   },
   "frigate": {
     "name": "Frigate",
+    "rig": "square",
     "length": 70,
     "beam": 18,
     "maxSpeed": 9.5,
-    "acceleration": 0.8,
+    "speedTimeConstant": 8,
     "turnRate": 0.4,
-    "steerSpeed": 3
+    "minSteerShare": 0.3
   }
 }

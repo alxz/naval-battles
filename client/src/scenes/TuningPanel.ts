@@ -9,8 +9,11 @@ export interface TuningValues {
   speedScale: number;
   combatCamera: boolean;
   autoZoom: boolean;
+  closeFightRange: number; // metres
   rangeRings: boolean;
   targetClass: string;
+  windFromBearingDeg: number; // compass degrees, where the wind comes from
+  windStrength: number; // 0..1
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -27,6 +30,8 @@ export interface TuningCallbacks {
   onPlaceTarget: (distance: number) => void;
   /** The target class was changed: swap the ship, keep its place. */
   onTargetClass: () => void;
+  /** The wind sliders moved. */
+  onWind: (fromBearingDeg: number, strength: number) => void;
 }
 
 /**
@@ -42,7 +47,7 @@ export class TuningPanel {
   constructor(start: TuningValues, callbacks: TuningCallbacks, startClosed: boolean) {
     this.values = { ...start };
     const v = this.values;
-    this.gui = new GUI({ title: 'Tuning (scale test)' });
+    this.gui = new GUI({ title: 'Tuning' });
 
     const view = this.gui.addFolder('View');
     view.add(v, 'pixelsPerMetre', 0.5, 3, 0.5).name('pixels / metre');
@@ -53,10 +58,16 @@ export class TuningPanel {
       .onFinishChange((h: number) => callbacks.onLogicalHeight(h));
     view.add(v, 'combatCamera').name('combat camera');
     view.add(v, 'autoZoom').name('auto combat zoom');
+    view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');
     view.add(this.info, 'pixelScale').name('pixel scale').listen().disable();
     view.add(this.info, 'view').name('view (m)').listen().disable();
     view.add(this.info, 'zoomNow').name('zoom now').listen().disable();
+
+    const wind = this.gui.addFolder('Wind');
+    const windChanged = (): void => callbacks.onWind(v.windFromBearingDeg, v.windStrength);
+    wind.add(v, 'windFromBearingDeg', 0, 359, 1).name('from (compass deg)').onChange(windChanged);
+    wind.add(v, 'windStrength', 0, 1, 0.05).name('strength').onChange(windChanged);
 
     const sailing = this.gui.addFolder('Sailing');
     sailing
@@ -80,6 +91,10 @@ export class TuningPanel {
     target.add(place, 'at200').name('put at 200 m');
     target.add(place, 'at400').name('put at 400 m');
 
+    // After any change, give the keyboard back to the game. Otherwise a focused
+    // drop-down list or number box keeps the keys, and W A S D stop steering the ship.
+    this.gui.onFinishChange(() => releaseFocus());
+
     if (startClosed) this.gui.close();
   }
 
@@ -88,4 +103,10 @@ export class TuningPanel {
     this.values.zoom = zoom;
     this.zoomController.updateDisplay();
   }
+}
+
+/** Take the keyboard focus away from any panel control (input, select, button). */
+export function releaseFocus(): void {
+  const el = document.activeElement;
+  if (el instanceof HTMLElement && el !== document.body) el.blur();
 }

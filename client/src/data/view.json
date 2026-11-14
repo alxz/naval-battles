@@ -10,6 +10,8 @@
   "autoZoom": true,
   "autoZoomMarginPx": 36,
   "autoZoomSpareInPx": 24,
+  "closeFightRange": 120,
+  "closeFightRangeSpare": 20,
   "zoomSmoothing": 0.25,
   "sightingRange": 1500,
   "rangeRings": [100, 150, 200],
