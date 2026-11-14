@@ -1,7 +1,7 @@
 import { applyCommand } from './commands';
 import { lerp, lerpAngle } from './interpolate';
 import { STEP_SECONDS, stepWorld } from './step';
-import type { Command, World } from './types';
+import type { Command, Tuning, World } from './types';
 
 /** Never run more than this many steps in one frame (protects after a long pause). */
 export const MAX_STEPS_PER_UPDATE = 10;
@@ -20,6 +20,8 @@ export interface Pose {
  */
 export class Simulation {
   readonly world: World;
+  /** Live tuning (lil-gui). Change the fields; the next step uses them. */
+  readonly tuning: Tuning = { speedScale: 1 };
   private previous: Pose[] = [];
   private accumulator = 0;
   private queue: Command[] = [];
@@ -42,7 +44,7 @@ export class Simulation {
       this.previous = this.snapshot();
       for (const command of this.queue) applyCommand(this.world, command);
       this.queue = [];
-      stepWorld(this.world);
+      stepWorld(this.world, STEP_SECONDS, this.tuning);
       this.accumulator -= STEP_SECONDS;
       steps += 1;
     }

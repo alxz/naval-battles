@@ -1,13 +1,25 @@
 import Phaser from 'phaser';
 import type { ShipState } from '../sim/types';
+import { TEXT_RESOLUTION } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
+
+/** Extra lines for the scale test: what the screen shows and how far the target is. */
+export interface ScaleInfo {
+  viewWidthM: number; // metres visible across the screen
+  viewHeightM: number;
+  pixelScale: number; // device pixels per logical pixel
+  logicalWidth: number;
+  logicalHeight: number;
+  zoom: number;
+  targetDistance: number; // metres
+}
 
 /**
  * The numbers on the screen.
  *  - On a computer: small text with all the details.
- *  - On a phone or tablet: a big panel with a large speed number and sail pips.
- *    Fewer words, larger shapes: you read it with a quick glance.
+ *  - On a phone or tablet: a big panel with a large speed number and sail pips,
+ *    plus one small line with the target distance.
  */
 export class Hud {
   private readonly touch: boolean;
@@ -22,47 +34,60 @@ export class Hud {
     if (touch) {
       this.gfx = scene.add.graphics().setScrollFactor(0).setDepth(100);
       this.speed = scene.add
-        .text(16, 12, '0.0', { fontFamily: 'monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffffff', resolution: 3 })
+        .text(16, 12, '0.0', {
+          fontFamily: 'monospace',
+          fontSize: '26px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          resolution: TEXT_RESOLUTION,
+        })
         .setScrollFactor(0)
         .setDepth(101);
       this.unit = scene.add
-        .text(80, 26, 'm/s', { fontFamily: 'monospace', fontSize: '14px', color: '#cfe6f7', resolution: 3 })
+        .text(80, 26, 'm/s', { fontFamily: 'monospace', fontSize: '14px', color: '#cfe6f7', resolution: TEXT_RESOLUTION })
         .setScrollFactor(0)
         .setDepth(101);
-      this.text = scene.add.text(0, 0, '').setVisible(false);
+      this.text = scene.add
+        .text(10, 80, '', { fontFamily: 'monospace', fontSize: '11px', color: '#ffffff', resolution: TEXT_RESOLUTION })
+        .setScrollFactor(0)
+        .setDepth(101);
     } else {
       this.text = scene.add
-        .text(8, 8, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffffff', resolution: 2 })
+        .text(8, 8, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffffff', resolution: TEXT_RESOLUTION })
         .setScrollFactor(0)
         .setDepth(100);
     }
   }
 
-  update(ship: ShipState, tick: number): void {
+  update(ship: ShipState, tick: number, info: ScaleInfo): void {
     if (this.touch) {
-      this.updateTouch(ship);
+      this.updateTouch(ship, info);
       return;
     }
     const degrees = ((ship.heading * 180) / Math.PI + 360) % 360;
     this.text.setText(
       [
-        'Naval-Battles M1 - sailing',
+        'Naval-Battles M1 - scale test',
         'A / D rudder   W / S sails   Z / X zoom',
         `sails ${Math.round(ship.sailLevel * 100)}%   speed ${ship.speed.toFixed(1)} m/s`,
         `heading ${degrees.toFixed(0)} deg   tick ${tick}`,
+        `target ${Math.round(info.targetDistance)} m`,
+        `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
+        `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
       ].join('\n'),
     );
   }
 
-  private updateTouch(ship: ShipState): void {
+  private updateTouch(ship: ShipState, info: ScaleInfo): void {
     const g = this.gfx;
     if (!g || !this.speed || !this.unit) return;
     this.speed.setText(ship.speed.toFixed(1));
+    this.text.setText(`target ${Math.round(info.targetDistance)} m\nview ${Math.round(info.viewWidthM)}x${Math.round(info.viewHeightM)} m`);
 
     g.clear();
     // Dark panel behind the numbers.
     g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(8, 8, 118, 68, 8);
+    g.fillRoundedRect(8, 8, 118, 100, 8);
 
     // Sail icon: a small triangle sail on a mast.
     g.fillStyle(0xf2e8c9, 1);

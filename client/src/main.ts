@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import './style.css';
 import { SeaScene } from './scenes/SeaScene';
 
-// Logical resolution is 640 x 360 (see the plan, section 4.1).
-// Phaser scales it up to fill the window with sharp pixels.
+// The size here is only a first guess. SeaScene measures the screen and picks
+// a logical size with integer pixel scaling (plan D27, see scenes/ScreenFit.ts).
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
@@ -12,8 +12,8 @@ new Phaser.Game({
   backgroundColor: '#1d5b8f',
   pixelArt: true,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // NONE: we set the canvas size and its CSS zoom ourselves.
+    mode: Phaser.Scale.NONE,
   },
   scene: [SeaScene],
 });

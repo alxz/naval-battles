@@ -16,6 +16,7 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "phaser": "^4.2.1"
+    "lil-gui": "0.21.0",
+    "phaser": "4.2.1"
   }
 }

@@ -44,7 +44,7 @@ describe('stepShip', () => {
   it('heading east moves x up', () => {
     const s = newShip();
     s.speed = 6;
-    s.sailLevel = 0.75; // target speed 6, so speed stays 6
+    s.sailLevel = 6 / sloop.maxSpeed; // target speed 6, so speed stays 6
     stepShip(s, sloop, 1);
     expect(s.x).toBeCloseTo(166);
     expect(s.y).toBeCloseTo(90);
@@ -54,7 +54,7 @@ describe('stepShip', () => {
     const s = newShip();
     s.heading = Math.PI / 2;
     s.speed = 6;
-    s.sailLevel = 0.75;
+    s.sailLevel = 6 / sloop.maxSpeed;
     stepShip(s, sloop, 1);
     expect(s.x).toBeCloseTo(160);
     expect(s.y).toBeCloseTo(96);
@@ -96,7 +96,50 @@ describe('stepShip', () => {
   });
 });
 
+describe('speedScale (live tuning)', () => {
+  it('speedScale 2 doubles the top speed', () => {
+    const s = newShip();
+    s.sailLevel = 1;
+    for (let i = 0; i < 30 * 30; i++) stepShip(s, sloop, STEP_SECONDS, { speedScale: 2 });
+    expect(s.speed).toBeCloseTo(sloop.maxSpeed * 2);
+  });
+
+  it('speedScale keeps the time needed to reach full speed', () => {
+    const normal = newShip();
+    const fast = newShip();
+    normal.sailLevel = 1;
+    fast.sailLevel = 1;
+    for (let i = 0; i < 30; i++) {
+      stepShip(normal, sloop, STEP_SECONDS);
+      stepShip(fast, sloop, STEP_SECONDS, { speedScale: 2 });
+    }
+    expect(fast.speed).toBeCloseTo(normal.speed * 2);
+  });
+});
+
+describe('ship data (game metres)', () => {
+  it('every class has a size and sane speeds', () => {
+    for (const p of Object.values(SHIP_CLASSES)) {
+      expect(p.length).toBeGreaterThan(p.beam);
+      expect(p.maxSpeed).toBeGreaterThan(0);
+      expect(p.acceleration).toBeGreaterThan(0);
+    }
+  });
+
+  it('the sloop is 30 game metres long (plan section 4.0)', () => {
+    expect(sloop.length).toBe(30);
+  });
+});
+
 describe('stepWorld', () => {
+  it('leaves the moored target where it is', () => {
+    const w = createWorld();
+    const before = { ...w.ships[1]! };
+    for (let i = 0; i < 90; i++) stepWorld(w);
+    expect(w.ships[1]!.x).toBe(before.x);
+    expect(w.ships[1]!.y).toBe(before.y);
+  });
+
   it('counts ticks', () => {
     const w = createWorld();
     stepWorld(w);

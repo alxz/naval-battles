@@ -32,4 +32,18 @@ describe('applyCommand', () => {
     applyCommand(w, { type: 'setSails', shipId: 99, value: 1 });
     expect(w.ships[0]!.sailLevel).toBe(0);
   });
+
+  it('placeShip moves a ship, stops it and can change its class', () => {
+    const w = createWorld();
+    w.ships[1]!.speed = 5;
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: 10, y: 20, heading: 1, shipClass: 'frigate' });
+    const s = w.ships[1]!;
+    expect([s.x, s.y, s.heading, s.speed, s.shipClass]).toEqual([10, 20, 1, 0, 'frigate']);
+  });
+
+  it('placeShip keeps the old class if the new one is unknown', () => {
+    const w = createWorld();
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: 0, y: 0, heading: 0, shipClass: 'galleon' });
+    expect(w.ships[1]!.shipClass).toBe('sloop');
+  });
 });

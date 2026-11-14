@@ -1,0 +1,13 @@
+{
+  "pixelsPerMetre": 1,
+  "zoomSteps": [1, 2],
+  "logicalHeightComputer": 360,
+  "logicalHeightPhone": 240,
+  "phoneMaxShortSide": 500,
+  "combatCameraRange": 400,
+  "combatCameraKeepInside": 0.8,
+  "combatCameraSmoothing": 0.4,
+  "sightingRange": 1500,
+  "rangeRings": [100, 150, 200],
+  "fireArcPreviewDeg": 25
+}
