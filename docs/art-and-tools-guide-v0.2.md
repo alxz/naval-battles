@@ -2,6 +2,8 @@
 
 *12 Nov 2026 · Companion to plan v0.4 · All sizes are starting values*
 
+> **Note (13 Nov 2026), plan v0.6:** two parts of this guide are under review. (1) **Scale:** the proposed world scale is 1 px per game metre at zoom ×1, with ships about 2× real size (D26); the sprite sizes in pixels stay the same, but "1 m = 2 px" and "32 px tile = 16 m" change to 1 px per game metre and 32 game metres per tile. The logical screen becomes about 360 px high on a computer and 240 px on a phone, with integer scaling (D27). (2) **Directions:** draft art uses 16 directions; the art spike (now a full day) compares 16 and 32 (D33). The art spike decides both; this guide becomes v0.3 after it. Until then, plan v0.6 section 4.0 wins.
+
 ---
 
 ## 1. Art direction: two steps

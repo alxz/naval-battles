@@ -1,6 +1,43 @@
 # Naval-Battles — Development Log
 
-Short record of what was done, what went wrong and how it was fixed. Newest entry first. Plan: `naval-game-plan-v0.5-en.md`.
+Short record of what was done, what went wrong and how it was fixed. Newest entry first. Plan: `naval-game-plan-v0.6-en.md`.
+
+---
+
+## 13 Nov 2026 — External review of plan v0.5; plan v0.6
+
+**Result:** the review (`Project_plan_v.0.5_Review`) was checked point by point. Its main finding was right: at 2 px/m the screen shows 320 × 180 m, but the guns reached 250 m, so in a broadside the enemy was off-screen. Plan v0.6 (EN + RU) answers every finding (Appendix B of the plan). No code changed today.
+
+### What we checked with numbers
+
+| Claim in the review | Our check | Verdict |
+|---|---|---|
+| Range at 10° with 85 m/s is about 250 m; dR/dθ ≈ 24 m per degree | 252 m; 24.2 m/deg | Correct |
+| 10–25% of balls hit at long range | Simulation of the plan formulas (Battle 4, wind 0.5): 0.9 hits per 4-gun salvo at 150 m, 0.8 at 200 m (v0.5 ship sizes) | Correct |
+| — (not in the review) | With ships 2× larger, the hit rate roughly doubles (2.0 per salvo at 150 m) | New finding: accuracy must be tuned **after** the scale decision |
+| The canvas is scaled by non-whole factors | Phaser `Scale.FIT` on a phone gives factors like 1.37 | Correct, and the review did not mention it; covered by D27 |
+
+### Decisions
+
+- **Adopted:** combat targets and hit table (D28), economy guards (D31), Phaser 4.2.1 pinned (D32), 16 directions for draft art (D33), one angle module with unit names (D34), fun checks with criteria (D35), likely dates and hour logging (D36), corrected determinism wording (D23).
+- **Waiting for your answer:** O2 Pirate only in Stage 1; O4 net-gold score and port saves with suspend at sea.
+- **Answered by the next step:** O3 world scale and display, by the M1 scale test.
+- **Where we did not follow the review:** the 1,000-day economy simulation runs the real TypeScript code (Python only plots the CSV), so the rules exist once; no second sprite size, because the zoomed-out view uses icons.
+
+### New estimate
+
+Stage 1 is likely about 44 weeks (range 38–55), R1 in mid January 2027. From now on, please add your hours to each entry (see the table below).
+
+### Next
+
+M1 step 2: the scale test (lil-gui, integer pixel scaling, ship data in game metres, a moored target with range rings, first combat camera and edge markers), checked on the computer, iPhone and iPad.
+
+### Hours log
+
+| Date | Hours | What |
+|---|---|---|
+| 12 Nov 2026 | (please fill in) | Planning, repository, M0, M1 steps 1–1c |
+| 13 Nov 2026 | (please fill in) | Review, plan v0.6 |
 
 ---
 
