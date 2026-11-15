@@ -9,7 +9,10 @@
     "turnRate": 0.8,
     "minSteerShare": 0.3,
     "gunsPerSide": 4,
-    "reloadSeconds": 15
+    "reloadSeconds": 15,
+    "hullPoints": 220,
+    "hullHeight": 5,
+    "mastHeight": 22
   },
   "brigantine": {
     "name": "Brigantine",
@@ -21,7 +24,10 @@
     "turnRate": 0.63,
     "minSteerShare": 0.3,
     "gunsPerSide": 6,
-    "reloadSeconds": 16
+    "reloadSeconds": 16,
+    "hullPoints": 320,
+    "hullHeight": 6,
+    "mastHeight": 30
   },
   "merchantman": {
     "name": "Merchantman",
@@ -33,7 +39,10 @@
     "turnRate": 0.29,
     "minSteerShare": 0.3,
     "gunsPerSide": 3,
-    "reloadSeconds": 18
+    "reloadSeconds": 18,
+    "hullPoints": 400,
+    "hullHeight": 7,
+    "mastHeight": 35
   },
   "frigate": {
     "name": "Frigate",
@@ -45,6 +54,9 @@
     "turnRate": 0.4,
     "minSteerShare": 0.3,
     "gunsPerSide": 12,
-    "reloadSeconds": 18
+    "reloadSeconds": 18,
+    "hullPoints": 600,
+    "hullHeight": 8,
+    "mastHeight": 45
   }
 }

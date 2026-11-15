@@ -104,7 +104,7 @@ export function stepWorld(
 
   for (const ship of world.ships) {
     const params = SHIP_CLASSES[ship.shipClass];
-    if (!params) continue;
+    if (!params || ship.sunk) continue; // a wreck does not sail
     const before = { x: ship.x, y: ship.y, headingRad: ship.headingRad };
     stepShip(ship, params, world.wind, dt, tuning);
     if (touchesLand(ship, params, islands)) {

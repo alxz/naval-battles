@@ -4,6 +4,21 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 14 Nov 2026 (night, 01:00+) — M2 step 1 tested; M2 step 2 built
+
+**Step 1 tested by you:** firing works; at high speed the balls land behind the cross. That is expected: the cross shows where a shot fired *now* would land and moves on with the ship while the balls fly (11 m/s × 2 s ≈ 22 m). Idea for step 6 (juice): leave a faint ghost cross where the salvo was aimed.
+
+### Step 2: hits, damage, sinking (waiting for your test)
+
+- `sim/hits.ts`: `segmentBoxEntry` (slab method), `toShipLocal`, `ballHit`. Each ship is two boxes: hull (water to `hullHeight`) and rigging (`hullHeight` to `mastHeight`). Each step tests the ball's whole segment, so a fast ball cannot jump through a ship; your own balls never hit you.
+- `ships.json`: `hullPoints`, `hullHeight`, `mastHeight` (sloop 220 / 5 m / 22 m; frigate 600 / 8 m / 45 m). `guns.json`: `damage` 27 → 9 hull hits sink a sloop (target 6–10, D28).
+- At 0 hull points the ship is **sunk**: it stops, cannot fire, takes no hits and fades to a faint wreck; camera, auto zoom and edge markers ignore it. `placeShip` (the "put at" buttons) brings the target back with a full hull.
+- Effects: brown splinters for hull hits, a white puff for rigging hits, a big splash when a ship sinks. HUD: target hull ("hull 139/220", "SUNK!").
+- Without random errors (step 3) the right elevation hits with every ball; this is why accuracy comes next.
+- 130 tests in the sandbox (131 with your angle test); headless: 3 hits with the first salvo, sunk after the third.
+
+---
+
 ## 14 Nov 2026 (night, later) — M1 done; stuck-on-the-shore fix; M2 step 1 built
 
 **M1 tested by you, all OK; M1 is done.** You added a second island (x + 600) without changing code.

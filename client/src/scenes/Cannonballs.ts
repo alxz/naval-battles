@@ -31,6 +31,10 @@ export class Cannonballs {
     for (const e of events) {
       if (e.type === 'splash') this.addFading('splash', e.x, e.y, s, SPLASH_SECONDS, 2.5);
       if (e.type === 'gunFired') this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
+      // Hits: brown splinters from the hull, a white puff of torn canvas from the rigging.
+      // Drawn on the water spot below the hit, raised by its height like the balls.
+      if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z, s, 0.6, 2);
+      if (e.type === 'sunk') this.addFading('splash', e.x, e.y, s, 2.5, 8);
     }
   }
 
@@ -98,6 +102,16 @@ export class Cannonballs {
     g.fillStyle(0xffffff, 0.6);
     g.fillRect(3, 3, 3, 3);
     g.generateTexture('splash', 9, 9);
+    g.clear();
+    g.fillStyle(0x6b3f1d, 1);
+    for (const [x, y] of [[0, 2], [3, 0], [6, 3], [2, 6], [5, 6], [3, 3]]) g.fillRect(x!, y!, 2, 2);
+    g.generateTexture('splinters', 8, 8);
+    g.clear();
+    g.fillStyle(0xf5f0e0, 1);
+    g.fillCircle(4, 4, 3);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(1, 1, 2, 2);
+    g.generateTexture('canvas', 8, 8);
     g.clear();
     g.fillStyle(0xfff1a8, 1);
     g.fillCircle(3, 3, 3);

@@ -11,7 +11,7 @@ const calm = { speedScale: 1, windDrift: false };
 function ship(elevationDeg: number, speed = 0): ShipState {
   return {
     id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad: 0, speed, rudder: 0, sailLevel: 0,
-    aground: false, elevationDeg, reloadPort: 0, reloadStarboard: 0,
+    aground: false, elevationDeg, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false,
   };
 }
 

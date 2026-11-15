@@ -1,5 +1,7 @@
 import { degToRad } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
+import { ballHit } from './hits';
+import type { HitZone } from './hits';
 import type { Ball, GunParams, ShipParams, ShipState, Side, World } from './types';
 
 /** The direction a battery fires: 90 degrees left (port) or right (starboard) of the bow. */
@@ -74,7 +76,7 @@ export function reloadLeft(ship: ShipState, side: Side): number {
  */
 export function orderBroadside(world: World, ship: ShipState, side: Side, stepSeconds: number, g: GunParams = GUNS): void {
   const params = SHIP_CLASSES[ship.shipClass];
-  if (!params || reloadLeft(ship, side) > 0) return;
+  if (!params || ship.sunk || reloadLeft(ship, side) > 0) return;
   const n = params.gunsPerSide;
   for (let gun = 0; gun < n; gun++) {
     const delay = n > 1 ? (gun / (n - 1)) * g.rippleSeconds : 0;
@@ -96,7 +98,7 @@ export function stepGunsAndBalls(world: World, dt: number, g: GunParams = GUNS):
   for (const shot of due) {
     const ship = world.ships.find((s) => s.id === shot.shipId);
     const params = ship ? SHIP_CLASSES[ship.shipClass] : undefined;
-    if (!ship || !params) continue;
+    if (!ship || !params || ship.sunk) continue;
     const from = gunPosition(ship, params, shot.side, shot.gun, g);
     const ball = launchBall(ship, shot.side, from, g);
     ball.id = world.nextBallId++;
@@ -104,9 +106,52 @@ export function stepGunsAndBalls(world: World, dt: number, g: GunParams = GUNS):
     world.events.push({ type: 'gunFired', shipId: ship.id, side: shot.side, x: from.x, y: from.y });
   }
 
-  for (const ball of world.balls) stepBall(ball, dt, g);
+  const hitBalls = new Set<number>();
   for (const ball of world.balls) {
-    if (ball.z <= 0) world.events.push({ type: 'splash', x: ball.x, y: ball.y });
+    const from = { x: ball.x, y: ball.y, z: ball.z };
+    stepBall(ball, dt, g);
+    const hit = firstHit(world, ball, from);
+    if (hit) {
+      hitBalls.add(ball.id);
+      applyHit(world, hit.ship, ball, hit.zone, hit.point, g);
+    } else if (ball.z <= 0) {
+      world.events.push({ type: 'splash', x: ball.x, y: ball.y });
+    }
   }
-  world.balls = world.balls.filter((b) => b.z > 0 && b.ageSeconds < g.maxBallSeconds);
+  world.balls = world.balls.filter((b) => !hitBalls.has(b.id) && b.z > 0 && b.ageSeconds < g.maxBallSeconds);
+}
+
+/**
+ * The first ship this ball hits during the step it just made (from -> its new position).
+ * Testing the whole segment means a fast ball never jumps through a ship.
+ * A ball never hits the ship that fired it, and sunk ships are ignored.
+ */
+function firstHit(world: World, ball: Ball, from: { x: number; y: number; z: number }): { ship: ShipState; zone: HitZone; point: { x: number; y: number; z: number } } | null {
+  const to = { x: ball.x, y: ball.y, z: ball.z };
+  let best: { ship: ShipState; zone: HitZone; t: number } | null = null;
+  for (const ship of world.ships) {
+    if (ship.id === ball.shipId || ship.sunk) continue;
+    const params = SHIP_CLASSES[ship.shipClass];
+    if (!params) continue;
+    const hit = ballHit(ship, params, from, to);
+    if (hit && (!best || hit.t < best.t)) best = { ship, zone: hit.zone, t: hit.t };
+  }
+  if (!best) return null;
+  const t = best.t;
+  const point = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, z: from.z + (to.z - from.z) * t };
+  return { ship: best.ship, zone: best.zone, point };
+}
+
+/** Hull hits take hull points; at 0 the ship sinks. Rigging hits only make an event for now (sails come in M3). */
+function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, point: { x: number; y: number; z: number }, g: GunParams): void {
+  world.events.push({ type: 'hit', shipId: ship.id, byShipId: ball.shipId, zone, ...point });
+  if (zone !== 'hull') return;
+  ship.hull = Math.max(0, ship.hull - g.damage);
+  if (ship.hull === 0 && !ship.sunk) {
+    ship.sunk = true;
+    ship.speed = 0;
+    ship.sailLevel = 0;
+    ship.rudder = 0;
+    world.events.push({ type: 'sunk', shipId: ship.id, byShipId: ball.shipId, x: ship.x, y: ship.y });
+  }
 }

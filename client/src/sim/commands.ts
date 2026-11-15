@@ -34,6 +34,9 @@ export function applyCommand(world: World, command: Command): void {
       if (command.shipClass !== undefined && SHIP_CLASSES[command.shipClass]) {
         ship.shipClass = command.shipClass;
       }
+      // A placed ship starts fresh: full hull, afloat (the test target comes back this way).
+      ship.hull = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? ship.hull;
+      ship.sunk = false;
       break;
     case 'setElevation':
       ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);

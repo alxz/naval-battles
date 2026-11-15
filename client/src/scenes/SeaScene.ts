@@ -173,6 +173,8 @@ export class SeaScene extends Phaser.Scene {
       const key = shipTextureKey(ship.shipClass, hull);
       if (image.texture.key !== key) image.setTexture(key);
       image.setPosition(pose.x * s, pose.y * s).setRotation(pose.headingRad).setScale(s);
+      // A sunk ship fades into the sea (it stays as a faint wreck); a placed one is solid again.
+      image.setAlpha(ship.sunk ? Math.max(0.2, image.alpha - seconds * 0.3) : 1);
     });
 
     this.islands.update(s);
@@ -189,7 +191,8 @@ export class SeaScene extends Phaser.Scene {
     if (myParams) this.markers2.update(myShip, myParams, s);
 
     // 4. The camera: at your ship, or pulled toward the nearest enemy (combat camera).
-    const enemies = poses.slice(1);
+    // Enemies: every other ship that is still afloat.
+    const enemies = poses.filter((_p, i) => i > 0 && !this.sim.world.ships[i]?.sunk);
     const goal = v.combatCamera
       ? combatCameraCentre(me, nearest(me, enemies), halfW, halfH, {
           range: viewJson.combatCameraRange,
@@ -239,6 +242,9 @@ export class SeaScene extends Phaser.Scene {
       logicalHeight: layout.height,
       zoom: this.zoomGoal,
       targetDistance: this.targetDistance(),
+      targetHull: this.ship(TARGET_ID)?.hull ?? 0,
+      targetHullMax: SHIP_CLASSES[this.ship(TARGET_ID)?.shipClass ?? '']?.hullPoints ?? 0,
+      targetSunk: this.ship(TARGET_ID)?.sunk ?? false,
     }, sailing, wind);
   }
 
@@ -247,7 +253,7 @@ export class SeaScene extends Phaser.Scene {
     const v = this.panel.values;
     const me = this.ship(PLAYER_ID);
     if (!v.autoZoom || !me) return v.zoom;
-    const others = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
+    const others = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID && !sh.sunk);
     const enemy = nearest(me, others);
     if (!enemy || Math.hypot(enemy.x - me.x, enemy.y - me.y) > viewJson.combatCameraRange) return v.zoom;
     const cam = this.cameras.main;

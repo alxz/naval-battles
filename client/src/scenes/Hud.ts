@@ -18,6 +18,9 @@ export interface ScaleInfo {
   logicalHeight: number;
   zoom: number;
   targetDistance: number; // metres
+  targetHull: number; // hull points left
+  targetHullMax: number;
+  targetSunk: boolean;
 }
 
 /**
@@ -85,7 +88,7 @@ export class Hud {
         inIrons ? 'IN IRONS - turn away from the wind' : '',
         ship.aground ? 'AGROUND - turn away from the shore' : '',
         this.gunsLine(ship),
-        `target ${Math.round(info.targetDistance)} m`,
+        `target ${Math.round(info.targetDistance)} m   ${info.targetSunk ? 'SUNK!' : `hull ${info.targetHull}/${info.targetHullMax}`}`,
         `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
         `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
       ]
@@ -110,12 +113,13 @@ export class Hud {
     const g = this.gfx;
     if (!g || !this.speed || !this.unit) return;
     this.speed.setText(ship.speed.toFixed(1));
+    const target = info.targetSunk ? 'target SUNK!' : `target ${Math.round(info.targetDistance)} m ${info.targetHull}hp`;
     this.text.setText(
       ship.aground
-        ? `target ${Math.round(info.targetDistance)} m\nAGROUND!`
+        ? `${target}\nAGROUND!`
         : inIrons
-        ? `target ${Math.round(info.targetDistance)} m\nIN IRONS!`
-        : `target ${Math.round(info.targetDistance)} m\nwind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`,
+        ? `${target}\nIN IRONS!`
+        : `${target}\nwind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`,
     );
     this.text.setColor(inIrons || ship.aground ? '#ff8070' : '#ffffff');
 

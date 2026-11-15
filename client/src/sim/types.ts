@@ -15,6 +15,9 @@ export interface ShipParams {
   minSteerShare: number; // 0..1: share of turnRate left when the ship barely moves
   gunsPerSide: number;
   reloadSeconds: number; // base reload time of one broadside
+  hullPoints: number; // at 0 the ship sinks
+  hullHeight: number; // metres from the water to the deck edge (hull hit zone)
+  mastHeight: number; // metres from the water to the mast top (rigging hit zone above the hull)
 }
 
 /** Gun and ball numbers for every ship. Loaded from `data/guns.json` (plan 4.4). */
@@ -27,6 +30,7 @@ export interface GunParams {
   inheritVelocity: number; // share of the ship's velocity the ball keeps (0..1)
   gunSpreadShare: number; // the guns sit along this share of the hull length
   maxBallSeconds: number; // safety limit: a ball older than this is removed
+  damage: number; // hull points one round shot takes off (plan 4.4: hullPoints / hitsToSink)
 }
 
 /** Port = left side looking forward, starboard = right side. */
@@ -56,7 +60,9 @@ export interface PendingShot {
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
 export type SimEvent =
   | { type: 'gunFired'; shipId: number; side: Side; x: number; y: number }
-  | { type: 'splash'; x: number; y: number };
+  | { type: 'splash'; x: number; y: number }
+  | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number }
+  | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -85,6 +91,8 @@ export interface ShipState {
   elevationDeg: number; // gun elevation, 0 .. maxElevationDeg
   reloadPort: number; // seconds until the port battery is ready (0 = ready)
   reloadStarboard: number;
+  hull: number; // hull points left
+  sunk: boolean; // a sunk ship stays in the list (for the picture) but takes no part any more
 }
 
 /** The wind as a ship feels it right now. */

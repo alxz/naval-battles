@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) and `dev-log-en.md` (what was done, problems and fixes). The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status:** M0 done · M1 done (14 Nov) · M2 in progress (step 1: guns and ballistics) · v0.6 answers the external review; O2, O3 and O4 confirmed 13 Nov (Pirate only in Stage 1; scale and display from the scale test; net-gold score, port saves and suspend at sea), see section 9.
+**Status:** M0 done · M1 done (14 Nov) · M2 in progress (steps 1–2: guns, ballistics, hits, damage, sinking) · v0.6 answers the external review; O2, O3 and O4 confirmed 13 Nov (Pirate only in Stage 1; scale and display from the scale test; net-gold score, port saves and suspend at sea), see section 9.
 
 ---
 
@@ -708,7 +708,7 @@ Based on 8–10 hours per week. Each release is a version you can play.
 Steps: 1 guns and ballistics · 2 hit test, hit zones, damage, sinking · 3 accuracy (salvo and gun error, ellipse) and `tools/hit_table.py` · 4 the bot · 5 HUD bars, win and lose, restart, touch buttons · 6 juice · 7 art spike.
 - [x] Broadsides, reload timers, elevation control, landing marker (it includes your ship's own velocity). **Step 1, 14 Nov:** `data/guns.json`, commands `fire` and `setElevation`, ripple fire, balls with height and shadow, splashes; keys Q / E fire, R / F elevation; `tools/range_table.py`.
 - [ ] Ball physics with height; shadow and arc; splashes; hit test along the segment of each step.
-- [ ] Hit zones; hull damage; sinking.
+- [x] Hit zones; hull damage; sinking. **Step 2, 14 Nov:** `sim/hits.ts` (segment against two boxes: hull and rigging), damage 27 per hull hit (`guns.json`), `hullPoints` / `hullHeight` / `mastHeight` per class; a sunk ship stays as a fading wreck; events `hit` and `sunk`. Rigging hits do no damage until sails in M3.
 - [ ] One simple bot: chase, turn its side, fire. Edge marker when it is outside the view; combat camera.
 - [ ] Hull bars in the HUD; win and lose messages; restart.
 - [ ] Temporary touch buttons for the two broadsides and the elevation, so that a duel can be played on the iPhone.
