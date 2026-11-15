@@ -39,6 +39,12 @@ export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, 
   return params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength);
 }
 
+/** How much of the turn rate the rudder gives at this speed: minSteerShare at a standstill, 1 from half of top speed. */
+export function steerShare(ship: ShipState, params: ShipParams, tuning: Tuning = DEFAULT_TUNING): number {
+  const fullSteerSpeed = 0.5 * params.maxSpeed * tuning.speedScale;
+  return params.minSteerShare + (1 - params.minSteerShare) * Math.min(1, ship.speed / fullSteerSpeed);
+}
+
 /**
  * Move one ship forward by `dt` seconds.
  *  1. Speed moves toward the target speed. Each second it closes the same SHARE of the gap
@@ -52,8 +58,7 @@ export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt:
   const target = targetSpeed(ship, params, wind, tuning);
   ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / params.speedTimeConstant));
 
-  const fullSteerSpeed = 0.5 * params.maxSpeed * tuning.speedScale;
-  const steer = params.minSteerShare + (1 - params.minSteerShare) * Math.min(1, ship.speed / fullSteerSpeed);
+  const steer = steerShare(ship, params, tuning);
   ship.headingRad = normalizeAngle(ship.headingRad + params.turnRate * ship.rudder * steer * dt);
 
   ship.x += Math.cos(ship.headingRad) * ship.speed * dt;

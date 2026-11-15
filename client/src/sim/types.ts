@@ -31,6 +31,8 @@ export interface GunParams {
   gunSpreadShare: number; // the guns sit along this share of the hull length
   maxBallSeconds: number; // safety limit: a ball older than this is removed
   damage: number; // hull points one round shot takes off (plan 4.4: hullPoints / hitsToSink)
+  gunSigmaDeg: number; // base spread of one gun, degrees (plan 4.4: sigma_gun); tuned with tools/hit_table.py
+  salvoSigmaDeg: number; // base error of a whole broadside, degrees (plan 4.4: sigma_salvo, the ship's roll)
 }
 
 /** Port = left side looking forward, starboard = right side. */
@@ -55,6 +57,7 @@ export interface PendingShot {
   side: Side;
   gun: number; // 0 .. gunsPerSide-1, from stern to bow
   tick: number; // fires at the start of this step
+  salvoErrorDeg: number; // the roll error of this broadside: the same for every gun in it
 }
 
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
@@ -93,6 +96,7 @@ export interface ShipState {
   reloadStarboard: number;
   hull: number; // hull points left
   sunk: boolean; // a sunk ship stays in the list (for the picture) but takes no part any more
+  battleSkill: number; // the captain's Battle skill 0..10 (plan 4.4 and 4.7); 4 for everyone until captains come (M6)
 }
 
 /** The wind as a ship feels it right now. */

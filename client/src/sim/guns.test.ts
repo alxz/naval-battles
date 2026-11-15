@@ -3,6 +3,7 @@ import { applyCommand } from './commands';
 import { GUNS, SHIP_CLASSES } from './data';
 import { predictLanding } from './guns';
 import { STEP_SECONDS, stepWorld } from './step';
+import { withPerfectGuns } from './testing';
 import type { ShipState, SimEvent, World } from './types';
 
 const sloop = SHIP_CLASSES['sloop']!;
@@ -11,7 +12,7 @@ const calm = { speedScale: 1, windDrift: false };
 function ship(elevationDeg: number, speed = 0): ShipState {
   return {
     id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad: 0, speed, rudder: 0, sailLevel: 0,
-    aground: false, elevationDeg, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false,
+    aground: false, elevationDeg, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false, battleSkill: 4,
   };
 }
 
@@ -68,6 +69,7 @@ describe('predictLanding (range table)', () => {
 });
 
 describe('fire command', () => {
+  withPerfectGuns();
   it('fires every gun of the side, one after another (ripple), and the splashes land around the marker', () => {
     const s = ship(6);
     const w = worldWith(s);

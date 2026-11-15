@@ -3,6 +3,8 @@ import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
 import { SHIP_CLASSES } from '../sim/data';
 import { Simulation } from '../sim/simulation';
+import { circleRudder } from '../sim/circle';
+import type { Circle } from '../sim/circle';
 import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
 import type { ShipState } from '../sim/types';
@@ -64,6 +66,9 @@ export class SeaScene extends Phaser.Scene {
   private cameraCentre: Point | null = null; // metres
   private zoomGoal = 1; // the whole zoom step we are heading for
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
+  private targetCircle: Circle | null = null; // the circle the moving target sails round
+  private ballsFired = 0; // your balls since the last reset (for the hit count)
+  private hullHits = 0;
 
   constructor() {
     super('Sea');
@@ -128,6 +133,9 @@ export class SeaScene extends Phaser.Scene {
         detailAtZoom: true,
         rangeRings: true,
         targetClass: 'sloop',
+        targetMoving: true,
+        targetSailsPercent: 30,
+        targetCircleRadius: 150,
         windFromBearingDeg: Math.round(headingRadToBearingDeg(this.sim.world.wind.fromRad) * 10) / 10,
         windStrength: this.sim.world.wind.strength,
         windDrift: true,
@@ -138,6 +146,11 @@ export class SeaScene extends Phaser.Scene {
         onPlaceTarget: (d) => this.placeTarget(d),
         onTargetClass: () => this.placeTarget(this.targetDistance()),
         onWindDrift: (on) => (this.sim.tuning.windDrift = on),
+        onTargetCircle: () => (this.targetCircle = null),
+        onResetHits: () => {
+          this.ballsFired = 0;
+          this.hullHits = 0;
+        },
         onWind: (fromBearingDeg, strength) =>
           this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(fromBearingDeg), strength }),
       },
@@ -153,6 +166,7 @@ export class SeaScene extends Phaser.Scene {
     const v = this.panel.values;
     const seconds = Math.min(delta / 1000, MAX_FRAME_SECONDS);
     this.readInput(seconds);
+    this.steerTarget();
 
     // 1. Let the simulation catch up with real time.
     const alpha = this.sim.update(seconds);
@@ -183,7 +197,12 @@ export class SeaScene extends Phaser.Scene {
     });
 
     this.islands.update(s);
-    this.cannonballs.play(this.sim.takeEvents(), s);
+    const events = this.sim.takeEvents();
+    for (const e of events) {
+      if (e.type === 'gunFired' && e.shipId === PLAYER_ID) this.ballsFired++;
+      if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.hullHits++;
+    }
+    this.cannonballs.play(events, s);
     this.cannonballs.update(this.sim.world.balls, alpha * STEP_SECONDS, s, seconds);
 
     const me = poses[0];
@@ -193,7 +212,7 @@ export class SeaScene extends Phaser.Scene {
     this.rings.visible = v.rangeRings;
     this.rings.update(me.x, me.y, me.headingRad, s);
     const myParams = SHIP_CLASSES[myShip.shipClass];
-    if (myParams) this.markers2.update(myShip, myParams, s);
+    if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength);
 
     // 4. The camera: at your ship, or pulled toward the nearest enemy (combat camera).
     // Enemies: every other ship that is still afloat.
@@ -250,6 +269,9 @@ export class SeaScene extends Phaser.Scene {
       targetHull: this.ship(TARGET_ID)?.hull ?? 0,
       targetHullMax: SHIP_CLASSES[this.ship(TARGET_ID)?.shipClass ?? '']?.hullPoints ?? 0,
       targetSunk: this.ship(TARGET_ID)?.sunk ?? false,
+      ballsFired: this.ballsFired,
+      hullHits: this.hullHits,
+      gunsPerSide: params?.gunsPerSide ?? 1,
     }, sailing, wind);
   }
 
@@ -339,14 +361,37 @@ export class SeaScene extends Phaser.Scene {
     const me = this.ship(PLAYER_ID);
     if (!me) return;
     const side = me.headingRad + Math.PI / 2; // starboard (clockwise from the bow)
-    this.sim.queueCommand({
-      type: 'placeShip',
-      shipId: TARGET_ID,
-      x: me.x + Math.cos(side) * distance,
-      y: me.y + Math.sin(side) * distance,
-      headingRad: me.headingRad,
-      shipClass: this.panel.values.targetClass,
-    });
+    const x = me.x + Math.cos(side) * distance;
+    const y = me.y + Math.sin(side) * distance;
+    this.sim.queueCommand({ type: 'placeShip', shipId: TARGET_ID, x, y, headingRad: me.headingRad, shipClass: this.panel.values.targetClass });
+    this.targetCircle = this.circleFrom(x, y, me.headingRad);
+  }
+
+  /**
+   * The moving target (M2 step 3): it sails slowly round a circle that starts where it is
+   * and lies to its starboard side, so it first sails away from you. Like any ship it is
+   * steered only by commands. Not a bot yet: it does not care about you (step 4).
+   */
+  private steerTarget(): void {
+    const v = this.panel.values;
+    const target = this.ship(TARGET_ID);
+    const params = target ? SHIP_CLASSES[target.shipClass] : undefined;
+    if (!target || !params || target.sunk) return;
+    const sails = v.targetMoving ? v.targetSailsPercent / 100 : 0;
+    if (Math.abs(target.sailLevel - sails) > 1e-6) this.sim.queueCommand({ type: 'setSails', shipId: TARGET_ID, value: sails });
+    let rudder = 0;
+    if (v.targetMoving) {
+      this.targetCircle ??= this.circleFrom(target.x, target.y, target.headingRad);
+      rudder = circleRudder(target, params, this.sim.world.wind, this.targetCircle);
+    }
+    if (Math.abs(target.rudder - rudder) > 0.01) this.sim.queueCommand({ type: 'setRudder', shipId: TARGET_ID, value: rudder });
+  }
+
+  /** A circle through (x, y) whose centre lies to the starboard of a ship heading this way. */
+  private circleFrom(x: number, y: number, headingRad: number): Circle {
+    const r = this.panel.values.targetCircleRadius;
+    const side = headingRad + Math.PI / 2;
+    return { x: x + Math.cos(side) * r, y: y + Math.sin(side) * r, radiusM: r, tacking: false };
   }
 
   private targetDistance(): number {

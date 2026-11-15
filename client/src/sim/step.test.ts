@@ -11,7 +11,7 @@ const NORTH = -Math.PI / 2;
 const northWind: WindNow = { fromRad: NORTH, strength: 1 };
 
 function newShip(headingRad = EAST): ShipState {
-  return { id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false };
+  return { id: 1, shipClass: 'sloop', x: 0, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false, battleSkill: 4 };
 }
 
 /** Run `seconds` of fixed steps. */

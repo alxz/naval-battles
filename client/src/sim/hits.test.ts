@@ -3,6 +3,7 @@ import { applyCommand } from './commands';
 import { GUNS, SHIP_CLASSES } from './data';
 import { ballHit, segmentBoxEntry, toShipLocal } from './hits';
 import { STEP_SECONDS, stepWorld } from './step';
+import { withPerfectGuns } from './testing';
 import type { ShipState, SimEvent, World } from './types';
 
 const sloop = SHIP_CLASSES['sloop']!; // 30 x 10 m, hull 5 m, mast 22 m
@@ -12,7 +13,7 @@ const box = { minX: 0, maxX: 10, minY: 0, maxY: 10, minZ: 0, maxZ: 10 };
 function ship(id: number, x: number, y: number, headingRad = 0): ShipState {
   return {
     id, shipClass: 'sloop', x, y, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false,
-    elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false,
+    elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4,
   };
 }
 
@@ -59,6 +60,7 @@ describe('ballHit (hit zones)', () => {
 });
 
 describe('broadside against a moored target', () => {
+  withPerfectGuns();
   /** Your ship at the origin heading east, the target 150 m to starboard (south). */
   function duel(elevationDeg: number): { world: World; events: SimEvent[] } {
     const me = ship(1, 0, 0);
@@ -76,7 +78,7 @@ describe('broadside against a moored target', () => {
     return { world, events };
   }
 
-  it('the right elevation hits with every ball (no random error until step 3)', () => {
+  it('the right elevation hits with every ball (guns without random error)', () => {
     let best = 0;
     for (let e = 0; e <= 10; e += 0.5) {
       best = Math.max(best, duel(e).events.filter((ev) => ev.type === 'hit' && ev.zone === 'hull').length);
@@ -106,6 +108,7 @@ describe('broadside against a moored target', () => {
 });
 
 describe('sinking', () => {
+  withPerfectGuns();
   function sinkingWorld(): World {
     const target = ship(2, 0, 150);
     target.hull = GUNS.damage; // one more hull hit sinks it

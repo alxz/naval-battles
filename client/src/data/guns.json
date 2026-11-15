@@ -7,5 +7,7 @@
   "inheritVelocity": 1.0,
   "gunSpreadShare": 0.6,
   "maxBallSeconds": 6,
-  "damage": 27
+  "damage": 27,
+  "gunSigmaDeg": 1.8,
+  "salvoSigmaDeg": 0.6
 }

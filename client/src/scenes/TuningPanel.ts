@@ -1,5 +1,5 @@
 import GUI from 'lil-gui';
-import { SHIP_CLASSES } from '../sim/data';
+import { GUNS, SHIP_CLASSES } from '../sim/data';
 
 /** Everything the sliders change. The scene reads these values every frame. */
 export interface TuningValues {
@@ -14,6 +14,9 @@ export interface TuningValues {
   detailAtZoom: boolean; // use the double-detail pictures at zoom x2
   rangeRings: boolean;
   targetClass: string;
+  targetMoving: boolean; // the target sails slowly in a circle
+  targetSailsPercent: number; // its sail setting while moving
+  targetCircleRadius: number; // metres
   windFromBearingDeg: number; // compass degrees, where the wind comes from
   windStrength: number; // 0..1
   windDrift: boolean;
@@ -36,6 +39,10 @@ export interface TuningCallbacks {
   /** The wind sliders moved. */
   onWind: (fromBearingDeg: number, strength: number) => void;
   onWindDrift: (on: boolean) => void;
+  /** The circle radius changed: start a new circle from where the target is now. */
+  onTargetCircle: () => void;
+  /** Start counting your hits again. */
+  onResetHits: () => void;
 }
 
 /**
@@ -99,6 +106,19 @@ export class TuningPanel {
     target.add(place, 'at150').name('put at 150 m');
     target.add(place, 'at200').name('put at 200 m');
     target.add(place, 'at400').name('put at 400 m');
+    target.add(v, 'targetMoving').name('moving (circle)');
+    target.add(v, 'targetSailsPercent', 0, 100, 5).name('sails %');
+    target
+      .add(v, 'targetCircleRadius', 60, 400, 10)
+      .name('circle radius (m)')
+      .onFinishChange(() => callbacks.onTargetCircle());
+
+    // Accuracy (plan 4.4): these change the numbers from guns.json while the game runs.
+    // Write the values you like back into guns.json; tools/hit_table.py shows what they mean.
+    const accuracy = this.gui.addFolder('Accuracy');
+    accuracy.add(GUNS, 'gunSigmaDeg', 0, 4, 0.1).name('gun sigma (deg)');
+    accuracy.add(GUNS, 'salvoSigmaDeg', 0, 3, 0.1).name('salvo sigma (deg)');
+    accuracy.add({ reset: () => callbacks.onResetHits() }, 'reset').name('reset hit count');
 
     // After any change, give the keyboard back to the game. Otherwise a focused
     // drop-down list or number box keeps the keys, and W A S D stop steering the ship.

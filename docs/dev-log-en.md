@@ -4,6 +4,43 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 15 Nov 2026 (after midnight) — M2 step 3 built: accuracy and spread; moving target
+
+### What was built (waiting for your test)
+
+- **Two random errors (plan 4.4)** in `sim/accuracy.ts`:
+  - *salvo error*: the ship's roll; one number per broadside, in elevation, so the whole salvo lands long or short together; drawn when you fire and kept in each `PendingShot` (`salvoErrorDeg`);
+  - *gun error*: each ball, in elevation and in direction.
+  - Formulas unchanged from the plan: `σ_gun = 1.8° × (1.4 − 0.06 × Battle) × …`, `σ_salvo = 0.6° × (1 + wind) × (1.2 − 0.04 × Battle)`. Crew shortage, gun wear and ammunition stay neutral (M3). New `ShipState.battleSkill` = 4 for both ships until captains (M6).
+  - Random numbers from the seeded generator: `nextGaussian` (normal distribution, "bell curve") in `sim/random.ts`. The same seed gives the same shots.
+- **`tools/hit_table.py`**: Monte Carlo in Python (same flight steps and same box test as the game). Perfect aim, Battle 4, wind 0.7: **3.2 / 1.8 / 1.2 / 0.9** hull hits per salvo at 50 / 100 / 150 / 200 m. D28 wants 1–2 at 150 m and 0–1 at 200 m, so base σ is **gun 1.8°, salvo 0.6°** (`guns.json`). Try `python tools/hit_table.py --gun 1.5 --battle 8`.
+- **Guard test** `accuracy.test.ts`: 300 salvos with the real TypeScript code at 150 m must give 1–2 hits. Old exact tests (balls land on the cross) run with `withPerfectGuns()` (`sim/testing.ts`).
+- **Landing ellipse** around each cross (`LandingMarkers.ts`, `landingSpread` in `sim/guns.ts`): long along the line of fire (elevation error, about ±40 m at 150 m), narrow across it (direction error, about ±5 m). 1 sigma (`view.json` `landingEllipseSigmas`).
+- **Moving target** (`sim/circle.ts`): with 30% sails (about 1.3–2.8 m/s) it sails clockwise round a 150 m circle that starts to its starboard. A circle runs into the wind somewhere, so there it tacks and sails close-hauled across the circle, then follows the circle again. It is steered by commands like every ship. lil-gui *Target*: "moving (circle)", "sails %", "circle radius (m)"; "put at …" starts a new circle.
+- **Hit count** in the computer HUD: "hits 5 / 24 balls = 0.83 per salvo of 4"; lil-gui *Accuracy*: both σ sliders and "reset hit count".
+- 148 tests in the sandbox (149 with your angle test); build clean; headless computer and iPhone, no errors.
+
+### Problem found and fixed
+
+| Problem | Cause | Fix |
+|---|---|---|
+| First version: the target drifted away and stalled near the wind for over a minute | It turned at speed / radius; close to the wind the speed fell, so the turn became very slow | Fixed circle centre, steer along the tangent; where the circle points into the wind, tack and sail close-hauled |
+| Then it flipped between two courses near the wind | The choice "follow the circle or tack" had no memory | `tacking` memory (hysteresis): the tack ends only when the circle can be followed with the wind on the other side |
+
+---
+
+## 14 Nov 2026 (late night) — Touch fire buttons; art settings kept
+
+**Your test on iPhone and iPad:** there was no way to fire the guns. My mistake: touch buttons for the guns were planned for step 5, but the phone could not test steps 1–2 without them. Fixed now.
+
+- **Second button row** (`scenes/TouchControls.ts`): **L** and **R** fire the port / starboard broadside (one tap = one salvo); **v** and **^** lower / raise the guns (held). Button size is now `min(48, 17% of height)` so two rows fit on the 240 px phone screen.
+- **Phone panel** (`Hud.ts`): two new lines, e.g. `5 deg 130 m` (elevation and range) and `L 14s  R ok` (reload).
+- `SeaScene.ts` sends the same `fire` and `setElevation` commands as the keys. 133 tests in the sandbox; headless iPhone and iPad emulation: a tap on **L** fires, no errors. Checked by you on the devices: all OK.
+- **Art decisions:** `HEIGHT_SCALE` stays **0.65** for now (may change later); **16 directions** stay the default. Final choice 16 vs 32 is still part of the art spike (D33).
+- Final touch controls with an assisted-aim option remain M8 (D24).
+
+---
+
 ## 14 Nov 2026 (evening, later) — M2 step 2 tested; sloop art version 2
 
 **Step 2 tested by you:** hits, damage and sinking work; shots aimed beyond the hull do little or no damage, as designed. The art in the game: you liked it and asked for more detail and a more tilted (less side-on) look when the ship heads east or west.

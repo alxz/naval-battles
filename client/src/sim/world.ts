@@ -18,6 +18,9 @@ const START_HEADING_RAD = Math.PI / 2;
  *  - ship 2: a moored target sloop, 150 m to your starboard (west), same heading,
  *    so it lies right on your beam, where a broadside would hit it.
  */
+/** Battle skill of both captains until captains and bot skill tiers exist (plan 4.7: skills 0..10). */
+export const START_BATTLE_SKILL = 4;
+
 /** Any whole number. The same seed gives the same wind drift (and later the same gun errors). */
 export const DEFAULT_SEED = 20261114;
 
@@ -29,7 +32,7 @@ export function createWorld(seed: number = DEFAULT_SEED): World {
     rngState: seed,
     wind: { fromRad: wind, strength: WIND.startStrength, baseFromRad: wind },
     ships: [
-      { id: 1, shipClass: 'sloop', x: 160, y: 90, headingRad: START_HEADING_RAD, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: SLOOP_HULL, sunk: false },
+      { id: 1, shipClass: 'sloop', x: 160, y: 90, headingRad: START_HEADING_RAD, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: SLOOP_HULL, sunk: false, battleSkill: START_BATTLE_SKILL },
       {
         id: 2,
         shipClass: 'sloop',
@@ -44,7 +47,7 @@ export function createWorld(seed: number = DEFAULT_SEED): World {
         reloadPort: 0,
         reloadStarboard: 0,
         hull: SLOOP_HULL,
-        sunk: false,
+        sunk: false, battleSkill: START_BATTLE_SKILL,
       },
     ],
     balls: [],

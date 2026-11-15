@@ -16,3 +16,14 @@ export function nextRandom(state: { rngState: number }): number {
 export function nextSigned(state: { rngState: number }): number {
   return nextRandom(state) * 2 - 1;
 }
+
+/**
+ * A random number from the normal ("bell curve") distribution with mean 0 and spread (sigma) 1.
+ * About 68% of the numbers fall between -1 and 1, 95% between -2 and 2.
+ * Multiply by sigma to get an error of that size. (Box-Muller: two even numbers -> one bell-curve number.)
+ */
+export function nextGaussian(state: { rngState: number }): number {
+  const u = 1 - nextRandom(state); // 0 < u <= 1, so the log below is never log(0)
+  const v = nextRandom(state);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}

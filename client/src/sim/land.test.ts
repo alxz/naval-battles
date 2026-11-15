@@ -19,7 +19,7 @@ const square: Island = {
 };
 
 function ship(x: number, headingRad = 0): ShipState {
-  return { id: 1, shipClass: 'sloop', x, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false };
+  return { id: 1, shipClass: 'sloop', x, y: 0, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false, elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false, battleSkill: 4 };
 }
 
 /** A world with one ship and a full wind from the north (a beam reach when heading east). */

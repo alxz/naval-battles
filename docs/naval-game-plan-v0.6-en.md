@@ -283,6 +283,16 @@ damagePerHit = hullPoints / hitsToSink          // sloop: 220 / 8 ≈ 27
 
 The review's estimate (10–25% per ball at long range) is confirmed. Doubling the ships doubles the hit rate, so the accuracy numbers (σ) are tuned **after** the scale test. `tools/hit_table.py` (M2) repeats this with the final numbers and sets σ and damage.
 
+**Tuned (15 Nov, M2 step 3, `tools/hit_table.py`).** Base values in `guns.json`: `gunSigmaDeg` **1.8**, `salvoSigmaDeg` **0.6** (the formulas above unchanged). Perfect aim (cross on the target centre), target lying still beam-on, Battle 4, wind 0.7, hull hits per 4-gun salvo:
+
+| | 50 m | 100 m | 150 m | 200 m |
+|---|---|---|---|---|
+| Battle 4 | 3.2 | 1.8 | **1.2** | 0.9 |
+| Battle 8 | 3.5 | 2.0 | 1.5 | 1.1 |
+| Battle 0 | 3.0 | 1.5 | 1.0 | 0.7 |
+
+150 m and 200 m meet D28; 50 m is a little above "2–3" (at point-blank range the gun cannot aim lower than 0°, which lands at about 58 m); accepted. Real play will hit less (aim is never perfect, ships move). A Vitest test (`accuracy.test.ts`) fires 300 salvos with the real TypeScript code and checks 1–2 hits at 150 m, so the script and the game cannot drift apart. The fun check after R1 verifies it in play (the HUD counts your hits per salvo).
+
 ### 4.5 Ammunition
 
 | Type | Range | Spread | Hull | Sails | Crew | Use it to |
@@ -709,11 +719,12 @@ Steps: 1 guns and ballistics · 2 hit test, hit zones, damage, sinking · 3 accu
 - [x] Broadsides, reload timers, elevation control, landing marker (it includes your ship's own velocity). **Step 1, 14 Nov:** `data/guns.json`, commands `fire` and `setElevation`, ripple fire, balls with height and shadow, splashes; keys Q / E fire, R / F elevation; `tools/range_table.py`.
 - [ ] Ball physics with height; shadow and arc; splashes; hit test along the segment of each step.
 - [x] Hit zones; hull damage; sinking. **Step 2, 14 Nov:** `sim/hits.ts` (segment against two boxes: hull and rigging), damage 27 per hull hit (`guns.json`), `hullPoints` / `hullHeight` / `mastHeight` per class; a sunk ship stays as a fading wreck; events `hit` and `sunk`. Rigging hits do no damage until sails in M3.
+- [x] Accuracy. **Step 3, 15 Nov:** salvo error (one per broadside, elevation) and gun error (each ball, elevation and direction) by the 4.4 formulas with a seeded normal distribution (`sim/accuracy.ts`, `nextGaussian`); `ShipState.battleSkill` (4 for now); crew shortage, gun wear and ammunition stay neutral until M3. Landing ellipse (1 sigma) around each cross. `tools/hit_table.py` set σ (gun 1.8°, salvo 0.6°). Practice target sails slowly round a circle (`sim/circle.ts`; 30% sails; it tacks across the upwind part). HUD counts your hull hits per salvo; lil-gui sliders for both σ.
 - [ ] One simple bot: chase, turn its side, fire. Edge marker when it is outside the view; combat camera.
 - [ ] Hull bars in the HUD; win and lose messages; restart.
-- [ ] Temporary touch buttons for the two broadsides and the elevation, so that a duel can be played on the iPhone.
+- [x] Temporary touch buttons for the two broadsides and the elevation, so that a duel can be played on the iPhone. **Done early, 14 Nov:** L / R fire, v / ^ elevation; phone panel shows elevation, range and reload.
 - [ ] **Juice:** muzzle flash, a short screen shake, placeholder sounds (CC0).
-- [ ] `tools/range_table.py` and `tools/hit_table.py` (your first Python scripts); set accuracy and damage from the combat targets (D28).
+- [x] `tools/range_table.py` and `tools/hit_table.py` (your first Python scripts); set accuracy and damage from the combat targets (D28). **Done 15 Nov** (table in 4.4).
 - [ ] **Art spike (a full day, in two sessions):** render one Kenney Pirate Kit ship in 16 and in 32 directions and show both in the game. Decide the direction count (D33) and confirm the art style (D18, D27).
 - **You learn:** ballistics, collision tests, a first state machine, Monte Carlo simulation in Python.
 - **Done when:** you can win and lose a duel against the bot on the computer and on the iPhone. **→ Release R1 "First Duel".**
@@ -733,7 +744,7 @@ If a criterion fails, we tune for up to one week before M3. If the core is still
 
 #### M3 — Damage, ammunition and bots (4 weeks)
 - [ ] Sail and crew damage; 3 ammunition types.
-- [ ] Accuracy: salvo error, gun error, gun wear; landing marker as an ellipse.
+- [ ] Accuracy: gun wear and crew shortage join the formulas (salvo error, gun error and the ellipse are done in M2 step 3).
 - [ ] All 4 ship classes from JSON data; three rig polars; variants and skill tiers.
 - [ ] Full bot state machine; merchant, patrol and pirate behaviours; land avoidance; tacking with hysteresis and a cooldown.
 - [ ] Headless bot scenarios in Vitest: reach an upwind waypoint within N minutes; bot against bot ends within N minutes; no loop in irons.

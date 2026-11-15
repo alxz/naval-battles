@@ -21,6 +21,9 @@ export interface ScaleInfo {
   targetHull: number; // hull points left
   targetHullMax: number;
   targetSunk: boolean;
+  ballsFired: number; // your balls since the last reset
+  hullHits: number; // your hull hits since the last reset
+  gunsPerSide: number;
 }
 
 /**
@@ -78,7 +81,7 @@ export class Hud {
     const deg = (n: number): string => String(Math.round(n) % 360).padStart(3, '0');
     this.text.setText(
       [
-        'Naval-Battles M2 - guns',
+        'Naval-Battles M2 - guns and accuracy',
         'A / D rudder   W / S sails   Z / X zoom',
         'Q / E fire port / starboard   R / F elevation',
         `sails ${Math.round(ship.sailLevel * 100)}%   speed ${ship.speed.toFixed(1)} m/s`,
@@ -88,6 +91,7 @@ export class Hud {
         inIrons ? 'IN IRONS - turn away from the wind' : '',
         ship.aground ? 'AGROUND - turn away from the shore' : '',
         this.gunsLine(ship),
+        this.hitsLine(info),
         `target ${Math.round(info.targetDistance)} m   ${info.targetSunk ? 'SUNK!' : `hull ${info.targetHull}/${info.targetHullMax}`}`,
         `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
         `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
@@ -95,6 +99,13 @@ export class Hud {
         .filter((line) => line !== '')
         .join('\n'),
     );
+  }
+
+  /** "hits 5 / 24 balls = 0.83 per salvo of 4" (combat target D28: 1-2 at 150 m) */
+  private hitsLine(info: ScaleInfo): string {
+    if (info.ballsFired === 0) return 'hits: no shots yet';
+    const salvos = info.ballsFired / Math.max(1, info.gunsPerSide);
+    return `hits ${info.hullHits} / ${info.ballsFired} balls = ${(info.hullHits / salvos).toFixed(2)} per salvo of ${info.gunsPerSide}`;
   }
 
   /** Short version for the phone panel: "6 deg 150 m" and "L ok R 8s". */

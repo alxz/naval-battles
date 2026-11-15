@@ -1,5 +1,7 @@
+import { accuracyInputs, gunSigmaDeg, salvoSigmaDeg } from './accuracy';
 import { degToRad } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
+import { nextGaussian } from './random';
 import { ballHit } from './hits';
 import type { HitZone } from './hits';
 import type { Ball, GunParams, ShipParams, ShipState, Side, World } from './types';
@@ -22,13 +24,22 @@ export function gunPosition(ship: ShipState, params: ShipParams, side: Side, gun
   };
 }
 
+/** Random errors of one ball, in degrees: up/down and left/right of where the gun was pointed. */
+export interface ShotError {
+  elevationDeg: number;
+  directionDeg: number;
+}
+
+export const NO_ERROR: ShotError = { elevationDeg: 0, directionDeg: 0 };
+
 /**
  * A new ball leaving the gun (plan 4.4):
  *   velocity = inheritVelocity x ship velocity + muzzle speed at a right angle to the hull, raised by the elevation.
+ * `error` turns the gun a little (accuracy, step 3); without it the ball flies exactly as aimed.
  */
-export function launchBall(ship: ShipState, side: Side, from: { x: number; y: number }, g: GunParams = GUNS): Ball {
-  const out = sideAngleRad(ship.headingRad, side);
-  const elev = degToRad(ship.elevationDeg);
+export function launchBall(ship: ShipState, side: Side, from: { x: number; y: number }, g: GunParams = GUNS, error: ShotError = NO_ERROR): Ball {
+  const out = sideAngleRad(ship.headingRad, side) + degToRad(error.directionDeg);
+  const elev = degToRad(ship.elevationDeg + error.elevationDeg);
   const horizontal = g.muzzleSpeed * Math.cos(elev);
   return {
     id: 0,
@@ -78,9 +89,11 @@ export function orderBroadside(world: World, ship: ShipState, side: Side, stepSe
   const params = SHIP_CLASSES[ship.shipClass];
   if (!params || ship.sunk || reloadLeft(ship, side) > 0) return;
   const n = params.gunsPerSide;
+  // The roll of the ship: one random error for the whole broadside (plan 4.4).
+  const salvoErrorDeg = nextGaussian(world) * salvoSigmaDeg(accuracyInputs(ship, world.wind.strength), g);
   for (let gun = 0; gun < n; gun++) {
     const delay = n > 1 ? (gun / (n - 1)) * g.rippleSeconds : 0;
-    world.pendingShots.push({ shipId: ship.id, side, gun, tick: world.tick + Math.round(delay / stepSeconds) });
+    world.pendingShots.push({ shipId: ship.id, side, gun, tick: world.tick + Math.round(delay / stepSeconds), salvoErrorDeg });
   }
   if (side === 'port') ship.reloadPort = params.reloadSeconds;
   else ship.reloadStarboard = params.reloadSeconds;
@@ -100,7 +113,13 @@ export function stepGunsAndBalls(world: World, dt: number, g: GunParams = GUNS):
     const params = ship ? SHIP_CLASSES[ship.shipClass] : undefined;
     if (!ship || !params || ship.sunk) continue;
     const from = gunPosition(ship, params, shot.side, shot.gun, g);
-    const ball = launchBall(ship, shot.side, from, g);
+    // Each gun adds its own error, up/down and left/right, on top of the salvo's roll error.
+    const sigma = gunSigmaDeg(accuracyInputs(ship, world.wind.strength), g);
+    const error: ShotError = {
+      elevationDeg: shot.salvoErrorDeg + nextGaussian(world) * sigma,
+      directionDeg: nextGaussian(world) * sigma,
+    };
+    const ball = launchBall(ship, shot.side, from, g, error);
     ball.id = world.nextBallId++;
     world.balls.push(ball);
     world.events.push({ type: 'gunFired', shipId: ship.id, side: shot.side, x: from.x, y: from.y });
@@ -154,4 +173,30 @@ function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, poin
     ship.rudder = 0;
     world.events.push({ type: 'sunk', shipId: ship.id, byShipId: ball.shipId, x: ship.x, y: ship.y });
   }
+}
+
+/**
+ * How far the balls of this battery may stray from the cross, in metres (for the landing ellipse).
+ *   along:  along the line of fire (long or short), from the elevation errors (salvo and gun together)
+ *   across: sideways (ahead or behind the target), from the direction error
+ * Each is one sigma: about two thirds of the balls land within it.
+ * The elevation error is turned into metres by flying the middle ball at elevation +- sigma.
+ */
+export function landingSpread(ship: ShipState, params: ShipParams, side: Side, windStrength: number, dt: number, g: GunParams = GUNS): { alongM: number; acrossM: number } {
+  const inputs = accuracyInputs(ship, windStrength);
+  const gunSigma = gunSigmaDeg(inputs, g);
+  const salvoSigma = salvoSigmaDeg(inputs, g);
+  // Two independent errors add like the sides of a right triangle.
+  const elevSigma = Math.hypot(gunSigma, salvoSigma);
+  const at = (deltaDeg: number): { x: number; y: number } => predictLanding({ ...ship, elevationDeg: ship.elevationDeg + deltaDeg }, params, side, dt, g);
+  const far = at(elevSigma);
+  const near = at(-elevSigma);
+  const mid = at(0);
+  const out = sideAngleRad(ship.headingRad, side);
+  const fromX = ship.x + Math.cos(out) * (params.beam / 2);
+  const fromY = ship.y + Math.sin(out) * (params.beam / 2);
+  return {
+    alongM: Math.hypot(far.x - near.x, far.y - near.y) / 2,
+    acrossM: Math.hypot(mid.x - fromX, mid.y - fromY) * Math.tan(degToRad(gunSigma)),
+  };
 }

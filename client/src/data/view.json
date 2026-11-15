@@ -1,6 +1,9 @@
 {
   "pixelsPerMetre": 1,
-  "zoomSteps": [1, 2],
+  "zoomSteps": [
+    1,
+    2
+  ],
   "logicalHeightComputer": 400,
   "logicalHeightPhone": 240,
   "phoneMaxShortSide": 500,
@@ -14,6 +17,11 @@
   "closeFightRangeSpare": 20,
   "zoomSmoothing": 0.25,
   "sightingRange": 1500,
-  "rangeRings": [100, 150, 200],
-  "fireArcPreviewDeg": 25
+  "rangeRings": [
+    100,
+    150,
+    200
+  ],
+  "fireArcPreviewDeg": 25,
+  "landingEllipseSigmas": 1
 }

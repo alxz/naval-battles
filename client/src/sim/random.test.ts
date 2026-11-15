@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextRandom, nextSigned } from './random';
+import { nextGaussian, nextRandom, nextSigned } from './random';
 
 describe('nextRandom', () => {
   it('the same seed gives the same numbers', () => {
@@ -33,5 +33,29 @@ describe('nextRandom', () => {
       expect(r).toBeGreaterThanOrEqual(-1);
       expect(r).toBeLessThan(1);
     }
+  });
+});
+
+describe('nextGaussian', () => {
+  it('has mean about 0 and sigma about 1; about 68% fall within -1..1', () => {
+    const s = { rngState: 11 };
+    const n = 20000;
+    let sum = 0;
+    let sumSq = 0;
+    let inside = 0;
+    for (let i = 0; i < n; i++) {
+      const g = nextGaussian(s);
+      sum += g;
+      sumSq += g * g;
+      if (Math.abs(g) < 1) inside++;
+    }
+    expect(sum / n).toBeCloseTo(0, 1);
+    expect(Math.sqrt(sumSq / n)).toBeCloseTo(1, 1);
+    expect(inside / n).toBeGreaterThan(0.66);
+    expect(inside / n).toBeLessThan(0.70);
+  });
+
+  it('the same seed gives the same numbers', () => {
+    expect(nextGaussian({ rngState: 5 })).toBe(nextGaussian({ rngState: 5 }));
   });
 });
