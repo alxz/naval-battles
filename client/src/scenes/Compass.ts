@@ -11,7 +11,7 @@ export interface CompassInfo {
 }
 
 /**
- * A small compass rose in a screen corner (north is up, like the sea):
+ * A small compass rose in my ship panel (north is up, like the sea):
  *  - red wedge: the no-go zone, where the sails give no drive;
  *  - blue arrow: the wind, blowing from one side across the rose (longer = stronger);
  *  - white needle: your heading. It turns red when it points into the no-go zone.
@@ -24,7 +24,7 @@ export class Compass {
   private r = 30;
 
   constructor(scene: Phaser.Scene) {
-    // Created last and drawn on top of everything, text after the graphics:
+    // Part of the HUD, drawn above the panel backgrounds, text after the graphics:
     // see the note about Text after Graphics in RangeRings.ts.
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(102);
     this.north = scene.add
@@ -34,12 +34,12 @@ export class Compass {
       .setDepth(103);
   }
 
-  /** Computer: bottom left corner (the tuning panel is on the right). Phone: right side, between the panel title and the buttons. */
-  layout(width: number, height: number, phone: boolean): void {
-    this.r = phone ? 26 : 30;
-    this.cx = phone ? width - this.r - 12 : this.r + 14;
-    this.cy = phone ? Math.round(height * 0.42) : height - this.r - 14;
-    this.north.setPosition(this.cx, this.cy - this.r - 1);
+  /** Put the compass here (centre and radius in logical pixels); the HUD decides where. */
+  place(cx: number, cy: number, r: number): void {
+    this.cx = cx;
+    this.cy = cy;
+    this.r = r;
+    this.north.setPosition(cx, cy - r + 9);
   }
 
   update(info: CompassInfo): void {
@@ -52,7 +52,7 @@ export class Compass {
     g.fillCircle(cx, cy, r + 2);
     g.lineStyle(1, 0xffffff, 0.6);
     g.strokeCircle(cx, cy, r);
-    g.lineBetween(cx, cy - r, cx, cy - r + 5); // north tick
+    g.lineBetween(cx, cy - r, cx, cy - r + 3); // north tick
 
     // No-go zone around the direction the wind comes from.
     const noGo = (info.noGoDeg * Math.PI) / 180;

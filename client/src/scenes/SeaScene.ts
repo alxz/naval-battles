@@ -7,17 +7,18 @@ import { circleRudder } from '../sim/circle';
 import type { Circle } from '../sim/circle';
 import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
-import type { ShipState } from '../sim/types';
+import { predictLanding } from '../sim/guns';
+import type { ShipParams, ShipState } from '../sim/types';
 import { createWorld } from '../sim/world';
 import { autoZoom } from '../view/autoZoom';
 import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
 import { Cannonballs } from './Cannonballs';
-import { Compass } from './Compass';
 import { EdgeMarkers } from './EdgeMarkers';
 import type { Contact } from './EdgeMarkers';
-import { Hud } from './Hud';
+import { Hud, debugLines } from './Hud';
+import { makeHudIcons } from './icons';
 import { Islands } from './Islands';
 import { LandingMarkers } from './LandingMarkers';
 import { RangeRings } from './RangeRings';
@@ -32,7 +33,14 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H', Phaser.Input.Keyboard.Key>;
+
+/**
+ * Keys for the guns up / down: "+" and "-" on the main keyboard and on the number pad.
+ * Browsers disagree on the codes of the main keys (Chrome/Safari 187/189, Firefox 61/173), so we take both.
+ */
+const RAISE_KEY_CODES = [187, 61, 107];
+const LOWER_KEY_CODES = [189, 173, 109];
 
 const ELEVATION_DEG_PER_SECOND = 4; // R / F held
 
@@ -58,7 +66,8 @@ export class SeaScene extends Phaser.Scene {
   private rings!: RangeRings;
   private markers!: EdgeMarkers;
   private hud!: Hud;
-  private compass!: Compass;
+  private raiseKeys: Phaser.Input.Keyboard.Key[] = [];
+  private lowerKeys: Phaser.Input.Keyboard.Key[] = [];
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
   private touch: TouchControls | null = null;
@@ -103,7 +112,10 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H') as KeyMap;
+    this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
+    this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
+    makeHudIcons(this);
 
     // On phones and tablets there is no keyboard, so show buttons.
     if (isTouch) {
@@ -114,8 +126,7 @@ export class SeaScene extends Phaser.Scene {
         (side) => this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side }),
       );
     }
-    this.hud = new Hud(this, isTouch);
-    this.compass = new Compass(this); // last: drawn on top of everything
+    this.hud = new Hud(this, isTouch); // last: drawn on top of everything
 
     // Integer pixel scaling: measure the screen now and after every resize.
     this.screenFit = new ScreenFit(this, (layout) => this.onLayout(layout));
@@ -139,6 +150,7 @@ export class SeaScene extends Phaser.Scene {
         windFromBearingDeg: Math.round(headingRadToBearingDeg(this.sim.world.wind.fromRad) * 10) / 10,
         windStrength: this.sim.world.wind.strength,
         windDrift: true,
+        debugText: false,
       },
       {
         onLogicalHeight: (h) => this.screenFit.setTargetHeight(h),
@@ -251,28 +263,43 @@ export class SeaScene extends Phaser.Scene {
     const wind = this.sim.world.wind;
     const params = SHIP_CLASSES[myShip.shipClass];
     const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
-    this.compass.update({
-      headingRad: me.headingRad,
-      windFromRad: wind.fromRad,
-      windStrength: wind.strength,
-      noGoDeg: sailing.noGoDeg,
-      twaDeg: sailing.twaDeg,
+    const target = this.ship(TARGET_ID);
+    const rangeM = params ? gunRange(myShip, params) : 0;
+    this.hud.update({
+      ship: myShip,
+      hullMax: params?.hullPoints ?? 1,
+      sailing,
+      wind,
+      rangeM,
+      target: target
+        ? {
+            shipClass: target.shipClass,
+            distance: this.targetDistance(),
+            hull: target.hull,
+            hullMax: SHIP_CLASSES[target.shipClass]?.hullPoints ?? 1,
+            sunk: target.sunk,
+          }
+        : null,
+      debug: v.debugText,
+      debugLines: v.debugText
+        ? debugLines({
+            ship: myShip,
+            sailing,
+            wind,
+            tick: this.sim.world.tick,
+            rangeM,
+            ballsFired: this.ballsFired,
+            hullHits: this.hullHits,
+            gunsPerSide: params?.gunsPerSide ?? 1,
+            viewWidthM: halfW * 2,
+            viewHeightM: halfH * 2,
+            zoom: this.zoomGoal,
+            logicalWidth: layout.width,
+            logicalHeight: layout.height,
+            pixelScale: layout.pixelScale,
+          })
+        : [],
     });
-    this.hud.update(myShip, this.sim.world.tick, {
-      viewWidthM: halfW * 2,
-      viewHeightM: halfH * 2,
-      pixelScale: layout.pixelScale,
-      logicalWidth: layout.width,
-      logicalHeight: layout.height,
-      zoom: this.zoomGoal,
-      targetDistance: this.targetDistance(),
-      targetHull: this.ship(TARGET_ID)?.hull ?? 0,
-      targetHullMax: SHIP_CLASSES[this.ship(TARGET_ID)?.shipClass ?? '']?.hullPoints ?? 0,
-      targetSunk: this.ship(TARGET_ID)?.sunk ?? false,
-      ballsFired: this.ballsFired,
-      hullHits: this.hullHits,
-      gunsPerSide: params?.gunsPerSide ?? 1,
-    }, sailing, wind);
   }
 
   /** Which whole zoom step to show now. */
@@ -301,7 +328,7 @@ export class SeaScene extends Phaser.Scene {
     this.cameras.main.setSize(layout.width, layout.height);
     this.water.setSize(layout.width, layout.height);
     this.touch?.layout(layout.width, layout.height);
-    this.compass.layout(layout.width, layout.height, this.screenFit.isPhone);
+    this.hud.layout(layout.width, layout.height);
   }
 
   /** Keys -> commands. Rudder and elevation are held; sails change one step per key press. */
@@ -319,11 +346,13 @@ export class SeaScene extends Phaser.Scene {
     if (more) this.changeSails(1);
     if (less) this.changeSails(-1);
 
-    // Guns: Q fires the port (left) broadside, E the starboard (right) one; R / F raise and lower.
+    // Guns: Q fires the port (left) broadside, E the starboard (right) one;
+    // + / - (or R / F, or the gun icons) raise and lower the guns.
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side: 'port' });
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side: 'starboard' });
-    const raise =
-      (this.keys.R.isDown || (this.touch?.raise ?? false) ? 1 : 0) - (this.keys.F.isDown || (this.touch?.lower ?? false) ? 1 : 0);
+    const up = this.keys.R.isDown || this.raiseKeys.some((k) => k.isDown) || this.hud.raise || (this.touch?.raise ?? false);
+    const down = this.keys.F.isDown || this.lowerKeys.some((k) => k.isDown) || this.hud.lower || (this.touch?.lower ?? false);
+    const raise = (up ? 1 : 0) - (down ? 1 : 0);
     if (raise !== 0) {
       const next = Math.max(0, Math.min(GUNS.maxElevationDeg, this.elevationDeg + raise * ELEVATION_DEG_PER_SECOND * seconds));
       if (next !== this.elevationDeg) {
@@ -331,6 +360,9 @@ export class SeaScene extends Phaser.Scene {
         this.sim.queueCommand({ type: 'setElevation', shipId: PLAYER_ID, valueDeg: next });
       }
     }
+
+    // H shows or hides the debug text (keys and all the numbers).
+    if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
 
     // Zoom is only about the picture, so it does not go through the simulation.
     if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.setZoom(this.panel.values.zoom + 1);
@@ -418,4 +450,10 @@ export class SeaScene extends Phaser.Scene {
     g.generateTexture('water', 64, 64);
     g.destroy();
   }
+}
+
+/** How far the guns reach now, lying still (metres from the ship's centre to the landing point). */
+function gunRange(ship: ShipState, params: ShipParams): number {
+  const p = predictLanding({ ...ship, speed: 0 }, params, 'starboard', STEP_SECONDS);
+  return Math.hypot(p.x - ship.x, p.y - ship.y);
 }

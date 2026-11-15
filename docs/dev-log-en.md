@@ -4,6 +4,24 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 15 Nov 2026 — Step 3 tested; new HUD
+
+**Your test of step 3:** at 150 m by hand **0.82 hull hits per salvo** (9 / 44 balls; perfect aim in the script gives 1.2); wind 1.0 makes the ellipse longer, the target sank after 9 hits / 24 balls; the moving target sank in about **2–2.5 min** (target 2–4 min). Gun sigma between 1.2 and 2.0–2.5 feels right; **1.8 stays**. Your idea: the target should set its sails by the wind → the bot (step 4) does that.
+
+### Your UI review → new HUD (part of step 5, built before the bot)
+
+| Your point | What changed |
+|---|---|
+| Computer: text covers the picture, hard to read at x2 and in motion | Three small panels on dark plates: **my ship** bottom left (compass, speed, sail pips, hull bar, IN IRONS / AGROUND), **target** top centre (class, distance, hull bar), **guns** bottom centre (port / starboard discs: yellow = loaded, a grey pie fills while reloading; elevation gauge, angle, range). All the numbers and keys moved into the **debug text**, hidden until **H** (or "debug text (H)" in the panel) |
+| iPad: the compass under the rudder buttons | My ship panel (with the compass) is now top left on touch screens; guns bottom centre between the button groups. A test checks on four screen sizes that no panel lies under a button |
+| Elevation buttons: better symbols | Option A: **pixel gun icons** (barrel up + arrow up, barrel down + arrow down), **stacked**: up above down, above "+" |
+| Computer: the same icons as a reminder, keys + and - | The gun icons with "+" / "-" are in the guns panel (they can be clicked too). Keys **+ / -** on the main keyboard and on the number pad; R / F still work |
+
+- New: `view/hudLayout.ts` (panel and button places, hull bar colour; 9 tests), `scenes/icons.ts`, new `scenes/Hud.ts`, `TouchControls.ts` by named places, `Compass.place`. Range ring labels moved to the upper left (the target card is at the top centre).
+- 157 tests in the sandbox (158 with your angle test); build clean; headless computer, iPad, iPhone: no errors.
+
+---
+
 ## 15 Nov 2026 (after midnight) — M2 step 3 built: accuracy and spread; moving target
 
 ### What was built (waiting for your test)

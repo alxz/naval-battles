@@ -20,6 +20,7 @@ export interface TuningValues {
   windFromBearingDeg: number; // compass degrees, where the wind comes from
   windStrength: number; // 0..1
   windDrift: boolean;
+  debugText: boolean; // the debug text with keys and numbers (H on a computer)
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -54,6 +55,7 @@ export class TuningPanel {
   readonly info: TuningInfo = { pixelScale: '', view: '', zoomNow: '' };
   private readonly gui: GUI;
   private readonly zoomController;
+  private readonly debugController;
 
   constructor(start: TuningValues, callbacks: TuningCallbacks, startClosed: boolean) {
     this.values = { ...start };
@@ -71,6 +73,7 @@ export class TuningPanel {
     view.add(v, 'autoZoom').name('auto combat zoom');
     view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');
+    this.debugController = view.add(v, 'debugText').name('debug text (H)');
     view.add(this.info, 'pixelScale').name('pixel scale').listen().disable();
     view.add(this.info, 'view').name('view (m)').listen().disable();
     view.add(this.info, 'zoomNow').name('zoom now').listen().disable();
@@ -132,6 +135,12 @@ export class TuningPanel {
     });
 
     if (startClosed) this.gui.close();
+  }
+
+  /** The H key switches the debug text; keep the check box in step. */
+  toggleDebugText(): void {
+    this.values.debugText = !this.values.debugText;
+    this.debugController.updateDisplay();
   }
 
   /** The keys and the zoom button change the zoom too; keep the slider in step. */

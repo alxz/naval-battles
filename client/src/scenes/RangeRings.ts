@@ -17,7 +17,7 @@ export class RangeRings {
     this.labels = viewJson.rangeRings.map((r) =>
       scene.add
         .text(0, 0, `${r} m`, { fontFamily: 'monospace', fontSize: '9px', color: '#d8ecff', resolution: TEXT_RESOLUTION })
-        .setOrigin(0.5, 1)
+        .setOrigin(1, 1)
         .setAlpha(0.8)
         // Above the ships. (Text drawn right after a Graphics and before a ship broke the
         // ship's picture in our headless test with Phaser 4.2.1, so we keep this order.)
@@ -47,11 +47,12 @@ export class RangeRings {
       g.fillPath();
     }
 
-    // The rings, with their distance written on top.
+    // The rings, with their distance written at the upper left (the top centre holds the target card).
     g.lineStyle(1, 0xd8ecff, 0.45);
+    const diag = Math.SQRT1_2;
     rings.forEach((r, i) => {
       g.strokeCircle(px, py, r * s);
-      this.labels[i]?.setPosition(px, py - r * s - 1);
+      this.labels[i]?.setPosition(px - r * s * diag - 1, py - r * s * diag - 1);
     });
   }
 }

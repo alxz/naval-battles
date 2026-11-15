@@ -1,169 +1,303 @@
 import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { GUNS, SHIP_CLASSES } from '../sim/data';
-import { predictLanding } from '../sim/guns';
 import type { SailingInfo } from '../sim/step';
-import { STEP_SECONDS } from '../sim/step';
-import type { ShipState, Wind } from '../sim/types';
+import type { ShipState, Side, Wind } from '../sim/types';
+import { barColour, hudLayout } from '../view/hudLayout';
+import type { HudLayout, Rect } from '../view/hudLayout';
+import { Compass } from './Compass';
+import { ICON_SIZE } from './icons';
 import { TEXT_RESOLUTION } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
+const PANEL_ALPHA = 0.55;
+const GAUGE_SPREAD_DEG = 60; // the gauge draws 0-10 degrees of elevation as 0-60 degrees, so it is easy to see
+const READY = 0xffe066;
 
-/** Extra lines for the scale test: what the screen shows and how far the target is. */
-export interface ScaleInfo {
-  viewWidthM: number; // metres visible across the screen
-  viewHeightM: number;
-  pixelScale: number; // device pixels per logical pixel
-  logicalWidth: number;
-  logicalHeight: number;
-  zoom: number;
-  targetDistance: number; // metres
-  targetHull: number; // hull points left
-  targetHullMax: number;
-  targetSunk: boolean;
-  ballsFired: number; // your balls since the last reset
-  hullHits: number; // your hull hits since the last reset
-  gunsPerSide: number;
+/** What the HUD shows about the target (null = no target). */
+export interface TargetInfo {
+  shipClass: string;
+  distance: number; // metres
+  hull: number;
+  hullMax: number;
+  sunk: boolean;
+}
+
+/** Everything the HUD needs in one frame. */
+export interface HudData {
+  ship: ShipState;
+  hullMax: number;
+  sailing: SailingInfo;
+  wind: Wind;
+  rangeM: number; // where the guns land now (lying still), metres from the ship
+  target: TargetInfo | null;
+  debug: boolean; // show the debug text
+  debugLines: string[];
 }
 
 /**
- * The numbers on the screen.
- *  - On a computer: small text with all the details.
- *  - On a phone or tablet: a big panel with a large speed number and sail pips,
- *    plus one small line with the target distance.
+ * The HUD (heads-up display): three small panels on dark plates, so they can be read
+ * over the moving sea. Places come from `hudLayout` (view/hudLayout.ts).
+ *   my ship:  compass, speed, sail pips, hull bar (and IN IRONS / AGROUND when it happens)
+ *   target:   class, distance, hull bar
+ *   guns:     port and starboard (yellow = loaded; a grey pie fills while reloading),
+ *             an elevation gauge with the angle and the range;
+ *             on a computer also the gun up / down icons with their keys (+ and -), which can be clicked
+ * The debug text (all the numbers, keys) shows with H on a computer or the panel switch.
  */
 export class Hud {
+  /** True while the mouse holds a gun icon (computer). */
+  raise = false;
+  lower = false;
   private readonly touch: boolean;
-  private readonly text: Phaser.GameObjects.Text;
-  private readonly speed: Phaser.GameObjects.Text | null = null;
-  private readonly unit: Phaser.GameObjects.Text | null = null;
-  private readonly gfx: Phaser.GameObjects.Graphics | null = null;
+  private readonly g: Phaser.GameObjects.Graphics;
+  private readonly compass: Compass;
+  private readonly speed: Phaser.GameObjects.Text;
+  private readonly unit: Phaser.GameObjects.Text;
+  private readonly status: Phaser.GameObjects.Text;
+  private readonly targetText: Phaser.GameObjects.Text;
+  private readonly elevation: Phaser.GameObjects.Text;
+  private readonly range: Phaser.GameObjects.Text;
+  private readonly sideText: Record<Side, Phaser.GameObjects.Text>;
+  private readonly keyHints: Phaser.GameObjects.Text[] = [];
+  private readonly gunIcons: Phaser.GameObjects.Image[] = [];
+  private readonly debugText: Phaser.GameObjects.Text;
+  private readonly hint: Phaser.GameObjects.Text;
+  private l: HudLayout = hudLayout(640, 360, false);
 
   constructor(scene: Phaser.Scene, touch: boolean) {
     this.touch = touch;
-
-    if (touch) {
-      this.gfx = scene.add.graphics().setScrollFactor(0).setDepth(100);
-      this.speed = scene.add
-        .text(16, 12, '0.0', {
+    // Order matters (see the note about Text after Graphics in RangeRings.ts): the plates
+    // and bars first, then the compass, then all text and icons on top.
+    this.g = scene.add.graphics().setScrollFactor(0).setDepth(100);
+    this.compass = new Compass(scene);
+    const text = (size: number, colour = '#ffffff', bold = false): Phaser.GameObjects.Text =>
+      scene.add
+        .text(0, 0, '', {
           fontFamily: 'monospace',
-          fontSize: '26px',
-          fontStyle: 'bold',
-          color: '#ffffff',
+          fontSize: `${size}px`,
+          fontStyle: bold ? 'bold' : 'normal',
+          color: colour,
           resolution: TEXT_RESOLUTION,
         })
         .setScrollFactor(0)
-        .setDepth(101);
-      this.unit = scene.add
-        .text(80, 26, 'm/s', { fontFamily: 'monospace', fontSize: '14px', color: '#cfe6f7', resolution: TEXT_RESOLUTION })
-        .setScrollFactor(0)
-        .setDepth(101);
-      this.text = scene.add
-        .text(10, 80, '', { fontFamily: 'monospace', fontSize: '11px', color: '#ffffff', resolution: TEXT_RESOLUTION })
-        .setScrollFactor(0)
-        .setDepth(101);
-    } else {
-      this.text = scene.add
-        .text(8, 8, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffffff', resolution: TEXT_RESOLUTION })
-        .setScrollFactor(0)
-        .setDepth(100);
-    }
-  }
+        .setDepth(104);
+    this.speed = text(18, '#ffffff', true);
+    this.unit = text(9, '#cfe6f7').setText('m/s');
+    this.status = text(10, '#ff8070', true);
+    this.targetText = text(10);
+    this.elevation = text(12, '#ffffff', true);
+    this.range = text(10, '#cfe6f7');
+    this.sideText = { port: text(10, '#1b1b1b', true).setOrigin(0.5), starboard: text(10, '#1b1b1b', true).setOrigin(0.5) };
+    this.debugText = text(10);
+    this.hint = text(9, '#cfe6f7').setAlpha(0.7);
 
-  update(ship: ShipState, tick: number, info: ScaleInfo, sailing: SailingInfo, wind: Wind): void {
-    const inIrons = sailing.twaDeg < sailing.noGoDeg;
-    if (this.touch) {
-      this.updateTouch(ship, info, sailing, inIrons);
-      return;
-    }
-    const bearing = headingRadToBearingDeg(ship.headingRad);
-    const windFrom = headingRadToBearingDeg(wind.fromRad);
-    const deg = (n: number): string => String(Math.round(n) % 360).padStart(3, '0');
-    this.text.setText(
-      [
-        'Naval-Battles M2 - guns and accuracy',
-        'A / D rudder   W / S sails   Z / X zoom',
-        'Q / E fire port / starboard   R / F elevation',
-        `sails ${Math.round(ship.sailLevel * 100)}%   speed ${ship.speed.toFixed(1)} m/s`,
-        `heading ${deg(bearing)} ${compassPoint(bearing)}   tick ${tick}`,
-        `wind from ${deg(windFrom)} ${compassPoint(windFrom)}, strength ${wind.strength.toFixed(2)}`,
-        `wind angle ${Math.round(sailing.twaDeg)} deg   sail power ${Math.round(sailing.share * 100)}%`,
-        inIrons ? 'IN IRONS - turn away from the wind' : '',
-        ship.aground ? 'AGROUND - turn away from the shore' : '',
-        this.gunsLine(ship),
-        this.hitsLine(info),
-        `target ${Math.round(info.targetDistance)} m   ${info.targetSunk ? 'SUNK!' : `hull ${info.targetHull}/${info.targetHullMax}`}`,
-        `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m   zoom x${info.zoom}`,
-        `screen ${info.logicalWidth} x ${info.logicalHeight} px, pixel x${info.pixelScale}`,
-      ]
-        .filter((line) => line !== '')
-        .join('\n'),
-    );
-  }
-
-  /** "hits 5 / 24 balls = 0.83 per salvo of 4" (combat target D28: 1-2 at 150 m) */
-  private hitsLine(info: ScaleInfo): string {
-    if (info.ballsFired === 0) return 'hits: no shots yet';
-    const salvos = info.ballsFired / Math.max(1, info.gunsPerSide);
-    return `hits ${info.hullHits} / ${info.ballsFired} balls = ${(info.hullHits / salvos).toFixed(2)} per salvo of ${info.gunsPerSide}`;
-  }
-
-  /** Short version for the phone panel: "6 deg 150 m" and "L ok R 8s". */
-  private gunsShort(ship: ShipState): string {
-    const params = SHIP_CLASSES[ship.shipClass];
-    if (!params) return '';
-    const p = predictLanding({ ...ship, speed: 0 }, params, 'starboard', STEP_SECONDS);
-    const range = Math.hypot(p.x - ship.x, p.y - ship.y);
-    const state = (left: number): string => (left <= 0 ? 'ok' : `${Math.ceil(left)}s`);
-    return `${Math.round(ship.elevationDeg)} deg ${Math.round(range)} m\nL ${state(ship.reloadPort)}  R ${state(ship.reloadStarboard)}`;
-  }
-
-  /** "guns 6.0 deg -> 150 m   port READY   starboard 12 s" */
-  private gunsLine(ship: ShipState): string {
-    const params = SHIP_CLASSES[ship.shipClass];
-    if (!params) return '';
-    const range = Math.hypot(...((): [number, number] => {
-      const p = predictLanding({ ...ship, speed: 0 }, params, 'starboard', STEP_SECONDS);
-      return [p.x - ship.x, p.y - ship.y];
-    })());
-    const state = (left: number): string => (left <= 0 ? 'READY' : `${Math.ceil(left)} s`);
-    return `guns ${ship.elevationDeg.toFixed(1)}/${GUNS.maxElevationDeg} deg -> ${Math.round(range)} m   port ${state(ship.reloadPort)}   starboard ${state(ship.reloadStarboard)}`;
-  }
-
-  private updateTouch(ship: ShipState, info: ScaleInfo, sailing: SailingInfo, inIrons: boolean): void {
-    const g = this.gfx;
-    if (!g || !this.speed || !this.unit) return;
-    this.speed.setText(ship.speed.toFixed(1));
-    const target = info.targetSunk ? 'target SUNK!' : `target ${Math.round(info.targetDistance)} m ${info.targetHull}hp`;
-    const second = ship.aground
-      ? 'AGROUND!'
-      : inIrons
-      ? 'IN IRONS!'
-      : `wind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`;
-    this.text.setText(`${target}\n${second}\n${this.gunsShort(ship)}`);
-    this.text.setColor(inIrons || ship.aground ? '#ff8070' : '#ffffff');
-
-    g.clear();
-    // Dark panel behind the numbers.
-    g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(8, 8, 118, 128, 8);
-
-    // Sail icon: a small triangle sail on a mast.
-    g.fillStyle(0xf2e8c9, 1);
-    g.fillRect(21, 46, 2, 22);
-    g.fillTriangle(25, 46, 25, 66, 41, 66);
-
-    // Sail pips: filled = sails set.
-    const set = Math.round(ship.sailLevel * SAIL_PIPS);
-    for (let i = 0; i < SAIL_PIPS; i++) {
-      const x = 50 + i * 17;
-      if (i < set) {
-        g.fillStyle(0xffffff, 1);
-        g.fillRect(x, 48, 13, 18);
-      } else {
-        g.lineStyle(2, 0xffffff, 0.5);
-        g.strokeRect(x + 1, 49, 11, 16);
+    if (!touch) {
+      // Computer: the gun icons are a reminder of the keys, and they can be clicked too.
+      for (const [key, label, hold] of [
+        ['icon-gun-up', '+', (down: boolean) => (this.raise = down)],
+        ['icon-gun-down', '-', (down: boolean) => (this.lower = down)],
+      ] as const) {
+        const icon = scene.add.image(0, 0, key).setOrigin(0, 0).setScrollFactor(0).setDepth(104).setInteractive();
+        icon.on('pointerdown', () => hold(true));
+        for (const ev of ['pointerup', 'pointerout', 'pointerupoutside']) icon.on(ev, () => hold(false));
+        this.gunIcons.push(icon);
+        this.keyHints.push(text(10, '#cfe6f7', true).setText(label));
       }
     }
   }
+
+  /** The screen got a new logical size: move the panels. */
+  layout(width: number, height: number): void {
+    const l = hudLayout(width, height, this.touch);
+    this.l = l;
+    const s = l.ship;
+    this.compass.place(s.x + 32, s.y + s.h / 2, 26);
+    this.speed.setPosition(s.x + 64, s.y + 5);
+    this.unit.setPosition(s.x + 112, s.y + 13);
+    // Status: just outside my ship panel (above it on a computer, below it on touch).
+    this.status.setPosition(s.x + 2, this.touch ? s.y + s.h + 4 : s.y - 15);
+    const t = l.target;
+    this.targetText.setPosition(t.x + 8, t.y + 4);
+    const gn = l.guns;
+    this.sideText.port.setPosition(gn.x + 20, gn.y + gn.h / 2);
+    this.sideText.starboard.setPosition(gn.x + gn.w - 20, gn.y + gn.h / 2);
+    this.elevation.setPosition(gn.x + 80, gn.y + 7);
+    this.range.setPosition(gn.x + 80, gn.y + 25);
+    this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
+    this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 155, gn.y + 7 + i * (ICON_SIZE + 4)));
+    this.debugText.setPosition(l.debugX, l.debugY);
+    this.hint.setPosition(l.debugX, l.debugY);
+  }
+
+  update(d: HudData): void {
+    const { ship, sailing } = d;
+    const l = this.l;
+    const g = this.g;
+    g.clear();
+
+    // --- Plates ---
+    for (const r of [l.ship, l.guns, ...(d.target ? [l.target] : [])]) {
+      g.fillStyle(0x000000, PANEL_ALPHA);
+      g.fillRoundedRect(r.x, r.y, r.w, r.h, 6);
+    }
+
+    // --- My ship ---
+    const s = l.ship;
+    this.compass.update({
+      headingRad: ship.headingRad,
+      windFromRad: d.wind.fromRad,
+      windStrength: d.wind.strength,
+      noGoDeg: sailing.noGoDeg,
+      twaDeg: sailing.twaDeg,
+    });
+    this.speed.setText(ship.speed.toFixed(1));
+    // Sail icon and pips: filled = sails set.
+    const px = s.x + 64;
+    const py = s.y + 30;
+    g.fillStyle(0xf2e8c9, 1);
+    g.fillRect(px, py, 1, 12);
+    g.fillTriangle(px + 2, py, px + 2, py + 11, px + 10, py + 11);
+    const set = Math.round(ship.sailLevel * SAIL_PIPS);
+    for (let i = 0; i < SAIL_PIPS; i++) {
+      const x = px + 16 + i * 14;
+      if (i < set) {
+        g.fillStyle(0xffffff, 1);
+        g.fillRect(x, py + 1, 10, 10);
+      } else {
+        g.lineStyle(1, 0xffffff, 0.5);
+        g.strokeRect(x + 0.5, py + 1.5, 9, 9);
+      }
+    }
+    this.bar(g, { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 }, ship.hull / Math.max(1, d.hullMax));
+    const inIrons = sailing.twaDeg < sailing.noGoDeg;
+    this.status.setText(ship.aground ? 'AGROUND!' : inIrons ? 'IN IRONS!' : ship.sunk ? 'SUNK!' : '');
+
+    // --- Target ---
+    this.targetText.setVisible(d.target !== null);
+    if (d.target) {
+      const t = l.target;
+      const tg = d.target;
+      this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m`}`);
+      this.bar(g, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+    }
+
+    // --- Guns ---
+    const gn = l.guns;
+    this.side(g, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
+    this.side(g, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
+    this.gauge(g, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
+    this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
+    this.range.setText(`${Math.round(d.rangeM)} m`);
+
+    // --- Debug text (H) ---
+    this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
+    this.hint.setVisible(!d.debug).setText(this.touch ? '' : 'H  help & debug');
+    if (d.debug) {
+      const b = this.debugText.getBounds();
+      g.fillStyle(0x000000, PANEL_ALPHA);
+      g.fillRoundedRect(b.x - 4, b.y - 3, b.width + 8, b.height + 6, 6);
+    }
+  }
+
+  /** A hull bar: dark track, coloured fill. */
+  private bar(g: Phaser.GameObjects.Graphics, r: Rect, share: number): void {
+    const f = Math.max(0, Math.min(1, share));
+    g.fillStyle(0xffffff, 0.18);
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.fillStyle(barColour(f), 1);
+    g.fillRect(r.x, r.y, Math.round(r.w * f), r.h);
+  }
+
+  /**
+   * One broadside: a yellow disc with the key when loaded; while reloading, a dark disc
+   * whose grey pie fills up, with the seconds left.
+   */
+  private side(g: Phaser.GameObjects.Graphics, side: Side, x: number, y: number, left: number, d: HudData): void {
+    const r = 12;
+    const text = this.sideText[side];
+    const key = this.touch ? (side === 'port' ? 'L' : 'R') : side === 'port' ? 'Q' : 'E';
+    if (left <= 0) {
+      g.fillStyle(READY, 1);
+      g.fillCircle(x, y, r);
+      text.setColor('#1b1b1b').setText(key);
+      return;
+    }
+    const total = SHIP_CLASSES[d.ship.shipClass]?.reloadSeconds ?? left;
+    const done = Math.max(0, 1 - left / Math.max(total, left));
+    g.fillStyle(0x000000, 0.6);
+    g.fillCircle(x, y, r);
+    g.fillStyle(0x9aa5ad, 0.8);
+    g.beginPath();
+    g.slice(x, y, r, -Math.PI / 2, -Math.PI / 2 + done * Math.PI * 2, false);
+    g.fillPath();
+    g.lineStyle(1, 0x9aa5ad, 1);
+    g.strokeCircle(x, y, r);
+    text.setColor('#ffffff').setText(String(Math.ceil(left)));
+  }
+
+  /** Elevation gauge: a wedge (0-10 degrees drawn 6x wider) with ticks at 0, 5, 10 degrees and a needle. */
+  private gauge(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, elevationDeg: number): void {
+    const toAngle = (deg: number): number => -((deg / GUNS.maxElevationDeg) * GAUGE_SPREAD_DEG * Math.PI) / 180;
+    // The whole range 0-10 degrees as a faint wedge, the part up to the current angle brighter.
+    g.fillStyle(0xffffff, 0.12);
+    g.beginPath();
+    g.slice(x, y, r, toAngle(GUNS.maxElevationDeg), 0, false);
+    g.fillPath();
+    g.fillStyle(READY, 0.25);
+    g.beginPath();
+    g.slice(x, y, r, toAngle(elevationDeg), 0, false);
+    g.fillPath();
+    g.lineStyle(1, 0xffffff, 0.5);
+    for (const deg of [0, 5, 10]) {
+      const a = toAngle(deg);
+      g.lineBetween(x + Math.cos(a) * (r - 4), y + Math.sin(a) * (r - 4), x + Math.cos(a) * r, y + Math.sin(a) * r);
+    }
+    const a = toAngle(elevationDeg);
+    g.lineStyle(2, READY, 1);
+    g.lineBetween(x, y, x + Math.cos(a) * (r - 2), y + Math.sin(a) * (r - 2));
+    g.fillStyle(READY, 1);
+    g.fillCircle(x, y, 2);
+  }
+}
+
+/** The debug lines: keys and every number we used while tuning. */
+export function debugLines(info: {
+  ship: ShipState;
+  sailing: SailingInfo;
+  wind: Wind;
+  tick: number;
+  rangeM: number;
+  ballsFired: number;
+  hullHits: number;
+  gunsPerSide: number;
+  viewWidthM: number;
+  viewHeightM: number;
+  zoom: number;
+  logicalWidth: number;
+  logicalHeight: number;
+  pixelScale: number;
+}): string[] {
+  const deg = (n: number): string => String(Math.round(n) % 360).padStart(3, '0');
+  const bearing = headingRadToBearingDeg(info.ship.headingRad);
+  const windFrom = headingRadToBearingDeg(info.wind.fromRad);
+  const salvos = info.ballsFired / Math.max(1, info.gunsPerSide);
+  // Short lines (at most 38 characters), so the box stays left of the target card.
+  return [
+    'A / D rudder     W / S sails',
+    'Q / E fire port / starboard',
+    '+ / - guns up / down',
+    'Z / X zoom       H hide this',
+    '',
+    `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
+    `speed ${info.ship.speed.toFixed(1)} m/s`,
+    `wind from ${deg(windFrom)} ${compassPoint(windFrom)}, strength ${info.wind.strength.toFixed(2)}`,
+    `wind angle ${Math.round(info.sailing.twaDeg)}, sail power ${Math.round(info.sailing.share * 100)}%`,
+    `guns ${info.ship.elevationDeg.toFixed(1)}/${GUNS.maxElevationDeg} deg -> ${Math.round(info.rangeM)} m`,
+    info.ballsFired === 0 ? 'hits: no shots yet' : `hits ${info.hullHits} / ${info.ballsFired} balls`,
+    info.ballsFired === 0 ? '' : `   = ${(info.hullHits / salvos).toFixed(2)} per salvo of ${info.gunsPerSide}`,
+    `view ${Math.round(info.viewWidthM)} x ${Math.round(info.viewHeightM)} m, zoom x${info.zoom}`,
+    `screen ${info.logicalWidth} x ${info.logicalHeight}, pixel x${info.pixelScale}`,
+    `tick ${info.tick}`,
+  ];
 }
