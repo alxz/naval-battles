@@ -4,6 +4,30 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 14 Nov 2026 (evening, later) — M2 step 2 tested; sloop art version 2
+
+**Step 2 tested by you:** hits, damage and sinking work; shots aimed beyond the hull do little or no damage, as designed. The art in the game: you liked it and asked for more detail and a more tilted (less side-on) look when the ship heads east or west.
+
+- **More from above:** new `HEIGHT_SCALE` 0.65 in `tools/render_ship.py` (screen pixels up per metre of height; was 1). The masts are shorter on screen and more deck shows. The number is written to `shipArt.json` (`heightScale`) and `Cannonballs.ts` uses it too, so balls, hit effects and ship pictures still share one projection. The mainsail swings out 28° (was 18°).
+- **More detail:** hull side in three strips (dark planks, owner's band, top strake); the **rail in the owner's colour** (yellow = you, red = enemy), visible from every side; deck guns on carriages; gun ports; lit stern windows and a lantern; helm; hatch with grating; barrels; anchors; mast platform; sails made of cloth panels; a bigger black flag.
+- **Fine parts only in the double-detail sheet** (`min_detail = 2`): gun barrels, deck plank seams, shrouds and stay. In the small pictures they would only make broken dots.
+- Same file names and frame size, so the game code did not change apart from `Cannonballs.ts`. 133 tests in the sandbox.
+
+---
+
+## 14 Nov 2026 (evening) — Art test: pseudo-3D sloop drawn by code
+
+You asked whether I can draw ship sprites. Answer: not by hand, but by code. You chose that path and **accepted the style as draft art**.
+
+- `tools/render_ship.py` (Python, numpy + Pillow): the sloop is a 3D shape of coloured triangles in game metres (hull with a painted band, deck, mast, bowsprit, mainsail, jib, flag, gun ports). For each direction the model is turned and drawn with the **same projection as the cannonballs** (screen y = world y − height), so the hull keeps its true top-down size and a ball that hits the sail on screen hits the rigging in the sim. Brightness comes from the angle to the light in 5 steps; then a dark outline and a shadow on the water.
+- Output: 8 sheets in `client/public/assets/ships/` (owner player = yellow band, enemy = red band; 16 and 32 directions; detail 1 and 2 pixels per metre), `client/src/data/shipArt.json`, and `docs/art/ship-art-preview.png`.
+- In the game: `scenes/ShipArt.ts` loads the sheets and `showShip` picks the frame for the heading (`view/shipFrame.ts`, 3 tests); the image is not turned. At zoom ×2 the double-detail sheet is used at its own size. Classes without pictures (brigantine, merchantman, frigate) still use the plain boxes. lil-gui "Art (test)": boxes / 16 / 32 directions, "detail at zoom x2".
+- Fix found on the way: after a click on a panel **button** ("put at …") the keys did not steer; the panel now releases the focus after clicks on buttons and check boxes too.
+- Limits: details are small at 1 px per metre; the sails do not turn with the wind; 16 directions turn in 22.5° steps (compare with 32 in motion).
+- 133 tests in the sandbox (134 with your angle test). This is the first half of the M2 art spike (D33); the Blender path stays as the later option for final art.
+
+---
+
 ## 14 Nov 2026 (night, 01:00+) — M2 step 1 tested; M2 step 2 built
 
 **Step 1 tested by you:** firing works; at high speed the balls land behind the cross. That is expected: the cross shows where a shot fired *now* would land and moves on with the ship while the balls fly (11 m/s × 2 s ≈ 22 m). Idea for step 6 (juice): leave a faint ghost cross where the salvo was aimed.

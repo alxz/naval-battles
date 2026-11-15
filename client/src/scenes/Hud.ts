@@ -97,6 +97,16 @@ export class Hud {
     );
   }
 
+  /** Short version for the phone panel: "6 deg 150 m" and "L ok R 8s". */
+  private gunsShort(ship: ShipState): string {
+    const params = SHIP_CLASSES[ship.shipClass];
+    if (!params) return '';
+    const p = predictLanding({ ...ship, speed: 0 }, params, 'starboard', STEP_SECONDS);
+    const range = Math.hypot(p.x - ship.x, p.y - ship.y);
+    const state = (left: number): string => (left <= 0 ? 'ok' : `${Math.ceil(left)}s`);
+    return `${Math.round(ship.elevationDeg)} deg ${Math.round(range)} m\nL ${state(ship.reloadPort)}  R ${state(ship.reloadStarboard)}`;
+  }
+
   /** "guns 6.0 deg -> 150 m   port READY   starboard 12 s" */
   private gunsLine(ship: ShipState): string {
     const params = SHIP_CLASSES[ship.shipClass];
@@ -114,19 +124,18 @@ export class Hud {
     if (!g || !this.speed || !this.unit) return;
     this.speed.setText(ship.speed.toFixed(1));
     const target = info.targetSunk ? 'target SUNK!' : `target ${Math.round(info.targetDistance)} m ${info.targetHull}hp`;
-    this.text.setText(
-      ship.aground
-        ? `${target}\nAGROUND!`
-        : inIrons
-        ? `${target}\nIN IRONS!`
-        : `${target}\nwind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`,
-    );
+    const second = ship.aground
+      ? 'AGROUND!'
+      : inIrons
+      ? 'IN IRONS!'
+      : `wind ${Math.round(sailing.twaDeg)} deg ${Math.round(sailing.share * 100)}%`;
+    this.text.setText(`${target}\n${second}\n${this.gunsShort(ship)}`);
     this.text.setColor(inIrons || ship.aground ? '#ff8070' : '#ffffff');
 
     g.clear();
     // Dark panel behind the numbers.
     g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(8, 8, 118, 100, 8);
+    g.fillRoundedRect(8, 8, 118, 128, 8);
 
     // Sail icon: a small triangle sail on a mast.
     g.fillStyle(0xf2e8c9, 1);

@@ -21,24 +21,39 @@ export class TouchControls {
   /** True while the finger is on the button. */
   left = false;
   right = false;
+  /** Elevation buttons, held. */
+  raise = false;
+  lower = false;
   private readonly buttons: Button[] = [];
   private zoomButton: Button | null = null;
 
-  constructor(scene: Phaser.Scene, onSails: (direction: 1 | -1) => void, onZoom: () => void) {
-    scene.input.addPointer(2); // allow up to 3 fingers at once (rudder + sails)
+  constructor(
+    scene: Phaser.Scene,
+    onSails: (direction: 1 | -1) => void,
+    onZoom: () => void,
+    onFire: (side: 'port' | 'starboard') => void,
+  ) {
+    scene.input.addPointer(2); // allow up to 3 fingers at once (rudder + sails + guns)
 
     const bottom = (h: number, size: number): number => h - MARGIN - size / 2;
     this.add(scene, '<', (_w, h, s) => ({ x: MARGIN + s / 2, y: bottom(h, s) }), (down) => (this.left = down), undefined);
     this.add(scene, '>', (_w, h, s) => ({ x: MARGIN * 2 + s * 1.5, y: bottom(h, s) }), (down) => (this.right = down), undefined);
     this.add(scene, '-', (w, h, s) => ({ x: w - MARGIN * 2 - s * 1.5, y: bottom(h, s) }), undefined, () => onSails(-1));
     this.add(scene, '+', (w, h, s) => ({ x: w - MARGIN - s / 2, y: bottom(h, s) }), undefined, () => onSails(1));
+    // Second row: the guns. "L" / "R" fire the port / starboard broadside (one tap = one salvo)
+    // on the left; "v" / "^" lower / raise the guns (held) on the right.
+    const row2 = (h: number, s: number): number => bottom(h, s) - s - MARGIN;
+    this.add(scene, 'L', (_w, h, s) => ({ x: MARGIN + s / 2, y: row2(h, s) }), undefined, () => onFire('port'));
+    this.add(scene, 'R', (_w, h, s) => ({ x: MARGIN * 2 + s * 1.5, y: row2(h, s) }), undefined, () => onFire('starboard'));
+    this.add(scene, 'v', (w, h, s) => ({ x: w - MARGIN * 2 - s * 1.5, y: row2(h, s) }), (down) => (this.lower = down), undefined);
+    this.add(scene, '^', (w, h, s) => ({ x: w - MARGIN - s / 2, y: row2(h, s) }), (down) => (this.raise = down), undefined);
     // The zoom button sits right of the HUD panel (the panel is 118 px wide at x = 8).
     this.zoomButton = this.add(scene, 'x1', (_w, _h, s) => ({ x: 134 + s / 2, y: 8 + s / 2 }), undefined, onZoom, true);
   }
 
   /** Put the buttons in place for a screen of this logical size. */
   layout(width: number, height: number): void {
-    const size = Math.round(Math.min(52, height * 0.2));
+    const size = Math.round(Math.min(48, height * 0.17));
     for (const b of this.buttons) {
       const s = b.small ? Math.round(size * 0.75) : size;
       const { x, y } = b.place(width, height, s);

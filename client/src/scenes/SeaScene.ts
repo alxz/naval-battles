@@ -20,7 +20,7 @@ import { Islands } from './Islands';
 import { LandingMarkers } from './LandingMarkers';
 import { RangeRings } from './RangeRings';
 import { ScreenFit } from './ScreenFit';
-import { PLAYER_HULL, TARGET_HULL, makeShipTextures, shipTextureKey } from './ShipArt';
+import { loadShipSheets, makeShipTextures, showShip } from './ShipArt';
 import { TouchControls } from './TouchControls';
 import { TuningPanel, releaseFocus } from './TuningPanel';
 import { Wake } from './Wake';
@@ -69,6 +69,10 @@ export class SeaScene extends Phaser.Scene {
     super('Sea');
   }
 
+  preload(): void {
+    loadShipSheets(this);
+  }
+
   create(): void {
     this.sim = new Simulation(createWorld());
     const isTouch = this.sys.game.device.input.touch;
@@ -84,8 +88,8 @@ export class SeaScene extends Phaser.Scene {
     this.markers2 = new LandingMarkers(this);
     this.cannonballs = new Cannonballs(this);
     for (const ship of this.sim.world.ships) {
-      const hull = ship.id === PLAYER_ID ? PLAYER_HULL : TARGET_HULL;
-      this.shipImages.push(this.add.image(0, 0, shipTextureKey(ship.shipClass, hull)).setDepth(2));
+      const owner = ship.id === PLAYER_ID ? 'player' : 'enemy';
+      this.shipImages.push(this.add.image(0, 0, `box-${ship.shipClass}-${owner}`).setDepth(2));
     }
     this.markers = new EdgeMarkers(this);
 
@@ -102,6 +106,7 @@ export class SeaScene extends Phaser.Scene {
         this,
         (direction) => this.changeSails(direction),
         () => this.stepZoom(),
+        (side) => this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side }),
       );
     }
     this.hud = new Hud(this, isTouch);
@@ -119,6 +124,8 @@ export class SeaScene extends Phaser.Scene {
         combatCamera: true,
         autoZoom: viewJson.autoZoom,
         closeFightRange: viewJson.closeFightRange,
+        shipArt: 16,
+        detailAtZoom: true,
         rangeRings: true,
         targetClass: 'sloop',
         windFromBearingDeg: Math.round(headingRadToBearingDeg(this.sim.world.wind.fromRad) * 10) / 10,
@@ -169,10 +176,8 @@ export class SeaScene extends Phaser.Scene {
       const pose = poses[i];
       const image = this.shipImages[i];
       if (!pose || !image) return;
-      const hull = ship.id === PLAYER_ID ? PLAYER_HULL : TARGET_HULL;
-      const key = shipTextureKey(ship.shipClass, hull);
-      if (image.texture.key !== key) image.setTexture(key);
-      image.setPosition(pose.x * s, pose.y * s).setRotation(pose.headingRad).setScale(s);
+      const owner = ship.id === PLAYER_ID ? 'player' : 'enemy';
+      showShip(image, ship.shipClass, owner, v.shipArt, v.detailAtZoom, pose.x, pose.y, pose.headingRad, s);
       // A sunk ship fades into the sea (it stays as a faint wreck); a placed one is solid again.
       image.setAlpha(ship.sunk ? Math.max(0.2, image.alpha - seconds * 0.3) : 1);
     });
@@ -295,7 +300,8 @@ export class SeaScene extends Phaser.Scene {
     // Guns: Q fires the port (left) broadside, E the starboard (right) one; R / F raise and lower.
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side: 'port' });
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side: 'starboard' });
-    const raise = (this.keys.R.isDown ? 1 : 0) - (this.keys.F.isDown ? 1 : 0);
+    const raise =
+      (this.keys.R.isDown || (this.touch?.raise ?? false) ? 1 : 0) - (this.keys.F.isDown || (this.touch?.lower ?? false) ? 1 : 0);
     if (raise !== 0) {
       const next = Math.max(0, Math.min(GUNS.maxElevationDeg, this.elevationDeg + raise * ELEVATION_DEG_PER_SECOND * seconds));
       if (next !== this.elevationDeg) {

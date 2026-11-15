@@ -1,0 +1,8 @@
+{
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "directions": 16,
+  "anchorX": 32.0,
+  "anchorY": 38.4,
+  "pixelsPerMetre": 1
+}

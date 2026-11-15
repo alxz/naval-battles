@@ -10,6 +10,8 @@ export interface TuningValues {
   combatCamera: boolean;
   autoZoom: boolean;
   closeFightRange: number; // metres
+  shipArt: 0 | 16 | 32; // 0 = plain boxes, else pictures in that many directions
+  detailAtZoom: boolean; // use the double-detail pictures at zoom x2
   rangeRings: boolean;
   targetClass: string;
   windFromBearingDeg: number; // compass degrees, where the wind comes from
@@ -66,6 +68,10 @@ export class TuningPanel {
     view.add(this.info, 'view').name('view (m)').listen().disable();
     view.add(this.info, 'zoomNow').name('zoom now').listen().disable();
 
+    const art = this.gui.addFolder('Art (test)');
+    art.add(v, 'shipArt', { boxes: 0, '16 directions': 16, '32 directions': 32 }).name('ships');
+    art.add(v, 'detailAtZoom').name('detail at zoom x2');
+
     const wind = this.gui.addFolder('Wind');
     const windChanged = (): void => callbacks.onWind(v.windFromBearingDeg, v.windStrength);
     wind.add(v, 'windFromBearingDeg', 0, 359, 1).name('from (base, deg)').onChange(windChanged);
@@ -97,6 +103,13 @@ export class TuningPanel {
     // After any change, give the keyboard back to the game. Otherwise a focused
     // drop-down list or number box keeps the keys, and W A S D stop steering the ship.
     this.gui.onFinishChange(() => releaseFocus());
+    // Buttons and check boxes report no "finished change", so also release after a click on them.
+    // Boxes you type in (numbers) and drop-down lists keep the focus while you use them.
+    this.gui.domElement.addEventListener('click', (event) => {
+      const el = event.target;
+      const typing = el instanceof HTMLSelectElement || (el instanceof HTMLInputElement && el.type !== 'checkbox');
+      if (!typing) releaseFocus();
+    });
 
     if (startClosed) this.gui.close();
   }

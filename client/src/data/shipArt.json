@@ -1,0 +1,22 @@
+{
+  "frame": 64,
+  "anchorX": 0.5,
+  "anchorY": 0.6,
+  "heightScale": 0.65,
+  "columns": 8,
+  "classes": [
+    "sloop"
+  ],
+  "owners": [
+    "player",
+    "enemy"
+  ],
+  "directions": [
+    16,
+    32
+  ],
+  "details": [
+    1,
+    2
+  ]
+}

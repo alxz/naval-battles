@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
+import artJson from '../data/shipArt.json';
 import type { Ball, SimEvent } from '../sim/types';
+
+/** Screen pixels up per metre of height: the same number the ship pictures were drawn with. */
+const HEIGHT_SCALE = artJson.heightScale;
 
 const SPLASH_SECONDS = 0.7;
 const FLASH_SECONDS = 0.15;
@@ -33,7 +37,7 @@ export class Cannonballs {
       if (e.type === 'gunFired') this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
       // Hits: brown splinters from the hull, a white puff of torn canvas from the rigging.
       // Drawn on the water spot below the hit, raised by its height like the balls.
-      if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z, s, 0.6, 2);
+      if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z * HEIGHT_SCALE, s, 0.6, 2);
       if (e.type === 'sunk') this.addFading('splash', e.x, e.y, s, 2.5, 8);
     }
   }
@@ -58,7 +62,7 @@ export class Cannonballs {
       const y = b.y + b.vy * ahead;
       const z = Math.max(0, b.z + b.vz * ahead);
       pair.shadow.setPosition(x * s, y * s).setScale(Math.max(1, s));
-      pair.ball.setPosition(x * s, (y - z) * s).setScale(Math.max(1, s));
+      pair.ball.setPosition(x * s, (y - z * HEIGHT_SCALE) * s).setScale(Math.max(1, s));
     }
     for (const [id, pair] of this.balls) {
       if (alive.has(id)) continue;
