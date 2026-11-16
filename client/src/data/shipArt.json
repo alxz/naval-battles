@@ -1,11 +1,20 @@
 {
   "frame": 64,
+  "frames": {
+    "sloop": 64,
+    "brigantine": 80,
+    "merchantman": 96,
+    "frigate": 112
+  },
   "anchorX": 0.5,
   "anchorY": 0.6,
   "heightScale": 0.65,
   "columns": 8,
   "classes": [
-    "sloop"
+    "sloop",
+    "brigantine",
+    "merchantman",
+    "frigate"
   ],
   "owners": [
     "player",

@@ -24,7 +24,7 @@ function ship(x: number, headingRad = 0): ShipState {
 
 /** A world with one ship and a full wind from the north (a beam reach when heading east). */
 function worldWith(s: ShipState): World {
-  return { tick: 0, rngState: 1, wind: { fromRad: -Math.PI / 2, strength: 1, baseFromRad: -Math.PI / 2 }, ships: [s], balls: [], pendingShots: [], nextBallId: 1, events: [] };
+  return { tick: 0, rngState: 1, wind: { fromRad: -Math.PI / 2, strength: 1, baseFromRad: -Math.PI / 2 }, ships: [s], balls: [], pendingShots: [], nextBallId: 1, events: [], bots: [] };
 }
 
 function run(w: World, seconds: number, islands: Island[]): void {

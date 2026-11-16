@@ -52,6 +52,7 @@ export function createWorld(seed: number = DEFAULT_SEED): World {
     ],
     balls: [],
     pendingShots: [],
+    bots: [],
     nextBallId: 1,
     events: [],
   };

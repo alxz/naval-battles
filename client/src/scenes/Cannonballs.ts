@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import artJson from '../data/shipArt.json';
-import type { Ball, SimEvent } from '../sim/types';
+import type { Ball, SimEvent, WindNow } from '../sim/types';
 
 /** Screen pixels up per metre of height: the same number the ship pictures were drawn with. */
 const HEIGHT_SCALE = artJson.heightScale;
@@ -8,11 +8,21 @@ const HEIGHT_SCALE = artJson.heightScale;
 const SPLASH_SECONDS = 0.7;
 const FLASH_SECONDS = 0.15;
 
+const SMOKE_SECONDS = 2.8;
+const SMOKE_DRIFT = 5; // m/s at full wind strength
+const BUBBLES = 10; // small splashes around a sinking ship
+
+/** A short effect: placed in game metres (so it stays put when the zoom changes), it may drift. */
 interface Fading {
   image: Phaser.GameObjects.Image;
-  age: number;
+  x: number; // metres
+  y: number;
+  vx: number; // metres per second
+  vy: number;
+  age: number; // seconds; below 0 = waiting to start
   life: number;
   grow: number; // how much bigger it gets over its life
+  alpha: number; // starting alpha
 }
 
 /**
@@ -30,15 +40,41 @@ export class Cannonballs {
     this.makeTextures();
   }
 
-  /** Start splashes and flashes. x, y in metres; s = screen pixels per metre. */
-  play(events: readonly SimEvent[], s: number): void {
+  /**
+   * Start the effects of the simulation's events. x, y in metres; s = screen pixels per metre.
+   *   gunFired  a flash, then two puffs of gun smoke that drift downwind and fade
+   *   splash    a ring of water
+   *   hit       brown splinters (hull) or a white puff of torn canvas (rigging), raised by the height of the hit
+   *   sunk      a big ring and bubbles for two seconds
+   * Random numbers here only change the picture, never the game, so Math.random is fine.
+   */
+  play(events: readonly SimEvent[], s: number, wind: WindNow): void {
+    const downwind = wind.fromRad + Math.PI;
+    const drift = SMOKE_DRIFT * wind.strength;
     for (const e of events) {
       if (e.type === 'splash') this.addFading('splash', e.x, e.y, s, SPLASH_SECONDS, 2.5);
-      if (e.type === 'gunFired') this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
-      // Hits: brown splinters from the hull, a white puff of torn canvas from the rigging.
-      // Drawn on the water spot below the hit, raised by its height like the balls.
+      if (e.type === 'gunFired') {
+        this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
+        for (let i = 0; i < 2; i++) {
+          const jitter = (Math.random() - 0.5) * 0.8;
+          const speed = drift * (0.7 + Math.random() * 0.6);
+          this.addFading('smoke', e.x + (Math.random() - 0.5) * 3, e.y - 2 + (Math.random() - 0.5) * 3, s, SMOKE_SECONDS * (0.8 + Math.random() * 0.4), 3, {
+            vx: Math.cos(downwind + jitter) * speed,
+            vy: Math.sin(downwind + jitter) * speed - 0.6, // and it rises a little (up the screen)
+            alpha: 0.55,
+            delay: i * 0.05,
+          });
+        }
+      }
       if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z * HEIGHT_SCALE, s, 0.6, 2);
-      if (e.type === 'sunk') this.addFading('splash', e.x, e.y, s, 2.5, 8);
+      if (e.type === 'sunk') {
+        this.addFading('splash', e.x, e.y, s, 2.5, 8);
+        for (let i = 0; i < BUBBLES; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.random() * 12;
+          this.addFading('splash', e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, s, 0.6, 1.2, { delay: 0.2 + Math.random() * 2, alpha: 0.7 });
+        }
+      }
     }
   }
 
@@ -73,8 +109,15 @@ export class Cannonballs {
 
     for (const f of this.fading) {
       f.age += dt;
+      if (f.age < 0) continue; // not started yet
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
       const t = Math.min(1, f.age / f.life);
-      f.image.setAlpha(1 - t).setScale(Math.max(1, s) * (1 + f.grow * t));
+      f.image
+        .setVisible(true)
+        .setPosition(f.x * s, f.y * s)
+        .setAlpha(f.alpha * (1 - t))
+        .setScale(Math.max(1, s) * (1 + f.grow * t));
     }
     for (let i = this.fading.length - 1; i >= 0; i--) {
       const f = this.fading[i]!;
@@ -85,9 +128,18 @@ export class Cannonballs {
     }
   }
 
-  private addFading(key: string, x: number, y: number, s: number, life: number, grow: number): void {
-    const image = this.scene.add.image(x * s, y * s, key).setDepth(3).setScale(Math.max(1, s));
-    this.fading.push({ image, age: 0, life, grow });
+  private addFading(
+    key: string,
+    x: number,
+    y: number,
+    s: number,
+    life: number,
+    grow: number,
+    more: { vx?: number; vy?: number; alpha?: number; delay?: number } = {},
+  ): void {
+    const delay = more.delay ?? 0;
+    const image = this.scene.add.image(x * s, y * s, key).setDepth(key === 'smoke' ? 3.5 : 3).setScale(Math.max(1, s)).setVisible(delay <= 0);
+    this.fading.push({ image, x, y, vx: more.vx ?? 0, vy: more.vy ?? 0, age: -delay, life, grow, alpha: more.alpha ?? 1 });
   }
 
   private makeTextures(): void {
@@ -120,6 +172,13 @@ export class Cannonballs {
     g.fillStyle(0xfff1a8, 1);
     g.fillCircle(3, 3, 3);
     g.generateTexture('flash', 7, 7);
+    g.clear();
+    // Gun smoke: a soft grey puff (a darker edge, a lighter middle).
+    g.fillStyle(0xbfc3c7, 1);
+    g.fillCircle(5, 5, 5);
+    g.fillStyle(0xdfe2e4, 1);
+    g.fillCircle(4, 4, 3);
+    g.generateTexture('smoke', 11, 11);
     g.destroy();
   }
 }

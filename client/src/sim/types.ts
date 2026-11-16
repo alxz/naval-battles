@@ -125,6 +125,64 @@ export interface World {
   pendingShots: PendingShot[];
   nextBallId: number;
   events: SimEvent[]; // cleared at the start of every step
+  bots: BotState[]; // ships steered by the computer (sim/bot.ts)
+}
+
+/** What a bot is doing now (plan 4.9: a state machine). */
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'idle';
+
+/** What makes one bot different from another, drawn once when it is created (seeded random). */
+export interface BotPersonality {
+  preferredRange: number; // metres it likes for a broadside fight
+  patienceSeconds: number; // how long it chases without gaining before it gives up
+  aimErrorSigmaDeg: number; // how well it judges the elevation (smaller = better gunner)
+}
+
+/**
+ * A bot's memory. It lives in the world state (plain data), so saves and tests
+ * repeat exactly. The bot changes its ship only through commands, like the player.
+ */
+export interface BotState {
+  shipId: number;
+  enemyId: number;
+  mode: BotMode;
+  tack: -1 | 0 | 1; // beating against the wind: +1 = heading clockwise of the wind, -1 = anticlockwise, 0 = not beating
+  tackSeconds: number; // how long on this tack (to avoid flipping: tackCooldownSeconds)
+  side: Side | null; // the broadside it is turning toward the enemy
+  aimErrorDeg: number; // its misjudgement of the elevation for the next broadside (new after every shot)
+  personality: BotPersonality;
+  chaseSeconds: number; // time in the current patience window of a chase
+  chaseStartDistance: number; // distance at the start of that window
+  breakOffLeft: number; // seconds left of sailing away after giving up
+}
+
+/** Bot behaviour numbers (data/bots.json). */
+export interface BotParams {
+  thinkEveryTicks: number; // the bot thinks every N steps (3 = 10 times a second)
+  engageRange: number; // metres: closer than this it fights
+  chaseAgainRange: number; // metres: farther than this it chases again (gap = no flip-flop)
+  preferredRange: number; // metres: the distance it likes for a broadside fight (middle of the personality range)
+  preferredRangeSpread: number; // metres +- : each bot gets its own preferred range
+  rangeBand: number; // metres +- around preferredRange where it sails straight across
+  rangeBendDeg: number; // how much it bends its course to close or open the range
+  fightSpeed: number; // m/s it aims for while fighting (it sets the sails by the wind for this)
+  minSails: number; // never less sail than this (keep steering way)
+  tackMarginDeg: number; // a course closer than no-go + this counts as "into the wind"
+  closeHauledMarginDeg: number; // when beating, sail this far outside the no-go zone
+  tackCooldownSeconds: number; // at least this long on one tack
+  rudderGain: number; // rudder per radian of heading error
+  aimErrorMinDeg: number; // judgement error of the elevation, sigma: the best bot...
+  aimErrorMaxDeg: number; // ...and the worst (each bot gets its own value between)
+  elevationDegPerSecond: number; // how fast it can raise or lower the guns (the same as the player's keys)
+  aimToleranceDeg: number; // fire when the guns are within this of the wanted elevation
+  fireOffsetM: number; // fire when the aim point is at most this many metres off the line of fire (the guns fire straight abeam)
+  fireRangeShare: number; // fire up to this share of the longest range
+  landLookaheadSeconds: number; // look this far ahead for land
+  landLookaheadMinM: number; // and at least this many metres
+  patienceMinSeconds: number; // a chase that gains less than giveUpGainM in this long (each bot its own value)...
+  patienceMaxSeconds: number; // ...between min and max...
+  giveUpGainM: number; // ...is given up
+  breakOffSeconds: number; // then it sails away this long before it may chase again
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -144,4 +202,6 @@ export type Command =
   // Test setup now (lil-gui); later sea events can change the wind the same way.
   | { type: 'setWind'; fromRad: number; strength: number }
   | { type: 'setElevation'; shipId: number; valueDeg: number }
-  | { type: 'fire'; shipId: number; side: Side };
+  | { type: 'fire'; shipId: number; side: Side }
+  // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).
+  | { type: 'setBot'; shipId: number; enemyId: number | null };

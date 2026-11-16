@@ -27,6 +27,8 @@ Output:
 from __future__ import annotations
 
 import json
+import sys
+from dataclasses import dataclass, field
 import math
 from pathlib import Path
 
@@ -36,9 +38,12 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "client" / "public" / "assets" / "ships"
 META_FILE = ROOT / "client" / "src" / "data" / "shipArt.json"
-PREVIEW_FILE = ROOT / "docs" / "art" / "ship-art-preview.png"
+ART_DIR = ROOT / "docs" / "art"
+PREVIEW_FILE = ART_DIR / "ship-art-preview.png"
 
-FRAME = 64  # frame size in pixels at detail 1 (1 pixel per game metre)
+FRAME = 64  # frame size in pixels at detail 1 (1 pixel per game metre) for the sloop
+# Bigger ships need bigger frames (bowsprit and booms included; height x HEIGHT_SCALE above the anchor).
+FRAMES = {"sloop": 64, "brigantine": 80, "merchantman": 96, "frigate": 112}
 ANCHOR = (0.5, 0.6)  # where the middle of the hull at the water sits in the frame (share of the frame)
 COLUMNS = 8  # frames per row in a sheet
 DIRECTIONS = (16, 32)
@@ -268,6 +273,320 @@ def build_sloop(band: tuple[int, int, int]) -> Model:
     return m
 
 
+# ---------------------------------------------------------------------------------------------
+# The other classes (M2 step 7). They share one hull builder and a few rigging helpers.
+# The sloop above keeps its own code: its look was accepted as it is.
+# ---------------------------------------------------------------------------------------------
+
+STERN_GOLD = (196, 150, 58)  # carved decoration on a frigate's stern
+CARGO = (138, 104, 64)  # crates and bales on a merchant's deck
+
+
+@dataclass
+class HullSpec:
+    """The shape of a hull. All lengths in game metres."""
+
+    length: float
+    half_beam: float
+    sheer_mid: float  # height of the deck edge amidships
+    sheer_rise: float  # how much higher the deck edge is at bow and stern
+    aft_end: float  # share of the length (from the stern) under the raised quarterdeck
+    aft_rise: float  # how much higher the quarterdeck is than the main deck
+    fore_end: float  # share of the length (from the bow) under a forecastle, 0 = none
+    fore_rise: float
+    stern_share: float  # stern width as a share of the beam
+    bow_start: float  # where the bow starts to narrow (share from the stern)
+    bow_power: float  # bigger = fuller, blunter bow
+    guns: list[float] = field(default_factory=list)  # x of each gun (both sides)
+    deck_guns: bool = True  # guns on the open deck (small ships) or only behind ports (a gun deck below)
+    windows: int = 3
+
+
+class Hull:
+    """Builds a hull into a model and answers questions about it (widths and heights along the length)."""
+
+    def __init__(self, m: Model, spec: HullSpec, band: tuple[int, int, int]) -> None:
+        self.m = m
+        self.s = spec
+        self.band = band
+        self.build()
+
+    def at(self, x: float) -> float:
+        return (x + self.s.length / 2) / self.s.length
+
+    def half_width(self, t: float) -> float:
+        s = self.s
+        if t < 0.35:
+            return s.half_beam * (s.stern_share + (1 - s.stern_share) * math.sin(math.pi / 2 * t / 0.35))
+        if t < s.bow_start:
+            return s.half_beam
+        u = (t - s.bow_start) / (1 - s.bow_start)
+        return s.half_beam * max(0.0, 1 - u**s.bow_power)
+
+    def sheer(self, t: float) -> float:
+        return self.s.sheer_mid + self.s.sheer_rise * (2 * t - 1) ** 2
+
+    def raise_at(self, t: float) -> float:
+        s = self.s
+        if t < s.aft_end:
+            return s.aft_rise
+        if s.fore_end > 0 and t > 1 - s.fore_end:
+            return s.fore_rise
+        return 0.0
+
+    def deck(self, x: float) -> float:
+        t = self.at(x)
+        return self.sheer(t) - 0.9 + self.raise_at(t)
+
+    def width_at(self, x: float) -> float:
+        return self.half_width(self.at(x))
+
+    def build(self) -> None:
+        m, s, band = self.m, self.s, self.band
+        sections = max(16, int(s.length / 2))
+        ring = []
+        for i in range(sections + 1):
+            t = i / sections
+            ring.append((-s.length / 2 + s.length * t, self.half_width(t), self.sheer(t) + self.raise_at(t) * 0.8, t))
+        for (x0, w0, h0, t0), (x1, w1, h1, _t1) in zip(ring, ring[1:]):
+            lift = self.raise_at(t0)
+            deck0 = self.sheer(t0) - 0.9 + lift
+            deck1 = self.sheer(_t1) - 0.9 + lift
+            for side in (1, -1):
+                water0, water1 = (x0, side * w0 * 0.8, 0), (x1, side * w1 * 0.8, 0)
+                low0, low1 = (x0, side * w0 * 0.9, h0 * 0.45), (x1, side * w1 * 0.9, h1 * 0.45)
+                high0, high1 = (x0, side * w0 * 0.97, h0 * 0.8), (x1, side * w1 * 0.97, h1 * 0.8)
+                top0, top1 = (x0, side * w0, h0), (x1, side * w1, h1)
+                m.quad(water0, water1, low1, low0, HULL_DARK)
+                m.quad(low0, low1, high1, high0, band)
+                m.quad(high0, high1, top1, top0, WOOD_DARK)
+                in0, in1 = (x0, side * max(0, w0 - 0.8), h0), (x1, side * max(0, w1 - 0.8), h1)
+                m.quad(top0, top1, in1, in0, band)
+                m.quad(in0, in1, (in1[0], in1[1], deck1), (in0[0], in0[1], deck0), HULL_DARK)
+            inner0, inner1 = max(0, w0 - 0.8), max(0, w1 - 0.8)
+            colour = DECK_AFT if lift > 0 else DECK
+            m.quad((x0, -inner0, deck0), (x1, -inner1, deck1), (x1, inner1, deck1), (x0, inner0, deck0), colour)
+            m.min_detail = 2
+            for share in (-0.6, -0.2, 0.2, 0.6):
+                m.quad(
+                    (x0, share * inner0 - 0.12, deck0 + 0.03),
+                    (x1, share * inner1 - 0.12, deck1 + 0.03),
+                    (x1, share * inner1 + 0.12, deck1 + 0.03),
+                    (x0, share * inner0 + 0.12, deck0 + 0.03),
+                    DECK_LINE,
+                )
+            m.min_detail = 1
+
+        # Walls where the quarterdeck and the forecastle step up from the main deck.
+        for t, rise in ((s.aft_end, s.aft_rise), (1 - s.fore_end, s.fore_rise)):
+            if rise <= 0 or t <= 0 or t >= 1:
+                continue
+            x = -s.length / 2 + s.length * t
+            w = self.half_width(t) - 0.8
+            h = self.sheer(t) - 0.9
+            m.quad((x, -w, h), (x, w, h), (x, w, h + rise), (x, -w, h + rise), WOOD)
+
+        # The stern: lit windows (and gold carving on a big ship), a lantern.
+        x0, w0, h0, _ = ring[0]
+        m.quad((x0, -w0 * 0.8, 0), (x0, w0 * 0.8, 0), (x0, w0, h0), (x0, -w0, h0), HULL_DARK)
+        n = s.windows
+        for i in range(n):
+            wy = (i - (n - 1) / 2) * (2 * w0 * 0.8 / max(n, 1))
+            m.quad((x0 - 0.06, wy - 0.6, h0 * 0.55), (x0 - 0.06, wy + 0.6, h0 * 0.55), (x0 - 0.06, wy + 0.6, h0 * 0.8), (x0 - 0.06, wy - 0.6, h0 * 0.8), WINDOW)
+        if s.length >= 60:
+            m.quad((x0 - 0.08, -w0 * 0.85, h0 * 0.84), (x0 - 0.08, w0 * 0.85, h0 * 0.84), (x0 - 0.08, w0 * 0.85, h0 * 0.95), (x0 - 0.08, -w0 * 0.85, h0 * 0.95), STERN_GOLD)
+        m.box((x0 - 0.5, -0.45, h0), (x0 + 0.3, 0.45, h0 + 1.4), WINDOW)
+
+        # Guns: a dark port in the band; deck guns on carriages, or barrels through the ports.
+        for gx in s.guns:
+            t = self.at(gx)
+            w = self.half_width(t)
+            h = self.sheer(t) + self.raise_at(t) * 0.8
+            d = self.deck(gx)
+            for side in (1, -1):
+                y_low, y_high = side * (w * 0.92 + 0.1), side * (w * 0.96 + 0.1)
+                m.quad((gx - 0.8, y_low, h * 0.5), (gx + 0.8, y_low, h * 0.5), (gx + 0.8, y_high, h * 0.74), (gx - 0.8, y_high, h * 0.74), PORT_HOLE)
+                if s.deck_guns:
+                    lo_y, hi_y = sorted((side * (w - 2.6), side * (w - 1.1)))
+                    m.box((gx - 0.7, lo_y, d), (gx + 0.7, hi_y, d + 0.7), IRON_DARK)
+                    m.min_detail = 2
+                    m.spar((gx, side * (w - 2.2), d + 0.95), (gx, side * (w + 0.7), d + 0.95), 0.6, IRON)
+                    m.min_detail = 1
+                else:
+                    m.min_detail = 2
+                    m.spar((gx, side * (w * 0.9), h * 0.62), (gx, side * (w + 1.0), h * 0.62), 0.6, IRON)
+                    m.min_detail = 1
+
+
+def mast(m: Model, x: float, base: float, top: float, thickness: float, tops: list[float]) -> None:
+    """A mast with a platform (top) at each given height."""
+    m.spar((x, 0, base), (x, 0, top), thickness, WOOD)
+    for i, h in enumerate(tops):
+        size = 1.6 - 0.4 * i
+        m.box((x - size, -size, h), (x + size, size, h + 0.35), WOOD_DARK)
+
+
+def square_sail(m: Model, x: float, bottom: float, top: float, half_width: float, brace_deg: float, belly: float = 3.5) -> None:
+    """
+    A square sail hanging from a yard across the ship. The yard is braced (turned) by brace_deg,
+    so from above the sail lies at an angle and the deck shows beside it.
+    The wind fills the cloth: the foot is pushed forward ("belly"), most in the middle. Seen from
+    above, that curved, filled shape is what shows a square sail; a flat sail seen edge-on would be
+    only a line. Cloth in vertical panels of two close colours.
+    """
+    a = math.radians(brace_deg)
+    across = np.array([math.sin(a), math.cos(a), 0.0])  # along the yard
+    ahead = np.array([math.cos(a), -math.sin(a), 0.0])  # the way the wind pushes the cloth
+    centre_top = np.array([x, 0.0, top])
+    centre_middle = np.array([x, 0.0, (top + bottom) / 2])
+    centre_bottom = np.array([x, 0.0, bottom])
+    panels = 6
+    foot = 0.92  # the foot is a little narrower than the head
+
+    def fill(share: float, k: float) -> np.ndarray:
+        """How far forward the cloth is at this point: k = 0 at the yard, 1 at the foot; most in the middle."""
+        return ahead * belly * (0.45 + 0.55 * (1 - share * share)) * (k * (2 - k))
+
+    for i in range(panels):
+        a0 = -1 + 2 * i / panels
+        a1 = -1 + 2 * (i + 1) / panels
+        colour = SAIL if i % 2 == 0 else SAIL_SEAM
+        head0, head1 = centre_top + across * half_width * a0, centre_top + across * half_width * a1
+        mid0 = centre_middle + across * half_width * (1 + foot) / 2 * a0 + fill(a0, 0.6)
+        mid1 = centre_middle + across * half_width * (1 + foot) / 2 * a1 + fill(a1, 0.6)
+        foot0 = centre_bottom + across * half_width * foot * a0 + fill(a0, 1.0)
+        foot1 = centre_bottom + across * half_width * foot * a1 + fill(a1, 1.0)
+        m.quad(head0, head1, mid1, mid0, colour)
+        m.quad(mid0, mid1, foot1, foot0, colour)
+    m.spar(centre_top - across * (half_width + 0.6), centre_top + across * (half_width + 0.6), 0.6, WOOD)  # the yard
+
+
+def gaff_sail(m: Model, x: float, foot: float, head: float, boom: float, gaff: float, swing_deg: float) -> None:
+    """A fore-and-aft sail behind a mast (like the sloop's mainsail), swung out to starboard."""
+    swing = math.radians(swing_deg)
+    out = np.array([-math.cos(swing), math.sin(swing), 0.0])
+    tack = np.array([x, 0.0, foot])
+    throat = np.array([x, 0.0, head])
+    clew = tack + out * boom
+    peak = throat + out * gaff + np.array([0, 0, 3.0])
+    panels = 5
+    for i in range(panels):
+        a, b = i / panels, (i + 1) / panels
+        m.quad(tack + (clew - tack) * a, tack + (clew - tack) * b, throat + (peak - throat) * b, throat + (peak - throat) * a, SAIL if i % 2 == 0 else SAIL_SEAM)
+    m.spar(tack - [0, 0, 0.5], clew - [0, 0, 0.5], 0.8, WOOD)
+    m.spar(throat, peak, 0.7, WOOD)
+
+
+def jibs(m: Model, bowsprit_end: np.ndarray, heads: list[np.ndarray], tack_x: float, side_out: float) -> None:
+    """Triangular head sails from the bowsprit to the foremast."""
+    for i, head in enumerate(heads):
+        tack = bowsprit_end + np.array([-3.0 * i, 0, -0.5 * i])
+        clew = np.array([tack_x - 2.0 * i, side_out, head[2] * 0.3])
+        middle = (tack + clew) / 2
+        m.tri(tack, head, middle, SAIL_JIB)
+        m.tri(middle, head, clew, SAIL_SEAM)
+
+
+def shrouds(m: Model, hull: Hull, x: float, top: float) -> None:
+    """Fine: the ropes from a mast top to both sides of the hull."""
+    m.min_detail = 2
+    for dx in (1.0, -1.5):
+        for side in (1, -1):
+            sx = x + dx
+            m.spar((x, 0, top), (sx, side * hull.width_at(sx), hull.sheer(hull.at(sx))), 0.3, ROPE)
+    m.min_detail = 1
+
+
+def flag(m: Model, x: float, top: float, size: float) -> None:
+    m.quad((x, 0, top - 0.2), (x, 0, top + size * 0.7), (x - size, size * 0.28, top + size * 0.55), (x - size, size * 0.28, top + size * 0.1), FLAG)
+
+
+def build_brigantine(band: tuple[int, int, int]) -> Model:
+    """Two masts, 40 m: square sails on the foremast, a big fore-and-aft mainsail; 6 guns a side."""
+    m = Model()
+    hull = Hull(m, HullSpec(40, 6.0, 3.5, 1.3, 0.25, 1.0, 0.0, 0.0, 0.6, 0.55, 2.2, guns=[-12.5, -7.5, -2.5, 2.5, 7.5, 12.5]), band)
+    bowsprit_end = np.array([31.0, 0.0, 9.0])
+    m.spar((17.0, 0, 4.6), bowsprit_end, 1.0, WOOD)
+    fore_x, main_x = 9.0, -4.0
+    mast(m, fore_x, hull.deck(fore_x), 29.0, 1.3, [15.0, 23.0])
+    mast(m, main_x, hull.deck(main_x), 30.0, 1.4, [21.0])
+    for bottom, top, hw in ((8.0, 14.5, 7.5), (15.5, 21.5, 6.0), (22.5, 26.5, 4.2)):
+        square_sail(m, fore_x, bottom, top, hw, 30)
+    gaff_sail(m, main_x, 6.5, 21.5, 15.0, 10.0, 26)
+    jibs(m, bowsprit_end, [np.array([fore_x + 0.6, 0, 19.0]), np.array([fore_x + 0.6, 0, 15.0])], 16.0, 3.0)
+    for x, top in ((fore_x, 23.0), (main_x, 21.0)):
+        shrouds(m, hull, x, top)
+    # On deck: a hatch, barrels, the helm.
+    m.box((1.0, -1.5, hull.deck(2)), (4.5, 1.5, hull.deck(2) + 0.5), WOOD_DARK)
+    for bx, by in ((-9.0, 1.6), (-10.2, 0.6)):
+        m.box((bx - 0.5, by - 0.5, hull.deck(bx)), (bx + 0.5, by + 0.5, hull.deck(bx) + 1.1), BARREL)
+    m.box((-16.0, -0.5, hull.deck(-16)), (-15.2, 0.5, hull.deck(-16) + 1.4), WOOD_DARK)
+    flag(m, main_x, 30.0, 4.5)
+    return m
+
+
+def build_merchantman(band: tuple[int, int, int]) -> Model:
+    """A broad, slow trader, 56 m: three masts, high stern castle, cargo on deck; 3 guns a side."""
+    m = Model()
+    hull = Hull(m, HullSpec(56, 8.0, 4.0, 1.6, 0.24, 1.8, 0.14, 1.0, 0.72, 0.62, 1.6, guns=[-12.0, 0.0, 12.0], windows=4), band)
+    bowsprit_end = np.array([38.0, 0.0, 11.0])
+    m.spar((24.0, 0, 5.8), bowsprit_end, 1.2, WOOD)
+    fore_x, main_x, mizzen_x = 15.0, 1.0, -15.0
+    mast(m, fore_x, hull.deck(fore_x), 31.0, 1.5, [17.0, 26.0])
+    mast(m, main_x, hull.deck(main_x), 35.0, 1.7, [19.0, 29.0])
+    mast(m, mizzen_x, hull.deck(mizzen_x), 26.0, 1.2, [19.0])
+    for bottom, top, hw in ((9.0, 16.0, 9.0), (17.5, 24.5, 7.0), (26.5, 30.0, 4.6)):
+        square_sail(m, fore_x, bottom, top, hw, 26)
+    for bottom, top, hw in ((10.0, 18.0, 10.5), (19.5, 27.5, 8.2), (29.5, 33.5, 5.5)):
+        square_sail(m, main_x, bottom, top, hw, 26)
+    gaff_sail(m, mizzen_x, 8.5, 18.5, 12.0, 8.0, 22)
+    jibs(m, bowsprit_end, [np.array([fore_x + 0.8, 0, 19.0])], 23.0, 3.5)
+    for x, top in ((fore_x, 26.0), (main_x, 29.0), (mizzen_x, 19.0)):
+        shrouds(m, hull, x, top)
+    # Cargo: crates and bales on the main deck, two big hatches.
+    for hx in (-5.0, 8.0):
+        m.box((hx - 2.5, -2.5, hull.deck(hx)), (hx + 2.5, 2.5, hull.deck(hx) + 0.6), WOOD_DARK)
+    for cx, cy, size in ((-8.5, 3.0, 1.6), (-8.0, -3.2, 1.4), (4.5, 3.4, 1.5), (5.0, -3.0, 1.3), (11.0, 2.8, 1.2)):
+        m.box((cx - size / 2, cy - size / 2, hull.deck(cx)), (cx + size / 2, cy + size / 2, hull.deck(cx) + size), CARGO)
+    m.box((-22.5, -0.6, hull.deck(-22)), (-21.5, 0.6, hull.deck(-22) + 1.5), WOOD_DARK)  # helm
+    flag(m, main_x, 35.0, 5.0)
+    return m
+
+
+def build_frigate(band: tuple[int, int, int]) -> Model:
+    """A fast warship, 70 m: three masts with full square rig, a row of 12 gun ports a side."""
+    m = Model()
+    guns = [-26.0 + i * (52.0 / 11) for i in range(12)]
+    hull = Hull(
+        m,
+        HullSpec(70, 9.0, 4.4, 1.2, 0.28, 1.2, 0.17, 1.0, 0.66, 0.6, 2.4, guns=guns, deck_guns=False, windows=5),
+        band,
+    )
+    bowsprit_end = np.array([51.0, 0.0, 13.0])
+    m.spar((30.0, 0, 6.4), bowsprit_end, 1.3, WOOD)
+    fore_x, main_x, mizzen_x = 19.0, 2.0, -17.0
+    mast(m, fore_x, hull.deck(fore_x), 41.0, 1.6, [19.0, 31.0])
+    mast(m, main_x, hull.deck(main_x), 45.0, 1.8, [21.0, 34.0])
+    mast(m, mizzen_x, hull.deck(mizzen_x), 35.0, 1.3, [19.0, 28.0])
+    for bottom, top, hw in ((10.0, 18.0, 11.5), (19.5, 29.5, 9.0), (31.0, 37.5, 6.0)):
+        square_sail(m, fore_x, bottom, top, hw, 30)
+    for bottom, top, hw in ((11.0, 20.0, 13.0), (21.5, 32.5, 10.0), (34.0, 41.5, 6.8)):
+        square_sail(m, main_x, bottom, top, hw, 30)
+    for bottom, top, hw in ((20.0, 27.0, 7.0), (28.5, 33.5, 5.0)):
+        square_sail(m, mizzen_x, bottom, top, hw, 30)
+    gaff_sail(m, mizzen_x, 9.0, 18.5, 16.0, 10.0, 20)  # the spanker
+    jibs(m, bowsprit_end, [np.array([fore_x + 0.8, 0, 24.0]), np.array([fore_x + 0.8, 0, 19.0])], 30.0, 4.0)
+    for x, top in ((fore_x, 31.0), (main_x, 34.0), (mizzen_x, 28.0)):
+        shrouds(m, hull, x, top)
+    # On deck: boats on the waist, the capstan, the big double helm.
+    for by in (-2.2, 2.2):
+        m.box((-6.0, by - 1.2, hull.deck(-4) + 0.4), (-1.0, by + 1.2, hull.deck(-4) + 1.2), WOOD)
+    m.box((-10.0, -0.9, hull.deck(-10)), (-8.2, 0.9, hull.deck(-10) + 1.0), WOOD_DARK)
+    m.box((-28.5, -0.6, hull.deck(-28)), (-27.5, 0.6, hull.deck(-28) + 1.6), WOOD_DARK)
+    flag(m, main_x, 45.0, 6.0)
+    return m
+
+
 def shade(colour: tuple[int, int, int], normal: np.ndarray) -> tuple[int, int, int]:
     """Brightness from the angle to the light, in a few steps."""
     if np.dot(normal, TO_CAMERA) < 0:  # we see the back of this triangle
@@ -338,21 +657,21 @@ def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[flo
         flat = np.stack([anchor[0] * SUPERSAMPLE + ground[:, 0] * scale, anchor[1] * SUPERSAMPLE + ground[:, 1] * scale], axis=1)
         fill_triangle(flat, np.zeros(3), 1, shadow, shadow_z)
 
-    # Shrink: each block of SUPERSAMPLE x SUPERSAMPLE becomes one pixel.
+    # Shrink: each block of SUPERSAMPLE x SUPERSAMPLE becomes one pixel, in the colour most of the
+    # block has (a "majority vote"). Done for all blocks at once with numpy (no Python loop per pixel).
+    n = SUPERSAMPLE
+    blocks = image.reshape(frame, n, frame, n).transpose(0, 2, 1, 3).reshape(frame, frame, n * n)
+    shadow_share = shadow.reshape(frame, n, frame, n).mean(axis=(1, 3))
+    filled = (blocks > 0).sum(axis=-1)
+    votes = np.stack([(blocks == k).sum(axis=-1) for k in range(1, len(palette))]) if len(palette) > 1 else np.zeros((1, frame, frame))
+    winner = votes.argmax(axis=0) + 1
+    solid = filled >= n * n * 0.35
+    colours = np.array(palette, dtype=np.uint8)
     out = np.zeros((frame, frame, 4), dtype=np.uint8)
-    solid = np.zeros((frame, frame), dtype=bool)
-    need = SUPERSAMPLE * SUPERSAMPLE * 0.35
-    for y in range(frame):
-        for x in range(frame):
-            block = image[y * SUPERSAMPLE : (y + 1) * SUPERSAMPLE, x * SUPERSAMPLE : (x + 1) * SUPERSAMPLE].ravel()
-            used = block[block > 0]
-            if used.size >= need:
-                values, counts = np.unique(used, return_counts=True)
-                out[y, x, :3] = palette[int(values[counts.argmax()])]
-                out[y, x, 3] = 255
-                solid[y, x] = True
-            elif shadow[y * SUPERSAMPLE : (y + 1) * SUPERSAMPLE, x * SUPERSAMPLE : (x + 1) * SUPERSAMPLE].mean() >= 0.5:
-                out[y, x] = (*SHADOW, SHADOW_ALPHA)
+    out[solid, :3] = colours[winner[solid]]
+    out[solid, 3] = 255
+    in_shadow = ~solid & (shadow_share >= 0.5)
+    out[in_shadow] = (*SHADOW, SHADOW_ALPHA)
 
     # A dark outline: every empty pixel that touches the ship.
     padded = np.pad(solid, 1)
@@ -361,9 +680,9 @@ def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[flo
     return Image.fromarray(out, "RGBA")
 
 
-def render_sheet(model: Model, name: str, directions: int, detail: int) -> Path:
+def render_sheet(model: Model, name: str, directions: int, detail: int, frame_size: int = FRAME) -> Path:
     """All directions of one ship in one picture: COLUMNS frames per row, direction 0 (east) first, clockwise."""
-    frame = FRAME * detail
+    frame = frame_size * detail
     anchor = (frame * ANCHOR[0], frame * ANCHOR[1])
     sheet = Image.new("RGBA", (frame * COLUMNS, frame * math.ceil(directions / COLUMNS)))
     for i in range(directions):
@@ -392,17 +711,21 @@ def preview(sheets: list[tuple[Path, int, int]], target: Path) -> None:
 
 
 def main() -> None:
-    models = {"sloop": build_sloop}  # more classes come later: add a build_... function here
+    models = {"sloop": build_sloop, "brigantine": build_brigantine, "merchantman": build_merchantman, "frigate": build_frigate}
+    only = sys.argv[1:]  # e.g. "python tools/render_ship.py frigate" renders only the frigate (faster while tuning)
     for ship_class, build in models.items():
+        if only and ship_class not in only:
+            continue
         for owner, band in OWNERS.items():
             model = build(band)
             for directions in DIRECTIONS:
                 for detail in DETAILS:
-                    path = render_sheet(model, f"{ship_class}_{owner}", directions, detail)
+                    path = render_sheet(model, f"{ship_class}_{owner}", directions, detail, FRAMES[ship_class])
                     print("written", path.name)
 
     meta = {
         "frame": FRAME,
+        "frames": {name: FRAMES[name] for name in models},
         "anchorX": ANCHOR[0],
         "anchorY": ANCHOR[1],
         "heightScale": HEIGHT_SCALE,
@@ -419,6 +742,9 @@ def main() -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     preview([(OUT_DIR / "sloop_player_16_1x.png", FRAME, 4), (OUT_DIR / "sloop_enemy_16_2x.png", FRAME * 2, 2)], target)
     print("written", target.name)
+    classes = ART_DIR / "ship-classes-preview.png"
+    preview([(OUT_DIR / f"{name}_enemy_16_2x.png", FRAMES[name] * 2, 1) for name in models], classes)
+    print("written", classes.name)
 
 
 if __name__ == "__main__":

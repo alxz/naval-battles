@@ -67,7 +67,7 @@ describe('broadside against a moored target', () => {
     me.elevationDeg = elevationDeg;
     const world: World = {
       tick: 0, rngState: 1, wind: { fromRad: 0, strength: 0, baseFromRad: 0 }, ships: [me, ship(2, 0, 150)],
-      balls: [], pendingShots: [], nextBallId: 1, events: [],
+      balls: [], pendingShots: [], nextBallId: 1, events: [], bots: [],
     };
     const events: SimEvent[] = [];
     applyCommand(world, { type: 'fire', shipId: 1, side: 'starboard' });
@@ -116,7 +116,7 @@ describe('sinking', () => {
     me.elevationDeg = 6.5;
     return {
       tick: 0, rngState: 1, wind: { fromRad: 0, strength: 0, baseFromRad: 0 }, ships: [me, target],
-      balls: [], pendingShots: [], nextBallId: 1, events: [],
+      balls: [], pendingShots: [], nextBallId: 1, events: [], bots: [],
     };
   }
 

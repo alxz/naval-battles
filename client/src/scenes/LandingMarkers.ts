@@ -15,6 +15,8 @@ const ELLIPSE_POINTS = 32;
  */
 export class LandingMarkers {
   private readonly g: Phaser.GameObjects.Graphics;
+  /** Ghost crosses: where a broadside was aimed when it was fired. They fade while the balls fly. */
+  private readonly ghosts: { x: number; y: number; age: number; life: number }[] = [];
 
   constructor(scene: Phaser.Scene) {
     // Depth 1.2: after the range rings, before the ships, with no text in between
@@ -22,9 +24,28 @@ export class LandingMarkers {
     this.g = scene.add.graphics().setDepth(1.2);
   }
 
-  update(ship: ShipState, params: ShipParams, s: number, windStrength: number): void {
+  /** Leave a ghost cross at (x, y) metres for `seconds` (the flight time plus a moment). */
+  addGhost(x: number, y: number, seconds: number): void {
+    this.ghosts.push({ x, y, age: 0, life: seconds });
+  }
+
+  update(ship: ShipState, params: ShipParams, s: number, windStrength: number, dt: number): void {
     const g = this.g;
     g.clear();
+    for (let i = this.ghosts.length - 1; i >= 0; i--) {
+      const ghost = this.ghosts[i]!;
+      ghost.age += dt;
+      if (ghost.age >= ghost.life) {
+        this.ghosts.splice(i, 1);
+        continue;
+      }
+      const r = 3 + 2 * s;
+      const x = ghost.x * s;
+      const y = ghost.y * s;
+      g.lineStyle(1, 0xffffff, 0.5 * (1 - ghost.age / ghost.life));
+      g.lineBetween(x - r, y - r, x + r, y + r);
+      g.lineBetween(x - r, y + r, x + r, y - r);
+    }
     for (const side of ['port', 'starboard'] as Side[]) {
       const p = predictLanding(ship, params, side, STEP_SECONDS);
       const ready = reloadLeft(ship, side) <= 0;

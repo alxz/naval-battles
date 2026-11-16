@@ -1,4 +1,6 @@
+import { thinkBots } from './bot';
 import { applyCommand } from './commands';
+import { ISLANDS } from './data';
 import { lerp, lerpAngle } from './interpolate';
 import { STEP_SECONDS, stepWorld } from './step';
 import type { Command, SimEvent, Tuning, World } from './types';
@@ -45,6 +47,8 @@ export class Simulation {
       this.previous = this.snapshot();
       for (const command of this.queue) applyCommand(this.world, command);
       this.queue = [];
+      // The bots think after the player's commands and act through commands too.
+      for (const command of thinkBots(this.world, ISLANDS)) applyCommand(this.world, command);
       stepWorld(this.world, STEP_SECONDS, this.tuning);
       this.events.push(...this.world.events);
       this.accumulator -= STEP_SECONDS;

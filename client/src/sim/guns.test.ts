@@ -19,7 +19,7 @@ function ship(elevationDeg: number, speed = 0): ShipState {
 function worldWith(s: ShipState): World {
   return {
     tick: 0, rngState: 1, wind: { fromRad: 0, strength: 0, baseFromRad: 0 }, ships: [s],
-    balls: [], pendingShots: [], nextBallId: 1, events: [],
+    balls: [], pendingShots: [], nextBallId: 1, events: [], bots: [],
   };
 }
 

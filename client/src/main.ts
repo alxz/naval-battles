@@ -4,7 +4,7 @@ import { SeaScene } from './scenes/SeaScene';
 
 // The size here is only a first guess. SeaScene measures the screen and picks
 // a logical size with integer pixel scaling (plan D27, see scenes/ScreenFit.ts).
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: 640,
@@ -17,3 +17,6 @@ new Phaser.Game({
   },
   scene: [SeaScene],
 });
+
+// Development only: lets automated browser tests reach the game (window.naval). Not in the release build.
+if (import.meta.env.DEV) (window as unknown as { naval?: Phaser.Game }).naval = game;

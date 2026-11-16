@@ -13,6 +13,12 @@ export type ArtChoice = 0 | 16 | 32;
 
 const MASTS: Record<string, number> = { sloop: 1, brigantine: 2, merchantman: 3, frigate: 3 };
 
+/** Frame size (pixels at detail 1) of a class's pictures; big ships have bigger frames. */
+function frameSize(shipClass: string): number {
+  const frames: Record<string, number> = artJson.frames ?? {};
+  return frames[shipClass] ?? artJson.frame;
+}
+
 function sheetKey(shipClass: string, owner: Owner, directions: number, detail: number): string {
   return `${shipClass}_${owner}_${directions}_${detail}x`;
 }
@@ -28,7 +34,7 @@ export function loadShipSheets(scene: Phaser.Scene): void {
       for (const directions of artJson.directions) {
         for (const detail of artJson.details) {
           const key = sheetKey(shipClass, owner as Owner, directions, detail);
-          const size = artJson.frame * detail;
+          const size = frameSize(shipClass) * detail;
           scene.load.spritesheet(key, `assets/ships/${key}.png`, { frameWidth: size, frameHeight: size });
         }
       }

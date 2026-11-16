@@ -1,6 +1,9 @@
 import GUI from 'lil-gui';
 import { GUNS, SHIP_CLASSES } from '../sim/data';
 
+/** What the second ship does: lie still, sail round a circle, or fight you (the bot, M2 step 4). */
+export type TargetBehaviour = 'moored' | 'circle' | 'bot';
+
 /** Everything the sliders change. The scene reads these values every frame. */
 export interface TuningValues {
   pixelsPerMetre: number;
@@ -14,13 +17,16 @@ export interface TuningValues {
   detailAtZoom: boolean; // use the double-detail pictures at zoom x2
   rangeRings: boolean;
   targetClass: string;
-  targetMoving: boolean; // the target sails slowly in a circle
+  targetBehaviour: TargetBehaviour; // what ship 2 does
   targetSailsPercent: number; // its sail setting while moving
   targetCircleRadius: number; // metres
   windFromBearingDeg: number; // compass degrees, where the wind comes from
   windStrength: number; // 0..1
   windDrift: boolean;
   debugText: boolean; // the debug text with keys and numbers (H on a computer)
+  sound: boolean; // sound effects on / off (M on a computer)
+  volume: number; // 0..1
+  screenShake: boolean; // shake the view when your ship is hit or fires
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -42,6 +48,12 @@ export interface TuningCallbacks {
   onWindDrift: (on: boolean) => void;
   /** The circle radius changed: start a new circle from where the target is now. */
   onTargetCircle: () => void;
+  /** The target behaviour changed (moored / circle / bot). */
+  onTargetBehaviour: () => void;
+  /** Start the duel again: a new world, both ships repaired. */
+  onRestart: () => void;
+  /** Put the target `distance` metres to windward of you (the bot comes down on you at once). */
+  onPlaceUpwind: (distance: number) => void;
   /** Start counting your hits again. */
   onResetHits: () => void;
 }
@@ -56,6 +68,7 @@ export class TuningPanel {
   private readonly gui: GUI;
   private readonly zoomController;
   private readonly debugController;
+  private readonly soundController;
 
   constructor(start: TuningValues, callbacks: TuningCallbacks, startClosed: boolean) {
     this.values = { ...start };
@@ -74,6 +87,11 @@ export class TuningPanel {
     view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');
     this.debugController = view.add(v, 'debugText').name('debug text (H)');
+
+    const fx = this.gui.addFolder('Sound & effects');
+    this.soundController = fx.add(v, 'sound').name('sound (M)');
+    fx.add(v, 'volume', 0, 1, 0.05).name('volume');
+    fx.add(v, 'screenShake').name('screen shake');
     view.add(this.info, 'pixelScale').name('pixel scale').listen().disable();
     view.add(this.info, 'view').name('view (m)').listen().disable();
     view.add(this.info, 'zoomNow').name('zoom now').listen().disable();
@@ -96,6 +114,11 @@ export class TuningPanel {
 
     const target = this.gui.addFolder('Target');
     target
+      .add(v, 'targetBehaviour', { 'bot (fights you)': 'bot', 'circle (slow)': 'circle', moored: 'moored' })
+      .name('behaviour')
+      .onChange(() => callbacks.onTargetBehaviour());
+    target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart duel');
+    target
       .add(v, 'targetClass', Object.keys(SHIP_CLASSES))
       .name('class')
       .onChange(() => callbacks.onTargetClass());
@@ -104,13 +127,14 @@ export class TuningPanel {
       at150: () => callbacks.onPlaceTarget(150),
       at200: () => callbacks.onPlaceTarget(200),
       at400: () => callbacks.onPlaceTarget(400),
+      upwind: () => callbacks.onPlaceUpwind(400),
     };
     target.add(place, 'at100').name('put at 100 m');
     target.add(place, 'at150').name('put at 150 m');
     target.add(place, 'at200').name('put at 200 m');
     target.add(place, 'at400').name('put at 400 m');
-    target.add(v, 'targetMoving').name('moving (circle)');
-    target.add(v, 'targetSailsPercent', 0, 100, 5).name('sails %');
+    target.add(place, 'upwind').name('put 400 m upwind');
+    target.add(v, 'targetSailsPercent', 0, 100, 5).name('circle sails %');
     target
       .add(v, 'targetCircleRadius', 60, 400, 10)
       .name('circle radius (m)')
@@ -135,6 +159,12 @@ export class TuningPanel {
     });
 
     if (startClosed) this.gui.close();
+  }
+
+  /** The M key switches the sound; keep the check box in step. */
+  toggleSound(): void {
+    this.values.sound = !this.values.sound;
+    this.soundController.updateDisplay();
   }
 
   /** The H key switches the debug text; keep the check box in step. */

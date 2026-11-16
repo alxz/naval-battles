@@ -4,6 +4,78 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 15 Nov 2026 (later afternoon) — Bot gives up; win/lose; step 6 juice; step 7 ship classes
+
+Built while you test the bot. Your question: *a bot on the same course chases me for ever — how can we add chance and variety?*
+
+### Bot: giving up and personality (part of step 4)
+
+- **Giving up:** in a chase the bot checks its progress. If it has not gained at least 50 m in its *patience* time, it **breaks off** for 90 s (sails away), then may chase again. Within 250 m it always fights. So an equal or faster ship can escape, and that is part of the game. Headless test: two sloops running before the wind on the same course: the bot breaks off and you get away.
+- **Personality:** each bot draws its own values once, from the seeded generator: preferred range 115–165 m, patience 45–90 s, aim judgement σ 0.3–0.8°. Bots differ, and the same seed still gives the same game.
+- **Your idea of ship variety** (weight, a fouled bottom, a tired or short crew) went into the plan, not into M2 (rule: a new idea never enters a milestone that has started): **M3** small random speed factor (±3–5%) per ship, crew shortage and fatigue slow speed and reloading; **M5** hull fouling over the days, careening or the shipyard in port, cargo weight.
+
+### Win and lose (rest of step 5)
+
+`scenes/Banner.ts`: 1.5 s after a ship sinks, "VICTORY! Enemy sloop sunk" or "YOUR SHIP IS LOST", with **SAIL AGAIN** (tap, click or Enter).
+
+### Step 6: juice
+
+| Effect | How |
+|---|---|
+| Sound | `tools/make_sounds.py` makes 5 sounds **by code** (noise, filters, falling sine "thump"; no recordings, no licences): cannon, splash, hull hit, sail hit, sinking → `client/public/assets/sounds/*.wav` (about 300 KB). `scenes/Sounds.ts` plays them quieter with distance, left/right by screen position, each shot a little different in pitch. Key **M** or the panel: sound on/off and volume |
+| Screen shake | small when you fire, stronger when your hull is hit, a long one when a ship sinks (panel switch) |
+| Gun smoke | two grey puffs per gun drift downwind with the real wind and fade |
+| Ghost cross | a faint cross stays where your salvo was aimed while the balls fly, so you can see how far the target moved |
+| Hit flash | the hit ship flashes white for 0.1 s |
+| Sinking | a big ring and bubbles for two seconds |
+
+Effects now live in game metres (before, they stayed put on the screen when the zoom changed).
+
+### Step 7: the other ship classes
+
+`tools/render_ship.py` now draws **brigantine** (40 m: square sails on the foremast, gaff mainsail), **merchantman** (56 m: broad, three masts, high stern, cargo on deck) and **frigate** (70 m: full square rig, a row of 12 gun ports a side, gold on the stern). The sloop code was not touched; its sheets are pixel-for-pixel the same.
+
+- One hull builder (`Hull`, `HullSpec`) and rigging helpers (`square_sail`, `gaff_sail`, `jibs`, `shrouds`).
+- **Square sails seen from above:** a flat sail seen edge-on is only a line, so the sails are *filled*: the foot is pushed forward (most in the middle), and the yards are braced 30°. Ships heading away from the camera still show the sails thin (draft art; final art in M8).
+- A frame size per class (64/80/96/112 px, in `shipArt.json` `frames`); the downsampling is vectorised with numpy (the whole set renders in about 2.5 min). `python tools/render_ship.py frigate` renders one class.
+- Preview: `docs/art/ship-classes-preview.png`. Try them in the game: panel → Target → class.
+
+### Open
+
+- **Your choice: 16 or 32 directions** (panel "Art (test)"), then the M2 "done when" check and fun check 1.
+
+176 tests in the sandbox (177 with your angle test); build clean; headless: sounds load, smoke and ghost cross show, banner and Enter restart work, all classes show; no errors.
+
+---
+
+## 15 Nov 2026 (afternoon) — HUD liked; M2 step 4 built: the bot
+
+**Your feedback on the HUD:** the panels and icons look professional; the enemy hull bar helps; hidden debug text accepted. iPad test running.
+
+### The bot (waiting for your test)
+
+- **`sim/bot.ts`**, a small **state machine**: *chase* (far: sail toward you, beating against the wind if needed), *engage* (within 250 m: turn a broadside to you and keep about 140 m), *idle* (you are sunk: lie still). Gap between 250 and 300 m so the mode does not flip.
+- **Fair play:** the bot sees only positions, headings and speeds, and acts only through commands (`setRudder`, `setSails`, `setElevation`, `fire`), like you. Its balls get the same random errors as yours (Battle 4). It raises the guns at 4°/s (your key speed) and misjudges the elevation a little (σ 0.5°, new after each shot).
+- **Sails by the wind** (your idea): while fighting it sets the sails so it moves at about 4.5 m/s on any course (`sailsForSpeed`).
+- **Tacking:** a course into the wind becomes close-hauled (15° outside the no-go zone); it stays on a tack at least 20 s (hysteresis), then goes about if needed.
+- **Aiming:** where you will be after the flight time, using your motion relative to its own (the ball keeps the bot's speed). It fires only when that point lies within 10 m of its line of fire (the guns fire straight abeam).
+- **Land:** looks 60 m or 10 s ahead with a "fat" hull (15 m clearance) and turns to the first free heading.
+- **Memory** (`BotState`) lives in `world.bots`, so a save or a test repeats exactly. `thinkBots` runs in `Simulation` after your commands, every 3 steps (reaction time 0.1 s). All numbers in `data/bots.json`.
+- **Panel → Target:** *behaviour* bot (default) / circle / moored; **restart duel** (fresh world, panel settings kept); **put 400 m upwind**. The game starts with the bot 400 m to windward, so it comes down on you at once. Debug text (H) shows the bot's mode and side.
+
+### Problems found and fixed
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Headless: the bot scraped an island's corner and stuck there for a minute | It looked for land only straight ahead; the corner was beside the hull | Look ahead with a hull 15 m wider and longer, at three points (near, middle, far) |
+| Only 0.1–0.4 hits per salvo | It fired whenever you were within 20° of its beam; the guns fire straight abeam, so 20° off at 150 m is a 55 m miss | Fire only when the aim point is within 10 m of the line of fire → 0.6–1.0 hits per salvo, like a player |
+| Few salvos | After each salvo it turned almost round to use the loaded side | Change sides only if the turn is under 90°; now one salvo per reload |
+
+- Headless numbers (you lying still, bot from 400 m to leeward, 5 min): first shot after 90–140 s (it must beat up to you), then one salvo about every 15 s, about 0.6 hull hits per salvo.
+- 172 tests in the sandbox (173 with your angle test); build clean; headless browser: the bot closes in, turns its port side, hits you; restart works; no errors.
+
+---
+
 ## 15 Nov 2026 — Step 3 tested; new HUD
 
 **Your test of step 3:** at 150 m by hand **0.82 hull hits per salvo** (9 / 44 balls; perfect aim in the script gives 1.2); wind 1.0 makes the ellipse longer, the target sank after 9 hits / 24 balls; the moving target sank in about **2–2.5 min** (target 2–4 min). Gun sigma between 1.2 and 2.0–2.5 feels right; **1.8 stays**. Your idea: the target should set its sails by the wind → the bot (step 4) does that.

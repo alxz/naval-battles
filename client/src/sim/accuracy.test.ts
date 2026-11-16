@@ -22,7 +22,7 @@ function duelWorld(distance: number, windStrength: number): World {
   // Ship 1 looks east; its starboard side faces south (+y), where ship 2 lies parallel.
   return {
     tick: 0, rngState: 2026, wind: { fromRad: 0, strength: windStrength, baseFromRad: 0 },
-    ships: [sloopAt(1, 0, 0), sloopAt(2, 0, distance)], balls: [], pendingShots: [], nextBallId: 1, events: [],
+    ships: [sloopAt(1, 0, 0), sloopAt(2, 0, distance)], balls: [], pendingShots: [], nextBallId: 1, events: [], bots: [],
   };
 }
 

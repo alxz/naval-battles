@@ -1,5 +1,6 @@
 import { normalizeAngle } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
+import { newBot } from './bot';
 import { orderBroadside } from './guns';
 import { clamp } from './math';
 import { STEP_SECONDS } from './step';
@@ -12,6 +13,13 @@ export function applyCommand(world: World, command: Command): void {
     world.wind.fromRad = normalizeAngle(command.fromRad);
     world.wind.baseFromRad = world.wind.fromRad; // the drift now wanders around the new direction
     world.wind.strength = clamp(command.strength, 0, 1);
+    return;
+  }
+
+  // Test setup: hand a ship to the computer (a new bot with fresh memory), or take it back.
+  if (command.type === 'setBot') {
+    world.bots = world.bots.filter((b) => b.shipId !== command.shipId);
+    if (command.enemyId !== null) world.bots.push(newBot(command.shipId, command.enemyId, world));
     return;
   }
 

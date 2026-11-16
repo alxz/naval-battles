@@ -287,7 +287,7 @@ export function debugLines(info: {
     'A / D rudder     W / S sails',
     'Q / E fire port / starboard',
     '+ / - guns up / down',
-    'Z / X zoom       H hide this',
+    'Z / X zoom   M sound   H hide this',
     '',
     `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
     `speed ${info.ship.speed.toFixed(1)} m/s`,
