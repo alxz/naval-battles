@@ -26,8 +26,8 @@ export const START_BATTLE_SKILL = 4;
 export const DEFAULT_SEED = 20261114;
 
 /** Where extra enemies appear: between these distances from your start, in open water. */
-const SPAWN_MIN_M = 700;
-const SPAWN_MAX_M = 1400;
+const SPAWN_MIN_M = 400;
+const SPAWN_MAX_M = 800;
 
 /**
  * `enemies`: how many enemy ships (1 to 3). Ship 2 always starts 150 m to starboard (the

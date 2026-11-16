@@ -55,6 +55,17 @@ ROCK = [(126, 112, 88), (148, 134, 106), (172, 160, 134), (206, 198, 180)]  # lo
 ROCK_SHADE = [(102, 90, 72), (122, 110, 88), (144, 134, 112), (178, 170, 154)]
 RIVER = (79, 159, 207)
 REEF = (58, 92, 110)
+LAVA_ROCK = [(92, 80, 72), (78, 66, 60), (64, 54, 50), (50, 42, 40)]  # a volcano: darker toward the top
+LAVA_ROCK_SHADE = [(72, 62, 56), (60, 50, 46), (48, 40, 38), (38, 32, 30)]
+LAVA = (236, 110, 40)
+LAVA_HOT = (255, 208, 96)
+ROOF = (176, 112, 62)
+ROOF_SHADE = (132, 80, 46)
+WALL = (226, 208, 170)
+PLANK = (122, 86, 52)
+PATH = (206, 184, 132)
+# Looks for the islands you drew by hand (islands.json), in their order. An island may also carry its own "theme".
+HANDMADE_THEMES = ["volcano", "village"]
 
 NAMES_BIG = ["Isla Verde", "Hawk's Nest", "Blackwater Island", "Tortoise Head"]
 NAMES_MEDIUM = ["Turtle Island", "Mango Cay", "Parrot Island", "Smuggler's Cay", "Windward Cay", "Three Palms", "Rum Key", "Coral Cay"]
@@ -125,8 +136,9 @@ def soft_noise(rng, shape: tuple[int, int], cell: int) -> np.ndarray:
     return np.asarray(image, dtype=np.float32) / 255
 
 
-def paint(rng, points: np.ndarray, kind: str) -> tuple[Image.Image, float, float]:
-    """The island's picture and the world position of its top left corner."""
+def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Image, float, float]:
+    """The island's picture and the world position of its top left corner.
+    theme: "" (plain), "volcano" (a dark cone with a glowing crater) or "village" (huts, a path and a pier)."""
     min_x = math.floor(points[:, 0].min()) - RIM
     min_y = math.floor(points[:, 1].min()) - RIM
     w = math.ceil(points[:, 0].max()) + RIM - min_x
@@ -177,6 +189,40 @@ def paint(rng, points: np.ndarray, kind: str) -> tuple[Image.Image, float, float
             step = choice[rng.integers(len(choice))]
             y, x = y + step[0], x + step[1]
 
+    if theme == "volcano":
+        # A round cone in the middle: dark rock bands lit from the west, and lava in the crater.
+        cy, cx = np.unravel_index(np.argmax(dist), dist.shape)
+        reach = dist[cy, cx] * 0.9
+        yy, xx = np.mgrid[0:h, 0:w]
+        away = np.hypot(xx - cx, yy - cy)
+        high = np.clip(1 - away / reach, 0, 1) + (soft_noise(rng, (h, w), 9) - 0.5) * 0.16
+        high[dist < 20] = 0
+        slope_east = np.zeros_like(high)
+        slope_east[:, 1:-1] = high[:, 2:] - high[:, :-2]
+        for level, limit in enumerate((0.2, 0.4, 0.58, 0.74)):
+            band = high > limit
+            rgba[band & (slope_east >= 0)] = (*LAVA_ROCK[level], 255)
+            rgba[band & (slope_east < 0)] = (*LAVA_ROCK_SHADE[level], 255)
+        crater = max(4.0, reach * 0.11)
+        rgba[away < crater + 2] = (30, 24, 24, 255)  # the dark rim
+        rgba[away < crater] = (*LAVA, 255)
+        rgba[away < crater * 0.5] = (*LAVA_HOT, 255)
+        # Two thin streams of lava a short way down the cone.
+        for angle in (rng.uniform(0.3, 1.2), rng.uniform(2.6, 3.6)):
+            y, x = float(cy), float(cx)
+            for step in range(int(reach * 0.45)):
+                angle += rng.uniform(-0.25, 0.25)
+                y, x = y + math.sin(angle), x + math.cos(angle)
+                if step > crater:
+                    rgba[int(y), int(x)] = (*(LAVA if step % 5 else LAVA_HOT), 255)
+
+    # A village: an open place near the shore that looks south, kept free of trees.
+    village: tuple[int, int] | None = None
+    if theme == "village":
+        ring = np.argwhere((dist > 20) & (dist < 24))
+        vy, vx = ring[np.argmax(ring[:, 0] - 0.4 * np.abs(ring[:, 1] - w / 2))]  # far south, near the middle
+        village = (int(vy), int(vx))
+
     # Trees: round crowns with a light spot and a shadow; palms on small sandy islets.
     spacing = {"big": 9, "medium": 10, "small": 14}[kind]
     draw_on = Image.fromarray(rgba)
@@ -188,6 +234,13 @@ def paint(rng, points: np.ndarray, kind: str) -> tuple[Image.Image, float, float
             if not (3 <= x < w - 3 and 3 <= y < h - 3) or high[y, x] > 0.2:
                 continue
             if tuple(rgba[y, x, :3]) == RIVER:
+                continue
+            if village and math.hypot(y - village[0], x - village[1]) < 30:
+                continue
+            if theme == "village" and dist[y, x] < 16:
+                if dist[y, x] > 5 and rng.uniform() < 0.45:  # palms along the beach
+                    pen.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(*PALM, 255))
+                    pen.point((x - 1, y - 1), fill=(*TREE_LIGHT, 255))
                 continue
             if kind == "small":
                 if dist[y, x] < 7 or rng.uniform() > 0.5:
@@ -201,6 +254,25 @@ def paint(rng, points: np.ndarray, kind: str) -> tuple[Image.Image, float, float
             pen.ellipse((x - size + 1, y - size + 2, x + size + 1, y + size + 2), fill=(*TREE_SHADE, 255))
             pen.ellipse((x - size, y - size, x + size, y + size), fill=(*TREE, 255))
             pen.ellipse((x - size + 1, y - size + 1, x, y), fill=(*TREE_LIGHT, 255))
+
+    if village:
+        vy, vx = village
+        pen.ellipse((vx - 24, vy - 15, vx + 24, vy + 15), fill=(*PATH, 255))  # the trodden village place
+        # A path to the beach and a wooden pier into the shallow water (a picture only: the shore polygon is the land).
+        y = vy
+        while y < h - 1 and land[y, vx]:
+            y += 1
+        pen.rectangle((vx - 1, vy, vx + 1, y), fill=(*PATH, 255))
+        pen.rectangle((vx - 1, y - 3, vx + 1, min(h - 1, y + RIM - 3)), fill=(*PLANK, 255))
+        for py in range(y - 2, min(h - 1, y + RIM - 3), 3):
+            pen.line((vx - 1, py, vx + 1, py), fill=(96, 66, 40, 255))
+        # Huts: a roof lit from the west with a shadow to the east, a pale wall to the south.
+        for hx, hy in ((-18, -6), (-8, -10), (6, -9), (16, -4), (-13, 5), (11, 6), (0, -2)):
+            x0, y0 = vx + hx + int(rng.integers(-1, 2)), vy + hy + int(rng.integers(-1, 2))
+            pen.rectangle((x0 + 1, y0 + 1, x0 + 7, y0 + 6), fill=(150, 130, 92, 255))  # shadow
+            pen.rectangle((x0, y0, x0 + 6, y0 + 4), fill=(*ROOF, 255))
+            pen.rectangle((x0 + 3, y0, x0 + 6, y0 + 4), fill=(*ROOF_SHADE, 255))
+            pen.line((x0, y0 + 5, x0 + 6, y0 + 5), fill=(*WALL, 255))
     return draw_on, float(min_x), float(min_y)
 
 
@@ -263,6 +335,19 @@ def main() -> None:
         )
         print(f"{name:20} {kind:6} centre ({cx:6.0f}, {cy:6.0f})  about {2 * reach:4.0f} m across  {picture.width} x {picture.height} px")
 
+    # The islands you drew by hand get a picture too: the first a volcano, the second a village
+    # (or what their own "theme" says). Their own random numbers, so the generated islands stay the same.
+    for i, island in enumerate(handmade):
+        theme = island.get("theme") or (HANDMADE_THEMES[i] if i < len(HANDMADE_THEMES) else "")
+        points = np.array([[p["x"], p["y"]] for p in island["points"]], dtype=float)
+        picture, px, py = paint(np.random.default_rng(SEED + 1 + i), points, "medium", theme)
+        file = f"handmade-{i + 1}-{slug(island['name'])}.png"
+        picture.save(PICTURES / file)
+        island["picture"] = {"file": file, "x": px, "y": py}
+        print(f"{island['name']:20} hand-made, {theme or 'plain'}  {picture.width} x {picture.height} px")
+    (DATA / "islands.json").write_text(json.dumps({"islands": handmade}, indent=2) + "\n", encoding="utf-8")
+    print("written islands.json (pictures added)")
+
     (DATA / "islandsGenerated.json").write_text(json.dumps({"seed": SEED, "islands": islands}, indent=1) + "\n", encoding="utf-8")
     print("written islandsGenerated.json")
 
@@ -274,12 +359,10 @@ def main() -> None:
     pen = ImageDraw.Draw(preview)
     reef = world["reefWidth"] // k
     pen.rectangle((0, 0, w - 1, h - 1), outline=(*REEF, 255), width=reef)
-    for island in islands:
+    for island in islands + handmade:
         picture = Image.open(PICTURES / island["picture"]["file"])
         small = picture.resize((max(1, picture.width // k), max(1, picture.height // k)), Image.NEAREST)
         preview.alpha_composite(small, (int((island["picture"]["x"] - world["minX"]) / k), int((island["picture"]["y"] - world["minY"]) / k)))
-    for island in handmade:
-        pen.polygon([((p["x"] - world["minX"]) / k, (p["y"] - world["minY"]) / k) for p in island["points"]], fill=(*SAND, 255))
     sx, sy = (START[0] - world["minX"]) / k, (START[1] - world["minY"]) / k
     pen.ellipse((sx - 4, sy - 4, sx + 4, sy + 4), outline=(255, 224, 102, 255), width=2)
     PREVIEW.parent.mkdir(parents=True, exist_ok=True)

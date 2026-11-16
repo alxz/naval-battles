@@ -42,7 +42,7 @@ describe('createWorld with more enemies', () => {
     expect(createWorld(123, 1).ships.length).toBe(2);
     for (const s of w.ships.slice(2)) {
       expect(touchesLand(s, sloop, ISLANDS)).toBe(false);
-      expect(Math.hypot(s.x - 160, s.y - 90)).toBeGreaterThanOrEqual(700);
+      expect(Math.hypot(s.x - 160, s.y - 90)).toBeGreaterThanOrEqual(400);
     }
     expect(createWorld(123, 3).ships).toEqual(w.ships); // the same seed, the same places
     expect(createWorld(124, 3).ships[2]!.x).not.toBe(w.ships[2]!.x);

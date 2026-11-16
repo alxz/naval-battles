@@ -9,6 +9,8 @@ import { textStyle } from './text';
  */
 export class RangeRings {
   visible = true;
+  /** The distances written at the rings (off on touch screens: less to read on a small screen). */
+  labelsVisible = true;
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly labels: Phaser.GameObjects.Text[];
 
@@ -29,7 +31,7 @@ export class RangeRings {
   update(x: number, y: number, headingRad: number, s: number): void {
     const g = this.g;
     g.clear();
-    for (const label of this.labels) label.setVisible(this.visible);
+    for (const label of this.labels) label.setVisible(this.visible && this.labelsVisible);
     if (!this.visible) return;
 
     const px = x * s;

@@ -13,7 +13,7 @@ const COVERED_ALPHA = 0.25;
  * in the tuning panel). It shows the same knowledge as the chart (view/chart.ts): the reef,
  * the islands you have seen, your ship (yellow, with a short line for its heading) and the
  * other ships where you saw them last (red, pale when out of sight).
- * Computer: bottom right. Touch screens: in the top row, where the chart button was.
+ * Computer: bottom right. Touch screens: bottom right too, above the "sails less" button.
  * A click or tap on it opens the big chart. Like the HUD panels it fades when a ship is under it.
  */
 export class Minimap {
@@ -64,21 +64,18 @@ export class Minimap {
     this.alpha += (goal - this.alpha) * Math.min(1, seconds * 6);
     g.setAlpha(this.alpha);
 
-    g.fillStyle(0x000000, 0.55);
-    g.fillRect(b.x, b.y, b.w, b.h);
-    g.lineStyle(1, 0xffffff, 0.6);
-    g.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-    const fit = chartFit(WORLD, { x: b.x + 2, y: b.y + 2, w: b.w - 4, h: b.h - 4 });
+    // No plate: only a faint tint and a thin frame, so the sea and ships show through.
+    const fit = chartFit(WORLD, { x: b.x, y: b.y, w: b.w, h: b.h });
     const at = (p: { x: number; y: number }): { x: number; y: number } => toChart(fit, WORLD, p);
     const nw = at({ x: WORLD.minX, y: WORLD.minY });
     const se = at({ x: WORLD.maxX, y: WORLD.maxY });
-    g.fillStyle(0x1d5b8f, 1);
+    g.fillStyle(0x0b2a44, 0.22);
     g.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
-    g.lineStyle(1, 0x9bb7c7, 0.9); // the reef: the frame of the sea
+    g.lineStyle(1, 0xcfe6f7, 0.7); // the reef: the frame of the sea
     g.strokeRect(nw.x + 0.5, nw.y + 0.5, se.x - nw.x - 1, se.y - nw.y - 1);
 
     // Islands you have seen. Small ones are at least one pixel, so they do not vanish.
-    g.fillStyle(0xe8d29a, 1);
+    g.fillStyle(0xe8d29a, 0.9);
     for (const island of ISLANDS) {
       if (island.kind === 'reef' || !isKnown(state, island)) continue;
       const points = island.points.map((p) => {

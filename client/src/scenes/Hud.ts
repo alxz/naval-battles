@@ -3,7 +3,7 @@ import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { GUNS, SHIP_CLASSES } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
 import type { ShipState, Side, Wind } from '../sim/types';
-import { barColour, hudLayout, panelCovers } from '../view/hudLayout';
+import { TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
 import type { HudLayout, Rect } from '../view/hudLayout';
 import { Compass } from './Compass';
 import { ICON_SIZE } from './icons';
@@ -12,7 +12,7 @@ import type { TextKind } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
 const PANEL_ALPHA = 0.55; // dark plates on a computer
-const PANEL_ALPHA_TOUCH = 0.42; // lighter on phones and tablets, where the sea is smaller
+const PANEL_ALPHA_TOUCH = 0.34; // lighter on phones and tablets, where the sea is smaller
 const COVERED_ALPHA = 0.25; // a panel with a ship under it becomes this see-through
 const FADE_PER_SECOND = 6; // how fast it fades in and out
 const GAUGE_SPREAD_DEG = 60; // the gauge draws 0-10 degrees of elevation as 0-60 degrees, so it is easy to see
@@ -52,9 +52,11 @@ type PanelName = 'ship' | 'target' | 'guns';
  * over the moving sea. Places come from `hudLayout` (view/hudLayout.ts).
  *   my ship:  compass, speed, sail pips, hull bar (and IN IRONS / AGROUND when it happens)
  *   target:   class, distance, hull bar
- *   guns:     port and starboard (yellow = loaded; a grey pie fills while reloading),
- *             an elevation gauge with the angle and the range;
- *             on a computer also the gun up / down icons with their keys (+ and -), which can be clicked
+ *   guns:     computer: port and starboard (yellow = loaded; a grey pie fills while reloading),
+ *             an elevation gauge with the angle and the range, and the gun up / down icons with
+ *             their keys (+ and -), which can be clicked;
+ *             touch: only the angle and the range, next to the gun buttons (the fire buttons show the reload)
+ * On touch screens the target card shows only in a fight (enemy within TARGET_CARD_RANGE_TOUCH).
  * The debug text (all the numbers, keys) shows with H on a computer or the panel switch.
  * A sound button (speaker icon) shows whether the sound is on; click or tap it to switch.
  * A chart button (map icon) opens and closes the sea chart (scenes/Chart.ts).
@@ -136,10 +138,16 @@ export class Hud {
     const t = l.target;
     this.targetText.setPosition(t.x + 8, t.y + 6);
     const gn = l.guns;
-    this.sideText.port.setPosition(gn.x + 20, gn.y + gn.h / 2);
-    this.sideText.starboard.setPosition(gn.x + gn.w - 20, gn.y + gn.h / 2);
-    this.elevation.setPosition(gn.x + 80, gn.y + 11);
-    this.range.setPosition(gn.x + 80, gn.y + 27);
+    this.sideText.port.setPosition(gn.x + 20, gn.y + gn.h / 2).setVisible(!this.touch);
+    this.sideText.starboard.setPosition(gn.x + gn.w - 20, gn.y + gn.h / 2).setVisible(!this.touch);
+    if (this.touch) {
+      // Two short lines, right-aligned to the edge of the button column.
+      this.elevation.setOrigin(1, 0).setPosition(gn.x + gn.w - 3, gn.y + 4);
+      this.range.setOrigin(1, 0).setPosition(gn.x + gn.w - 3, gn.y + 15);
+    } else {
+      this.elevation.setPosition(gn.x + 80, gn.y + 11);
+      this.range.setPosition(gn.x + 80, gn.y + 27);
+    }
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
     this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
     const so = l.sound;
@@ -153,6 +161,8 @@ export class Hud {
   update(d: HudData): void {
     const { ship, sailing } = d;
     const l = this.l;
+    // Touch: far enemies get no card (the red arrows at the screen edge tell the distance).
+    const target = d.target && this.touch && !d.target.sunk && d.target.distance > TARGET_CARD_RANGE_TOUCH ? null : d.target;
     for (const g of Object.values(this.gfx)) g.clear();
     const plate = this.touch ? PANEL_ALPHA_TOUCH : PANEL_ALPHA;
 
@@ -169,7 +179,7 @@ export class Hud {
     for (const t of [this.elevation, this.range, this.sideText.port, this.sideText.starboard, ...this.keyHints, ...this.gunIcons]) t.setAlpha(this.fade.guns);
 
     // --- Plates ---
-    const panels: PanelName[] = d.target ? ['ship', 'guns', 'target'] : ['ship', 'guns'];
+    const panels: PanelName[] = target ? ['ship', 'guns', 'target'] : ['ship', 'guns'];
     for (const name of panels) {
       const r = l[name];
       this.gfx[name].fillStyle(0x000000, plate);
@@ -215,10 +225,10 @@ export class Hud {
     this.status.setText(status).setColor(status === 'REPAIRING' ? '#7be07a' : '#ff8070');
 
     // --- Target ---
-    this.targetText.setVisible(d.target !== null);
-    if (d.target) {
+    this.targetText.setVisible(target !== null);
+    if (target) {
       const t = l.target;
-      const tg = d.target;
+      const tg = target;
       // "+" after the distance: its crew is repairing.
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
       this.bar(this.gfx.target, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
@@ -227,9 +237,11 @@ export class Hud {
     // --- Guns ---
     const gn = l.guns;
     const gg = this.gfx.guns;
-    this.side(gg, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
-    this.side(gg, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
-    this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
+    if (!this.touch) {
+      this.side(gg, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
+      this.side(gg, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
+      this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
+    }
     this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
     this.range.setText(`${Math.round(d.rangeM)} m`);
 
@@ -239,6 +251,7 @@ export class Hud {
     this.chartIcon.setVisible(!mapOnButton);
     if (this.touch) {
       for (const b of mapOnButton ? [l.sound] : [l.sound, l.chart]) {
+        // (the chart button is in the minimap's place, bottom right)
         this.gfx.sound.fillStyle(0xffffff, 0.22);
         this.gfx.sound.fillRect(b.x, b.y, b.w, b.h);
         this.gfx.sound.lineStyle(1, 0xffffff, 0.6);

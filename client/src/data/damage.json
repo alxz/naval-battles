@@ -11,6 +11,6 @@
     "seaMaxShare": 0.75,
     "maxSails": 0.25,
     "safeRange": 500,
-    "sharePerSecond": 0.007
+    "sharePerSecond": 0.005
   }
 }

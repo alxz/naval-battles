@@ -13,7 +13,8 @@ interface Button {
 
 /**
  * On-screen buttons for phones and tablets (places: `touchButtonRects` in view/hudLayout.ts):
- *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo)
+ *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo);
+ *          they also show the reload (see setReload)
  *   right: "-" "+" sails (one step per tap); above "+" the gun up / gun down icons (held)
  *   top:   a small zoom button
  * They only report what the finger does; SeaScene turns it into commands.
@@ -59,6 +60,27 @@ export class TouchControls {
       b.label.setPosition(x, y);
       // Icons: as big as fits in whole steps (pixel art stays sharp), at least x1.
       if (b.label instanceof Phaser.GameObjects.Image) b.label.setScale(Math.max(1, Math.floor((r.w * 0.8) / ICON_SIZE)));
+    }
+  }
+
+  /**
+   * The fire buttons show the guns of their side: a yellow letter when loaded; while reloading
+   * the button is dark and counts the seconds down.
+   */
+  setReload(portSeconds: number, starboardSeconds: number): void {
+    for (const [name, letter, left] of [
+      ['firePort', 'L', portSeconds],
+      ['fireStarboard', 'R', starboardSeconds],
+    ] as const) {
+      const b = this.buttons.find((x) => x.name === name);
+      if (!b || !(b.label instanceof Phaser.GameObjects.Text)) continue;
+      const ready = left <= 0;
+      const text = ready ? letter : String(Math.ceil(left));
+      if (b.label.text !== text) b.label.setText(text);
+      b.label.setColor(ready ? '#ffe066' : '#b8c4cc');
+      b.box.setStrokeStyle(1, ready ? 0xffe066 : 0xffffff, ready ? 0.9 : 0.35);
+      if (!ready) b.box.setFillStyle(0x000000, 0.3);
+      else if (b.box.fillColor === 0x000000) b.box.setFillStyle(0xffffff, 0.22);
     }
   }
 

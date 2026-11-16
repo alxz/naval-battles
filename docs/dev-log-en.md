@@ -4,6 +4,38 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 16 Nov 2026 — Your test of package B; package B2: lighter phone HUD, minimap, wake, island pictures
+
+### Your test results
+
+All of package B works on computer, iPad and iPhone; a battle with three bots is more fun than a duel. Fonts on the real iPhone are right. Wishes: a see-through minimap, smaller on a computer and bottom right on the phone; slower repair; bots closer at the start; too many things on the iPhone screen; the two old islands are bare; ships look small on a computer; a stronger wake; a faster game; a sea shaped like the Caribbean; a port; different water near the shore.
+
+### Done in B2
+
+- **Touch HUD**: the guns panel is gone. The L / R fire buttons are yellow when loaded and count the seconds while reloading; the gun angle and range are two short lines next to the gun buttons. The target card shows only when the enemy is within 400 m. No distance labels on the rings. Plates are lighter.
+- **Minimap**: no dark plate (a faint tint and a thin frame); computer 108 × 72 px; touch: bottom right, above the "sails less" button. It is still the chart button.
+- Distance labels of far enemies are no longer written over a HUD panel.
+- **Numbers**: repair 0.7 → 0.5% of the hull per second; bots start 400–800 m away.
+- **Wake** (`scenes/Wake.ts`): every ship leaves two bow waves that spread into a "V" and foam behind the stern; brighter and longer at speed.
+- **Hand-made islands**: `tools/make_islands.py` now also paints the islands of `islands.json` (the first a volcano, the second a village with a pier; `"theme"` in the JSON overrides). The zip does not contain `islands.json` (yours differs from mine), so run the tool once.
+- Words: "battle" instead of "duel" in the tuning panel.
+
+### Answers
+
+- All three sunk: the VICTORY banner with "All 3 enemies sunk", time and hits, then SAIL AGAIN.
+- The old islands were bare because they are polygons from M1 drawn by simple code; the generator painted only its own islands.
+- Ramming with bigger ships can be tried with the target class in the tuning panel; real class balance is M3.
+
+### Open (your choice needed)
+
+Ship size on the screen and game speed: see the plan (M2b, open questions). Caribbean-shaped sea: recorded for M5.
+
+211 tests (212 with your angle test); build clean; headless on computer, iPad and iPhone without errors.
+
+**Next:** package C (port on the village island, fog, shoal water).
+
+---
+
 ## 15 Nov 2026 (late night) — Package B: collisions, fleeing, repair, three bots; minimap and your UI wishes
 
 ### Your test of package A

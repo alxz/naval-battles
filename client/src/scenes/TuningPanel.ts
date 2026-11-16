@@ -135,8 +135,8 @@ export class TuningPanel {
       .add(v, 'targetBehaviour', { 'bot (fights you)': 'bot', 'circle (slow)': 'circle', moored: 'moored' })
       .name('behaviour')
       .onChange(() => callbacks.onTargetBehaviour());
-    target.add(v, 'enemyCount', 1, 3, 1).name('bots (next duel)');
-    target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart duel');
+    target.add(v, 'enemyCount', 1, 3, 1).name('bots (next battle)');
+    target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart battle');
     target
       .add(v, 'targetClass', Object.keys(SHIP_CLASSES))
       .name('class')

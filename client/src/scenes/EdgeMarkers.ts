@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { edgeMarker } from '../view/edgeMarker';
+import type { Rect } from '../view/hudLayout';
 import { textStyle } from './text';
 
 const MARGIN = 14; // pixels from the screen edge
@@ -34,7 +35,8 @@ export class EdgeMarkers {
     }
   }
 
-  update(contacts: readonly Contact[], width: number, height: number): void {
+  /** `avoid`: HUD panels; a distance that would be written on one of them is left out (the triangle stays). */
+  update(contacts: readonly Contact[], width: number, height: number, avoid: readonly Rect[] = []): void {
     const g = this.g;
     g.clear();
     this.labels.forEach((l) => l.setVisible(false));
@@ -54,10 +56,13 @@ export class EdgeMarkers {
 
       // The distance, a little inside the screen from the triangle.
       const label = this.labels[used];
+      const lx = m.x - cos * 16;
+      const ly = m.y - sin * 12;
+      const hidden = avoid.some((r) => lx > r.x - 22 && lx < r.x + r.w + 22 && ly > r.y - 6 && ly < r.y + r.h + 6);
       label
         ?.setText(`${Math.round(c.distance)} m`)
-        .setPosition(m.x - cos * 16, m.y - sin * 12)
-        .setVisible(true);
+        .setPosition(lx, ly)
+        .setVisible(!hidden);
       used += 1;
     }
   }

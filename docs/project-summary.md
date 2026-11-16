@@ -26,9 +26,9 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 ## Scale and display
 1 px per game metre at zoom ×1 (ships ~2× real: sloop 30 m); zoom ×1/×2 with auto combat zoom; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
 
-## Status (15 Nov 2026)
+## Status (16 Nov 2026)
 - M0, M1 done. **M2 done → R1 "First Duel"**: guns with ballistics and height, hit boxes, damage, sinking, accuracy (σ gun 1.8°, salvo 0.6°), bot (chase / engage / break-off, personality, tacks, avoids land), HUD panels, banner, sounds and effects, 4 ship classes.
-- **Now: M2b "Open Sea"** (D37). Packages A and B done: 6 × 4 km sea with a reef border, 18 generated islands, chart (C / ESC) and minimap; ship collisions (damage by weight and speed), bots flee at 30% hull, repair at sea to 75% (sails ≤ 25%, no enemy within 500 m), three bots at random places. Next: **C** neutral port (repair 90%, no fighting nearby), fog.
+- **Now: M2b "Open Sea"** (D37). Packages A and B done: 6 × 4 km sea with a reef border, 18 generated islands, chart (C / ESC) and minimap; ship collisions (damage by weight and speed), bots flee at 30% hull, repair at sea to 75% (sails ≤ 25%, no enemy within 500 m), three bots at random places; touch HUD without a guns panel (fire buttons show the reload). Next: **C** neutral port on the village island (repair 90%, no fighting nearby), fog, shoal water. Open: ship size on screen, game speed (developer tries the tuning sliders first).
 - Later: M3 damage/ammo/bot tiers/class balance and ship variety; M4 boarding; M5 world, ports, trade; M6 captain and saves.
 - Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`.
 
@@ -41,6 +41,7 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 
 ## How to help
 - Work on the current milestone only; say so if a request conflicts with a confirmed decision.
+- Zips never contain `client/src/data/islands.json` (the developer's copy differs); island pictures come from running `make_islands.py`.
 - Deliver larger changes as a zip unpacked into the repo root; the developer runs `npm test`, `npm run dev`, then commits.
 - Test every change before delivery: Vitest, build, headless browser (computer and iPhone).
 - Every instruction lists `mkdir -p` for new folders; remind to run `pwd` and `git rev-parse --show-toplevel` before `git add` with explicit paths.

@@ -59,8 +59,8 @@ const LOWER_KEY_CODES = [189, 173, 109];
 
 const ELEVATION_DEG_PER_SECOND = 4; // + / - held (the bot uses the same rate, data/bots.json)
 const START_BOT_DISTANCE = 400; // metres, to windward (the panel button "put 400 m upwind")
-const BOT_SPAWN_MIN = 600; // bots appear at random places this far from you...
-const BOT_SPAWN_MAX = 1200; // ...at most
+const BOT_SPAWN_MIN = 400; // bots appear at random places this far from you...
+const BOT_SPAWN_MAX = 800; // ...at most
 const SHAKE_COLLISION = { ms: 260, intensity: 0.009 };
 
 /**
@@ -275,8 +275,17 @@ export class SeaScene extends Phaser.Scene {
     const me = poses[0];
     const myShip = this.sim.world.ships[0];
     if (!me || !myShip) return;
-    this.wake.update(seconds, me.x, me.y, me.headingRad, myShip.speed, s);
+    // Every ship that floats leaves a wake.
+    const wakeShips = this.sim.world.ships.flatMap((ship, i) => {
+      const pose = poses[i];
+      const cls = SHIP_CLASSES[ship.shipClass];
+      if (!pose || !cls || ship.sunk) return [];
+      return [{ id: ship.id, x: pose.x, y: pose.y, headingRad: pose.headingRad, speed: ship.speed, length: cls.length, beam: cls.beam }];
+    });
+    this.wake.update(seconds, wakeShips, s);
     this.rings.visible = v.rangeRings;
+    this.rings.labelsVisible = this.touch === null;
+    this.touch?.setReload(myShip.reloadPort, myShip.reloadStarboard);
     this.rings.update(me.x, me.y, me.headingRad, s);
     const myParams = SHIP_CLASSES[myShip.shipClass];
     if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
@@ -319,7 +328,8 @@ export class SeaScene extends Phaser.Scene {
       if (distance > viewJson.sightingRange) continue;
       contacts.push({ screenX: p.x * s - cam.scrollX, screenY: p.y * s - cam.scrollY, distance });
     }
-    this.markers.update(contacts, cam.width, cam.height);
+    const hudRects = hudLayout(cam.width, cam.height, this.touch !== null);
+    this.markers.update(contacts, cam.width, cam.height, [hudRects.ship, hudRects.target, hudRects.guns, hudRects.minimap, hudRects.sound]);
 
     // 6. Numbers.
     const layout = this.screenFit.layout;
@@ -414,7 +424,7 @@ export class SeaScene extends Phaser.Scene {
     this.touch?.layout(layout.width, layout.height);
     this.hud.layout(layout.width, layout.height);
     this.banner.layout(layout.width, layout.height);
-    const buttons = hudLayout(layout.width, layout.height, this.touch !== null).chart;
+    const buttons = hudLayout(layout.width, layout.height, this.touch !== null).sound;
     this.chart.layout(layout.width, layout.height, buttons.y + buttons.h + 6);
     this.minimap.layout(layout.width, layout.height);
   }
@@ -591,7 +601,7 @@ export class SeaScene extends Phaser.Scene {
    * Start a duel: a fresh world, the same settings from the panel.
    *   - You start where the last duel ended (easier to find your way on the chart); the very
    *     first time, at the start place of the sea.
-   *   - In "bot" mode each bot appears at a random place in open water, 600-1200 m from you.
+   *   - In "bot" mode each bot appears at a random place in open water, 400-800 m from you.
    * A new seed each time, so every duel is different. (The time of day is only used here,
    * on the screen side, to pick the seed; inside the simulation everything follows from it.)
    */
@@ -627,6 +637,7 @@ export class SeaScene extends Phaser.Scene {
     this.sim.update(0.05); // one step: the wind and the places take effect
     this.started = true;
     this.rebuildShipImages();
+    this.wake.clear();
     this.elevationDeg = this.ship(PLAYER_ID)?.elevationDeg ?? 5;
     this.lastRudder = 0;
     this.ballsFired = 0;
