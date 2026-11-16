@@ -18,6 +18,7 @@ export interface ShipParams {
   hullPoints: number; // at 0 the ship sinks
   hullHeight: number; // metres from the water to the deck edge (hull hit zone)
   mastHeight: number; // metres from the water to the mast top (rigging hit zone above the hull)
+  mass: number; // tons; in a collision the lighter ship suffers more
 }
 
 /** Gun and ball numbers for every ship. Loaded from `data/guns.json` (plan 4.4). */
@@ -65,7 +66,9 @@ export type SimEvent =
   | { type: 'gunFired'; shipId: number; side: Side; x: number; y: number }
   | { type: 'splash'; x: number; y: number }
   | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number }
-  | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number };
+  | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number }
+  // Two ships ran into each other at (x, y); how many hull points each lost.
+  | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -97,6 +100,8 @@ export interface ShipState {
   hull: number; // hull points left
   sunk: boolean; // a sunk ship stays in the list (for the picture) but takes no part any more
   battleSkill: number; // the captain's Battle skill 0..10 (plan 4.4 and 4.7); 4 for everyone until captains come (M6)
+  team: number; // ships of different teams are enemies (0 = you, 1 = the bots, for now)
+  repairing: boolean; // the crew is mending the hull this step (sim/repair.ts); set by the simulation
 }
 
 /** The wind as a ship feels it right now. */
@@ -147,7 +152,7 @@ export interface World {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'idle';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'idle';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
@@ -201,6 +206,9 @@ export interface BotParams {
   patienceMaxSeconds: number; // ...between min and max...
   giveUpGainM: number; // ...is given up
   breakOffSeconds: number; // then it sails away this long before it may chase again
+  fleeHullShare: number; // with less hull than this share it runs away, then repairs at sea
+  shipAvoidM: number; // it turns away from another ship this close ahead (plus half of both lengths)
+  shipAvoidTurnDeg: number; // by this much
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -223,3 +231,21 @@ export type Command =
   | { type: 'fire'; shipId: number; side: Side }
   // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).
   | { type: 'setBot'; shipId: number; enemyId: number | null };
+
+/** Collisions and repair (data/damage.json). */
+export interface DamageParams {
+  collision: {
+    minClosingSpeed: number; // m/s: slower contacts only push the ships apart, without damage
+    hullPerMps: number; // hull points per m/s of closing speed, for two ships of equal mass
+    bowFactor: number; // a ship that hits with its bow takes only this share (the bow is strong)
+    bowArcDeg: number; // "with its bow" = the other ship lies within this angle of dead ahead
+    speedKept: number; // share of its speed a ship keeps after a damaging collision
+    gapM: number; // metres of water left between the hulls after they are pushed apart
+  };
+  repair: {
+    seaMaxShare: number; // repair at sea mends the hull up to this share of the full hull
+    maxSails: number; // only with the sails at or below this (almost stopped)
+    safeRange: number; // only with no enemy afloat within this many metres
+    sharePerSecond: number; // share of the full hull mended per second
+  };
+}

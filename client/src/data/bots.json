@@ -23,5 +23,8 @@
   "patienceMinSeconds": 45,
   "patienceMaxSeconds": 90,
   "giveUpGainM": 50,
-  "breakOffSeconds": 90
+  "breakOffSeconds": 90,
+  "fleeHullShare": 0.3,
+  "shipAvoidM": 90,
+  "shipAvoidTurnDeg": 70
 }

@@ -1,0 +1,16 @@
+{
+  "collision": {
+    "minClosingSpeed": 1.0,
+    "hullPerMps": 6,
+    "bowFactor": 0.5,
+    "bowArcDeg": 35,
+    "speedKept": 0.2,
+    "gapM": 0.5
+  },
+  "repair": {
+    "seaMaxShare": 0.75,
+    "maxSails": 0.25,
+    "safeRange": 500,
+    "sharePerSecond": 0.007
+  }
+}

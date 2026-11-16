@@ -4,20 +4,21 @@
 //   chase   (far away)   sail toward the enemy, beating against the wind if needed
 //   engage  (in range)   turn a broadside to the enemy, keep about 140 m, set the sails for a steady speed,
 //                        aim (with a small misjudgement) and fire when the enemy is on the line of fire
+//   flee    (hull low)   run on the fastest course away; then repair at sea and come back
 //   idle    (no enemy)   lie still
 // It sees only what a captain could see (positions, headings, speeds) and changes its ship
 // only through commands, like the player. Its shots get the same random errors as the player's.
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
 import { degToRad, normalizeAngle, twaDeg } from './angles';
-import { BOTS, GUNS, POLARS, SHIP_CLASSES } from './data';
+import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
 import { predictLanding, reloadLeft, sideAngleRad } from './guns';
 import { touchesLand } from './land';
 import { clamp } from './math';
 import { nextGaussian } from './random';
 import { STEP_SECONDS, targetSpeed } from './step';
 import { nextRandom } from './random';
-import type { BotParams, BotState, Command, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
+import type { BotParams, BotState, Command, DamageParams, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
 
 const SIDES: Side[] = ['port', 'starboard'];
 
@@ -59,8 +60,27 @@ function startChase(bot: BotState, distance: number): void {
  *   chase     when it gets farther than chaseAgainRange; after a break-off; after idle
  *   breakOff  when a chase gained less than giveUpGainM in the bot's patience time:
  *             it sails away for breakOffSeconds (so a faster or equal ship can escape)
+ *   flee      when its hull is below fleeHullShare: it runs until the enemy is out of repair range
+ *   repair    then it almost stops and mends the hull (sim/repair.ts); if the enemy comes near
+ *             again it flees again; mended to the sea limit, it comes back to fight
+ * `hullShare`: hull / full hull. `repairDone`: the hull has reached the limit for repair at sea.
  */
-export function updateMode(bot: BotState, distance: number, seconds: number, p: BotParams): void {
+export function updateMode(bot: BotState, distance: number, seconds: number, p: BotParams, hullShare = 1, d: DamageParams = DAMAGE): void {
+  const safe = d.repair.safeRange + 100; // a little more than the rule asks, so it does not hover at the limit
+  if (bot.mode === 'flee') {
+    if (distance > safe) bot.mode = 'repair';
+    return;
+  }
+  if (bot.mode === 'repair') {
+    if (distance <= d.repair.safeRange) bot.mode = 'flee';
+    else if (hullShare >= d.repair.seaMaxShare - 1e-6) startChase(bot, distance);
+    return;
+  }
+  if (hullShare < p.fleeHullShare) {
+    bot.mode = 'flee';
+    bot.side = null;
+    return;
+  }
   if (distance < p.engageRange) {
     bot.mode = 'engage';
     return;
@@ -197,6 +217,44 @@ export function avoidLand(ship: ShipState, params: ShipParams, islands: readonly
 }
 
 /**
+ * The fastest way to run: straight away from the enemy, or up to 40 degrees to either side
+ * of that if the wind makes such a course faster (a ship running dead before the wind or
+ * into it is slower than one on a reach).
+ */
+export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, bearingToEnemy: number): number {
+  const away = normalizeAngle(bearingToEnemy + Math.PI);
+  let best = away;
+  let bestSpeed = -1;
+  for (const offDeg of [0, 20, -20, 40, -40]) {
+    const heading = normalizeAngle(away + degToRad(offDeg));
+    const speed = targetSpeed({ ...ship, headingRad: heading, sailLevel: 1 }, params, wind);
+    if (speed > bestSpeed + 0.2) {
+      best = heading;
+      bestSpeed = speed;
+    }
+  }
+  return best;
+}
+
+/**
+ * Is another ship close ahead? Then a heading that turns away from it (to the side it is not on).
+ * Bots do not ram: a collision costs them hull too.
+ */
+export function avoidShips(ship: ShipState, params: ShipParams, ships: readonly ShipState[], headingRad: number, p: BotParams): number | null {
+  for (const other of ships) {
+    if (other.id === ship.id || other.sunk) continue;
+    const otherLength = SHIP_CLASSES[other.shipClass]?.length ?? 0;
+    const dx = other.x - ship.x;
+    const dy = other.y - ship.y;
+    if (Math.hypot(dx, dy) > p.shipAvoidM + (params.length + otherLength) / 2) continue;
+    const off = normalizeAngle(Math.atan2(dy, dx) - headingRad); // > 0: it lies to starboard of our course
+    if (Math.abs(off) > Math.PI / 3) continue; // not ahead
+    return normalizeAngle(headingRad + (off >= 0 ? -1 : 1) * degToRad(p.shipAvoidTurnDeg));
+  }
+  return null;
+}
+
+/**
  * One bot thinks and returns its commands. Called every step; it really thinks only every
  * `thinkEveryTicks` steps (reaction time), the rest of the time it returns nothing.
  */
@@ -224,7 +282,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const dy = enemy.y - ship.y;
   const distance = Math.hypot(dx, dy);
   const bearing = Math.atan2(dy, dx);
-  updateMode(bot, distance, thinkSeconds, p);
+  updateMode(bot, distance, thinkSeconds, p, ship.hull / params.hullPoints);
   const mine: BotParams = { ...p, preferredRange: bot.personality.preferredRange };
 
   // --- Course and sails. ---
@@ -238,6 +296,14 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     bot.side = null;
     goal = normalizeAngle(bearing + Math.PI); // away from the enemy
     sails = sailsForSpeed(ship, params, world.wind, p.fightSpeed, p.minSails);
+  } else if (bot.mode === 'flee') {
+    bot.side = null;
+    goal = fleeHeading(ship, params, world.wind, bearing);
+    sails = 1;
+  } else if (bot.mode === 'repair') {
+    bot.side = null;
+    goal = normalizeAngle(bearing + Math.PI); // keep drifting away, almost stopped, while the crew works
+    sails = DAMAGE.repair.maxSails;
   } else {
     // Keep the chosen side. Change to the other side when it is loaded, this one is not,
     // and the turn to it is less than 90 degrees (a full turn round would waste the reload time).
@@ -261,6 +327,8 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     }
   }
   let steer = steerWithTacks(goal, params, world.wind, bot, p);
+  const clear = avoidShips(ship, params, world.ships, steer, p);
+  if (clear !== null) steer = clear;
   const away = avoidLand(ship, params, islands, steer, p);
   if (away !== null) steer = away;
   const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);

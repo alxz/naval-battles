@@ -12,7 +12,8 @@
     "reloadSeconds": 15,
     "hullPoints": 220,
     "hullHeight": 5,
-    "mastHeight": 22
+    "mastHeight": 22,
+    "mass": 100
   },
   "brigantine": {
     "name": "Brigantine",
@@ -27,7 +28,8 @@
     "reloadSeconds": 16,
     "hullPoints": 320,
     "hullHeight": 6,
-    "mastHeight": 30
+    "mastHeight": 30,
+    "mass": 170
   },
   "merchantman": {
     "name": "Merchantman",
@@ -42,7 +44,8 @@
     "reloadSeconds": 18,
     "hullPoints": 400,
     "hullHeight": 7,
-    "mastHeight": 35
+    "mastHeight": 35,
+    "mass": 420
   },
   "frigate": {
     "name": "Frigate",
@@ -57,6 +60,7 @@
     "reloadSeconds": 18,
     "hullPoints": 600,
     "hullHeight": 8,
-    "mastHeight": 45
+    "mastHeight": 45,
+    "mass": 600
   }
 }

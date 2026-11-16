@@ -12,7 +12,7 @@ const circle = (): Circle => ({ x: 0, y: 150, radiusM: 150, tacking: false }); /
 function ship(x: number, y: number, headingRad: number, speed: number): ShipState {
   return {
     id: 2, shipClass: 'sloop', x, y, headingRad, speed, rudder: 0, sailLevel: 0.3,
-    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false, battleSkill: 4,
+    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk: false, battleSkill: 4, team: 1, repairing: false,
   };
 }
 

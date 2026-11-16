@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { twaDeg } from './angles';
-import { aimElevation, aimPoint, avoidLand, broadsideHeading, newBot, sailsForSpeed, steerWithTacks, thinkBots, updateMode } from './bot';
+import { aimElevation, aimPoint, avoidLand, avoidShips, broadsideHeading, fleeHeading, newBot, sailsForSpeed, steerWithTacks, thinkBots, updateMode } from './bot';
 import { applyCommand } from './commands';
-import { BOTS, SHIP_CLASSES } from './data';
+import { BOTS, DAMAGE, SHIP_CLASSES } from './data';
 import { predictLanding } from './guns';
 import { STEP_SECONDS, stepWorld, targetSpeed } from './step';
 import type { Island, ShipState, SimEvent, World } from './types';
@@ -14,7 +14,7 @@ const steady = { speedScale: 1, windDrift: false };
 function sloopAt(id: number, x: number, y: number, headingRad = 0, speed = 0): ShipState {
   return {
     id, shipClass: 'sloop', x, y, headingRad, speed, rudder: 0, sailLevel: 0,
-    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4,
+    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4, team: id === 1 ? 0 : 1, repairing: false,
   };
 }
 
@@ -268,5 +268,75 @@ describe('escaping (headless)', () => {
     const [me, bot] = w.ships;
     expect(brokeOff).toBe(true);
     expect(Math.hypot(bot!.x - me!.x, bot!.y - me!.y)).toBeGreaterThan(BOTS.chaseAgainRange);
+  });
+});
+
+describe('fleeing and repair (package B)', () => {
+  it('updateMode: low hull -> flee; far enough -> repair; enemy near again -> flee; mended -> chase', () => {
+    const bot = newBot(2, 1, { rngState: 1 });
+    updateMode(bot, 150, 0.1, BOTS, 0.9);
+    expect(bot.mode).toBe('engage');
+    updateMode(bot, 150, 0.1, BOTS, BOTS.fleeHullShare - 0.05);
+    expect(bot.mode).toBe('flee');
+    updateMode(bot, 200, 0.1, BOTS, 0.2); // still close: keeps running, does not fight
+    expect(bot.mode).toBe('flee');
+    updateMode(bot, DAMAGE.repair.safeRange + 150, 0.1, BOTS, 0.2);
+    expect(bot.mode).toBe('repair');
+    updateMode(bot, DAMAGE.repair.safeRange - 10, 0.1, BOTS, 0.4);
+    expect(bot.mode).toBe('flee');
+    updateMode(bot, 2000, 0.1, BOTS, 0.4);
+    expect(bot.mode).toBe('repair');
+    updateMode(bot, 2000, 0.1, BOTS, DAMAGE.repair.seaMaxShare);
+    expect(bot.mode).toBe('chase');
+  });
+
+  it('fleeHeading: away from the enemy, bent toward a faster course when dead downwind is slow', () => {
+    const ship = sloopAt(2, 0, 0);
+    // Enemy to the north, wind from the north: straight away is dead downwind (slower than a broad reach).
+    const h = fleeHeading(ship, sloop, fromNorth, -Math.PI / 2);
+    expect(Math.sin(h)).toBeGreaterThan(0.7); // still mostly south (away)
+    expect(Math.abs(Math.cos(h))).toBeGreaterThan(0.2); // but not dead downwind
+    // Enemy to the west, wind from the north: away = east = a beam reach, fast; stays near it.
+    const h2 = fleeHeading(ship, sloop, fromNorth, Math.PI);
+    expect(Math.cos(h2)).toBeGreaterThan(0.7);
+  });
+
+  it('avoidShips: turns away from a ship close ahead, ignores one behind, far away or sunk', () => {
+    const me = sloopAt(2, 0, 0, 0); // heading east
+    const ahead = sloopAt(3, 60, 10); // close ahead, a little to starboard (south)
+    const h = avoidShips(me, sloop, [me, ahead], 0, BOTS)!;
+    expect(h).toBeLessThan(0); // turns to port (north), away from it
+    expect(avoidShips(me, sloop, [me, sloopAt(3, -60, 0)], 0, BOTS)).toBeNull();
+    expect(avoidShips(me, sloop, [me, sloopAt(3, 400, 0)], 0, BOTS)).toBeNull();
+    expect(avoidShips(me, sloop, [me, { ...ahead, sunk: true }], 0, BOTS)).toBeNull();
+  });
+
+  it('scenario: a badly hurt bot runs, mends to 75% at sea and comes back', () => {
+    const w = duel(-200, 0, 0);
+    w.ships[1]!.hull = sloop.hullPoints * 0.2;
+    const modes = new Set<string>();
+    let lowest = Infinity;
+    run(w, 420, [], (world) => {
+      world.ships[0]!.hull = sloop.hullPoints; // you stay afloat
+      modes.add(world.bots[0]!.mode);
+      if (world.bots[0]!.mode === 'repair') lowest = Math.min(lowest, world.ships[1]!.hull);
+      if (world.ships[1]!.hull < sloop.hullPoints * 0.15) world.ships[1]!.hull = sloop.hullPoints * 0.15; // your gunner is not part of this test
+    });
+    expect(modes.has('flee')).toBe(true);
+    expect(modes.has('repair')).toBe(true);
+    expect(modes.has('chase')).toBe(true); // it came back
+  });
+
+  it('scenario: three bots against you do not ram each other', () => {
+    const w = duel(-400, 0, 0);
+    w.ships.push({ ...sloopAt(3, -420, 60, 0), team: 1 }, { ...sloopAt(4, -380, -60, 0), team: 1 });
+    w.bots.push(newBot(3, 1, { rngState: 5 }), newBot(4, 1, { rngState: 6 }));
+    let collisions = 0;
+    const events = run(w, 150, [], (world) => {
+      world.ships[0]!.hull = sloop.hullPoints;
+    });
+    for (const e of events) if (e.type === 'collision' && e.damageA + e.damageB > 0) collisions++;
+    expect(collisions).toBeLessThanOrEqual(1);
+    expect(events.some((e) => e.type === 'hit' && e.shipId === 1)).toBe(true); // and they still fight you
   });
 });

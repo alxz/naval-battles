@@ -24,6 +24,8 @@ describe('hudLayout', () => {
         expect(overlaps(l.chart, r)).toBe(false);
       }
       expect(overlaps(l.sound, l.chart)).toBe(false);
+      expect(inside(l.minimap, sc.w, sc.h)).toBe(true);
+      for (const r of [l.ship, l.target, l.guns, l.sound]) expect(overlaps(l.minimap, r)).toBe(false);
       expect(overlaps(l.ship, l.target)).toBe(false);
       expect(overlaps(l.ship, l.guns)).toBe(false);
       expect(overlaps(l.target, l.guns)).toBe(false);

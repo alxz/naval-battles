@@ -13,7 +13,7 @@ const box = { minX: 0, maxX: 10, minY: 0, maxY: 10, minZ: 0, maxZ: 10 };
 function ship(id: number, x: number, y: number, headingRad = 0): ShipState {
   return {
     id, shipClass: 'sloop', x, y, headingRad, speed: 0, rudder: 0, sailLevel: 0, aground: false,
-    elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4,
+    elevationDeg: 0, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4, team: id === 1 ? 0 : 1, repairing: false,
   };
 }
 

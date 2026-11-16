@@ -25,6 +25,7 @@ export interface TargetInfo {
   hull: number;
   hullMax: number;
   sunk: boolean;
+  repairing: boolean;
 }
 
 /** Everything the HUD needs in one frame. */
@@ -38,6 +39,8 @@ export interface HudData {
   debug: boolean; // show the debug text
   debugLines: string[];
   soundOn: boolean;
+  minimapOn: boolean; // on touch screens the minimap sits where the chart button is
+  repairSeaShare: number; // repair at sea mends up to this share of the hull (a tick on the bar)
   ships: { x: number; y: number }[]; // ship centres on the screen (logical px): panels over them fade
   seconds: number; // since the last frame
 }
@@ -202,16 +205,22 @@ export class Hud {
         gs.strokeRect(x + 0.5, py + 1.5, 9, 9);
       }
     }
-    this.bar(gs, { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 }, ship.hull / Math.max(1, d.hullMax));
+    const hullBar = { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 };
+    this.bar(gs, hullBar, ship.hull / Math.max(1, d.hullMax));
+    // A tick at the share that repair at sea can reach.
+    gs.fillStyle(0xffffff, 0.9);
+    gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
-    this.status.setText(ship.aground ? 'AGROUND!' : inIrons ? 'IN IRONS!' : ship.sunk ? 'SUNK!' : '');
+    const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : ship.repairing ? 'REPAIRING' : inIrons ? 'IN IRONS!' : '';
+    this.status.setText(status).setColor(status === 'REPAIRING' ? '#7be07a' : '#ff8070');
 
     // --- Target ---
     this.targetText.setVisible(d.target !== null);
     if (d.target) {
       const t = l.target;
       const tg = d.target;
-      this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m`}`);
+      // "+" after the distance: its crew is repairing.
+      this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
       this.bar(this.gfx.target, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
     }
 
@@ -226,8 +235,10 @@ export class Hud {
 
     // --- Sound button: a plate on touch screens (like the other buttons), the icon shows on / off. ---
     this.soundIcon.setTexture(d.soundOn ? 'icon-sound-on' : 'icon-sound-off');
+    const mapOnButton = this.touch && d.minimapOn; // the minimap takes the chart button's place
+    this.chartIcon.setVisible(!mapOnButton);
     if (this.touch) {
-      for (const b of [l.sound, l.chart]) {
+      for (const b of mapOnButton ? [l.sound] : [l.sound, l.chart]) {
         this.gfx.sound.fillStyle(0xffffff, 0.22);
         this.gfx.sound.fillRect(b.x, b.y, b.w, b.h);
         this.gfx.sound.lineStyle(1, 0xffffff, 0.6);

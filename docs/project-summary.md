@@ -1,120 +1,47 @@
-# Project Summary — "Naval-Battles" (working title)
+# Naval-Battles — project instructions
 
-Use this as project instructions or as context for any AI assistant. It reflects **plan v0.6 (13 Nov 2026)**, which is the single source of truth; if this summary disagrees with the plan, the plan wins. Full documents: `naval-game-plan-v0.6-en.md` (Russian: `-ru`), `art-and-tools-guide-v0.2.md` (scale and direction count under review) and `dev-log-en.md` (what was done, problems and fixes).
-
-## About the developer
-- Solo hobby developer. Native language: Russian (English is fine).
-- Some experience with JavaScript, PHP, Java, C#. New to Phaser and game development. Learning Python.
-- Wants step-by-step explanations: explain each new concept before the code; small runnable steps.
-- Work style: the assistant writes the larger pieces and explains them; the developer writes small parts and tunes numbers.
-- Time: 8–10 hours per week. Develops on Windows/Linux; MacBook Pro for iOS builds; tests on iPad and iPhone.
-- Principle: **simple first, deeper later.** Every new idea gets a small first version and a release; it never enters a milestone that has already started.
+## Developer and work style
+- Solo hobby developer, Russian native (English fine), 8–10 h/week. Windows/Linux; MacBook for iOS; tests on PC, iPad, iPhone.
+- Knows JS/PHP/Java/C#; new to Phaser and game dev; learning Python.
+- The assistant writes the larger pieces and explains each new concept before the code; the developer writes small parts and tunes numbers.
+- **Simple first, deeper later.** A new idea gets a small first version and never enters a milestone that has already started (D37 is how we handle new ideas).
+- Reply in Russian when the developer writes Russian. Plan and dev log exist in EN and RU; update both together.
 
 ## The game
-Top-down naval game, **Caribbean 1650–1720**. Open-ended single-player campaign against bots, with saves. Side in Stage 1: **Pirate** (D29); the English captain arrives in Stage 2 with Spain. Score = net gold gained + ships sunk + ships captured (D30). Sailing must never be boring: contracts, sea events, provisions and a market that reacts fill the time between fights.
+Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox against bots. Stage 1: the player is a **Pirate** (D29). Score = net gold gained + ships sunk/captured; manual saves in port, suspend at sea (D30).
 
-## Confirmed decisions (do not change without discussion)
-- **Engine:** Phaser 4 (2D), **version 4.2.1 pinned exactly** (D32). Top-down world math. Phaser code only in `scenes/` and `render/`.
-- **3D feel:** the simulation tracks height `z`; the ball is drawn above its shadow.
-- **Art path:** Kenney placeholders; later a 3D look from pre-rendered sprites made from Kenney Pirate Kit models or own models, in a pixel look. **16 directions** for draft art; the M2 art spike (a full day) compares 16 and 32 (D33).
-- **Client:** **TypeScript** (strict, gentle rules: plain interfaces first, no `any`, no clever generics), Vite, Vitest, lil-gui for live tuning. Maps in Tiled.
-- **Backend:** Python 3.12–3.13 (via uv), FastAPI, SQLModel, SQLite; only accounts, cloud saves and leaderboard. Built after the web alpha (O1 default).
-- **iOS:** installable web app first, then Capacitor. Apple Developer Program is bought at M10.
-- **Living Sea** is its own release R4; **fun check 2 after R3 decides which parts are built** (D35).
-- **Factions:** England + Pirates as factions; the player is a Pirate in Stage 1 (D29). Spain and France in Stage 2.
-- **Score and saving (D30, confirmed 13 Nov):** score counts net gold gained (loot, prizes, bounties, trade profit); manual saves in port, autosave on entering port, suspend save at sea (deleted when loaded).
-- **Aiming:** manual gun elevation with random factors; bots use the same rules.
-- **Project setup (D22):** the client was created by hand (Vite `vanilla-ts` + `npm install phaser`).
-- **Loop (D23):** fixed 30 Hz step with interpolation; commands wait in a queue and run at the start of the next step. Deterministic per browser engine only (Chrome and Safari may differ in the last digits), so saves store the full world state and tests use tolerances.
-- **Touch (D24):** four temporary buttons now (rudder `<` `>`, sails `-` `+`); final touch controls with an assisted-aim option in M8.
-- **Combat tuning (D28):** targets first (duel 2–4 min; 1–2 hits per 4-gun salvo at 150 m), then a Monte Carlo hit table (`tools/hit_table.py`), then damage per hit.
-- **Economy guards (D31):** per-unit price impact, 10–15% buy/sell spread, off-map imports refill stock to at least 30% of target; a 1,000-day headless run (real TS `sim/` code, CSV plotted in Python) before R3.
-- **Angles (D34):** one tested module `sim/angles.ts` (`headingRadToBearingDeg`, `bearingDegToHeadingRad`, `twaDeg`, `compassPoint`) converts sim heading (rad, 0 = east, clockwise), compass bearing (deg, 0 = north) and wind angle TWA (deg off the wind). Fields carry units: `ShipState.headingRad`, `Wind.fromRad`, `twaDeg`.
-- **Fun checks (D35)** with written pass/fail criteria after R1 and R3. **Schedule (D36):** dates are likely estimates; hours logged per session; recompute after each release.
-
-## Scale and display (D26, D27, confirmed 13 Nov by the M1 scale test, O3 closed)
-- Game metres: ship sizes and speeds about 2× real (sloop 30 m, frigate 70 m); 1 px per game metre at zoom ×1.
-- Whole zoom steps: ×1 sailing and long-range fights, ×2 close fights. **Auto combat zoom** within the close-fight range (120 m) picks the largest step that shows both ships (spare room before zooming in; smoothed 0.25 s). Combat camera shifts toward the nearest enemy (your ship stays in the middle 80%); edge markers for ships off screen.
-- Integer pixel scaling (`Scale.NONE`): logical height about 400 px on computer and tablet, 240 px on phone; width follows the screen. Values in `data/view.json`.
+## Tech (confirmed)
+- Client: **Phaser 4.2.1 pinned** (D32), TypeScript strict (plain interfaces, no `any`, no enums), Vite, Vitest, lil-gui. Backend later: Python 3.13 via uv, FastAPI, SQLModel, SQLite (after the web alpha). iOS: web app, then Capacitor.
+- Tools in Python (`uv run --with numpy --with pillow tools/...`): `render_ship.py` (ships, 32 directions, D33), `make_islands.py` (islands), `make_sounds.py` (sounds), `range_table.py`, `hit_table.py`.
+- Art, sounds and fonts are made by code or are OFL fonts (Press Start 2P, Silkscreen). No downloaded art.
 
 ## Architecture rules
-1. All game rules live in `client/src/sim/`: pure TypeScript, **no Phaser imports**.
-2. Fixed time step: 30 simulation steps per second.
-3. The world state is plain JSON-serializable data.
-4. The player and the bots change the world only through commands (`setRudder`, `setSails`, `fire`, `board`). Bots do not cheat.
-5. All balance numbers and content (ships, goods, ports, contracts) live in JSON data files.
-6. Units: game metres, seconds; x east, y south; sim angle 0 = east, clockwise. Wind direction = where it comes from.
+1. Game rules only in `client/src/sim/`: pure TS, no Phaser. Phaser only in `scenes/`; pure screen logic in `view/`.
+2. Fixed 30 Hz step with interpolation; world state is plain JSON; seeded RNG in the world (never `Math.random` in `sim/`).
+3. Player and bots change the world only by commands (`setRudder`, `setSails`, `setElevation`, `fire`, …). Bots do not cheat.
+4. Numbers and content in JSON (`client/src/data/`).
+5. Units: game metres, seconds; x east, y south; angle 0 = east, clockwise; wind = where it comes from; field names carry units (`headingRad`, `twaDeg`).
+6. A unit test for every formula in `sim/`.
 
-## Key constants (copied from plan section 4.0)
-| Constant | Value |
-|---|---|
-| Simulation step | 30 per second |
-| World unit | game metre; ships about 2× real |
-| Pixels per game metre at zoom ×1 | 1 |
-| Zoom | ×1 sailing/long range, ×2 close combat, auto combat zoom; tactical icon view later |
-| Logical screen height | about 400 px computer and tablet, 240 px phone |
-| Tile / map | 32 × 32 px / about 6 × 4 km |
-| Guns | muzzle 75 m/s, elevation 0–10°, g 9.81 → max range about 200 m, flight about 2.7 s; fire arc ±25° |
-| Sighting range | 1,500 m |
-| Sloop | 30 m, 11.5 m/s, turn 0.8 rad/s (developer's tuning), hull 220 |
-| Time | acceleration ×1–×8 and pause; game day = 2 real minutes |
+## Scale and display
+1 px per game metre at zoom ×1 (ships ~2× real: sloop 30 m); zoom ×1/×2 with auto combat zoom; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
 
-## Stage 1 rules (starting values)
-- **Wind:** one global wind, default trade wind from the ENE, slow drift.
-- **Sailing:** rudder + sail level 0–100%. `speed = maxSpeed × polar(TWA) × sailLevel × wind × sail condition × Navigation bonus`, exponential approach (time constant 5 s); turn rate has a 0.3 minimum share. Three polars: fore-and-aft (no-go below 40°), mixed (48°), square (55°). Code matches since M1 step 3 (sail condition and Navigation join later).
-- **Guns:** broadsides only, ±25° arc, manual elevation 0–10°, landing marker shown as an ellipse. The ball keeps `inheritVelocity` (start 1.0) × ship velocity. Hit test along the segment of each step.
-- **Accuracy:** salvo error (ship roll, whole broadside) plus gun error per ball; both depend on Battle skill, wind, crew shortage and gun wear. Seeded random numbers. σ is tuned after the scale test (bigger ships double the hit rate).
-- **Hit zones:** hull (low, about 5 m on a sloop) and rigging (high).
-- **Ammunition:** round shot (hull), chain shot (sails, 60% range), grape shot (crew, 30% range).
-- **Ship state:** hull points, sail condition, crew, ammunition, gun wear, provisions, cargo, gold.
-- **Capture:** crew ≤ 20% → the enemy surrenders. Sails ≤ 20% → boarding is possible but fought (one roll; within 15 m hull to hull, relative speed under 5 m/s). After capture: take the ship, send as prize (50% value), sink or release.
-- **Captain:** levels 1–10; skills Navigation, Battle, Morale (0–10).
-- **Ship loss:** restart at the nearest friendly port in a sloop; lose 50% of gold and all cargo.
-- **Ports (6):** Port Royal, Bridgetown, St. John's (English); Nassau, Tortuga (pirate); Curaçao (neutral).
-- **Trade:** stocks, production, consumption and imports; `price = base × target stock / current stock`, per unit, with a spread. Merchant bots carry real goods; **pirate bots keep the loot they take**.
-- **Ships (game units):** sloop 30 m / 4 guns per side, brigantine 40 m / 6, merchantman 56 m / 3, frigate 70 m / 12. Variants: armed merchantman, navy sloop-of-war. Bot skill tiers: green, regular, veteran.
-- **Bots:** merchant, navy patrol, pirate; state machines (travel/patrol → chase → engage → flee or board; avoid land); tacking with hysteresis and a cooldown; headless scenario tests.
-- **Living sea (R4, scope set by fun check 2):** provisions, fishing, contracts (Bounty, Treasure map), tavern rumours, sea events, outlaw rule.
+## Status (15 Nov 2026)
+- M0, M1 done. **M2 done → R1 "First Duel"**: guns with ballistics and height, hit boxes, damage, sinking, accuracy (σ gun 1.8°, salvo 0.6°), bot (chase / engage / break-off, personality, tacks, avoids land), HUD panels, banner, sounds and effects, 4 ship classes.
+- **Now: M2b "Open Sea"** (D37). Packages A and B done: 6 × 4 km sea with a reef border, 18 generated islands, chart (C / ESC) and minimap; ship collisions (damage by weight and speed), bots flee at 30% hull, repair at sea to 75% (sails ≤ 25%, no enemy within 500 m), three bots at random places. Next: **C** neutral port (repair 90%, no fighting nearby), fog.
+- Later: M3 damage/ammo/bot tiers/class balance and ship variety; M4 boarding; M5 world, ports, trade; M6 captain and saves.
+- Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`.
 
-## Roadmap (Stage 1, likely about 44 weeks; range 38–55)
-| Release | Content | Milestones | Likely target |
-|---|---|---|---|
-| R1 "First Duel" | Setup, sailing, scale test, guns, one bot, juice; art spike | M0–M2 | mid Jan 2027 |
-| R2 "Skirmish" | Damage, ammunition, accuracy, bots, boarding, capture | M3–M4 | early Mar 2027 |
-| R3 "Campaign" | World, ports, trade, captain, saves; then fun check 2 | M5–M6 | early May 2027 |
-| R4 "Living Sea" | The parts that pass fun check 2 | M7 | early Jun 2027 |
-| R5 "Web Alpha" | Final art, sound, touch, balance, iOS details | M8 | late Jul 2027 |
-| R6 "Online" | Python backend; privacy check | M9 | late Aug 2027 |
-| R7 "iOS" | Capacitor, TestFlight, App Store guideline check | M10 | mid Sep 2027 |
-
-**Draft art (14 Nov, style accepted by the developer):** `tools/render_ship.py` (numpy + Pillow) renders a 3D triangle model of the sloop with the ball projection (screen y = world y − heightScale × height, heightScale 0.65 in `shipArt.json`, shared with `Cannonballs.ts`; v2 has more detail, owner-coloured rail, fine parts only in the 2× sheet), flat shading in 5 steps, outline and water shadow into sheets `client/public/assets/ships/sloop_<player|enemy>_<16|32>_<1|2>x.png` (8 columns, frame 64 px × detail, anchor 0.5/0.6) and `client/src/data/shipArt.json`. Game: `scenes/ShipArt.ts` (`loadShipSheets`, `showShip`), `view/shipFrame.ts` (`directionFrame`); double-detail sheet at zoom ×2; other classes still boxes; lil-gui "Art (test)". To decide after the developer's look: 16 or 32 directions.
-
-**Current status:** M0 done. **M1 done (14 Nov)**: sailing with wind, polars, compass, islands with collision (push-off tries back, forward, both sides), wind drift with seeded random. **M2 in progress. Steps 1 and 2 done and tested (14 Nov); touch buttons L/R fire, v/^ elevation added early (tested on iPhone/iPad). Step 3 built 15 Nov, waiting for the developer's test:** `sim/accuracy.ts` (plan 4.4 σ formulas; crew, wear, ammo neutral until M3), `nextGaussian` in `sim/random.ts`, salvo error stored per `PendingShot.salvoErrorDeg`, gun error per ball in `launchBall(..., error)`, `ShipState.battleSkill` (4), `guns.json` gunSigmaDeg 1.8 / salvoSigmaDeg 0.6 (hit_table.py: 1.2 hull hits per salvo at 150 m, perfect aim), `landingSpread` + 1σ ellipse (`view.json` landingEllipseSigmas), `sim/circle.ts` moving target (30% sails, radius 150 m, tacks across the upwind part with a `tacking` memory), HUD hit count, lil-gui Accuracy folder; tests use `withPerfectGuns()` (`sim/testing.ts`) for exact ballistics; 148 tests in sandbox. Art: HEIGHT_SCALE 0.65 kept, 16 directions default. **Step 3 tested 15 Nov** (0.82 hull hits per salvo at 150 m by hand, duel 2–2.5 min; σ 1.8 kept; target sails by wind → bot step). **New HUD built 15 Nov (step 5 part, before the bot):** `view/hudLayout.ts` (hudLayout, touchButtonRects, barColour; tested), `scenes/Hud.ts` (panels: my ship with compass, target card, guns with reload discs and elevation gauge; debugLines on H / panel switch), `scenes/icons.ts` (icon-gun-up / icon-gun-down), Compass.place, TouchControls by named rects (gun icons stacked above +), keys + / - (codes 187/61/107, 189/173/109), ring labels at upper left. 157 tests. HUD liked by the developer (15 Nov). **Step 4 built 15 Nov, waiting for the developer's test:** `sim/bot.ts` (newBot, sailsForSpeed, steerWithTacks with tack cooldown, broadsideHeading with range bend, aimElevation as if lying still, aimPoint by relative motion, avoidLand with a fat hull 15 m clearance, thinkBot state machine chase/engage/idle, thinkBots), `BotState`/`BotParams` in types, `world.bots`, command `setBot`, `data/bots.json` (think every 3 ticks, engage 250 / chase again 300, preferred 140 ± 30, fight speed 4.5, tack cooldown 20 s, aim error σ 0.5°, elevation 4°/s, fire when aim point ≤ 10 m off the line of fire). Simulation runs bots after the player's commands. Scene: panel behaviour bot/circle/moored (default bot, starts 400 m upwind), restart duel, put 400 m upwind; debug line shows bot mode. 172 tests. **15 Nov afternoon (built while the developer tests the bot):** bot gives up a hopeless chase (no 50 m gain in its patience 45–90 s → breakOff 90 s, then chase again) and has a seeded personality (preferredRange 115–165, patience, aimError 0.3–0.8°; `newBot(shipId, enemyId, rng)`, `updateMode`); win/lose banner (`scenes/Banner.ts`, SAIL AGAIN / Enter); step 6 juice: `tools/make_sounds.py` (numpy synthesis → `client/public/assets/sounds/*.wav`), `scenes/Sounds.ts` (distance volume, pan, detune; M mute), camera shake, gun smoke drifting downwind, ghost aim cross, white hit flash (`setTint(0xffffff).setTintMode(Phaser.TintModes.FILL)`), sinking bubbles; effects now kept in metres; step 7: brigantine, merchantman, frigate in `tools/render_ship.py` (Hull/HullSpec builder, square_sail with belly, gaff_sail, jibs; `FRAMES` per class 64/80/96/112 → `shipArt.json` `frames`; vectorised downsample, sloop sheets unchanged; `python tools/render_ship.py frigate` renders one class); dev-only `window.naval` for headless tests. Plan: ship variety (±3–5% speed, crew fatigue) in M3; hull fouling, careening, cargo weight in M5. 176 tests. **15 Nov evening (after the developer's test of steps 4–7):** D33 decided: **32 directions** (default). Pixel fonts: Press Start 2P (8/16/24) and Silkscreen (8), OFL, `public/assets/fonts`, resolution 1, loaded before start (`scenes/text.ts`: textStyle, loadFonts; `main.ts` starts after fonts), `roundPixels: true`. HUD: one Graphics per panel, panels fade to 25% when a ship is under them (`panelCovers`), sound button with icon (`icon-sound-on/off`), touch target card under the zoom/sound buttons, ship panel 160 / target card 168 wide. Banner shows time and hull hits. Softer hit sounds; smoke leaves the port outward and drifts more. Bot: smooth range bend (no dead band), closes straight in when farther than preferred + 60 m; aim error 0.5–1.1°, fireOffsetM 16 (about 0.8 hits per salvo vs a still ship). M3 gets class sizes and balance (bigger ships, merchantman frigate-sized but weak). Developer's fun check 1 mark: 2–3; duel about 5 min. 179 tests. **15 Nov night:** D37 proposed: M2 closed as R1; new milestone **M2b "Open Sea"** (packages A sea/islands/chart, B collisions/flee/repair/more bots, C neutral port/fog). **Package A built:** `data/world.json` (6 x 4 km, reef 60 m, reefs are Island kind 'reef' via `reefs()`), `tools/make_islands.py` → `data/islandsGenerated.json` + `public/assets/islands/*.png` (18 islands, seed 1650), `ISLANDS` = hand-made + generated + reefs; `scenes/Islands.ts` loads pictures (`loadIslandPictures`), reef TileSprite; chart: `view/chart.ts` (discover, updateSightings, chartFit, toChart), `scenes/Chart.ts` (key C, map button `l.chart` next to sound), dev-only `window.naval`. 187 tests. **Next: developer tests package A and answers D37; then package B.** Step 2 contents: `sim/hits.ts` (segmentBoxEntry slab method, toShipLocal, ballHit with hull and rigging boxes), ships.json hullPoints/hullHeight/mastHeight (sloop 220/5/22), guns.json damage 27 (9 hits sink a sloop), `ShipState.hull`, `sunk` (wreck fades, ignored by camera, zoom, markers, hits; placeShip revives), events `hit`, `sunk`. Rigging hits no damage until M3. 130 tests in sandbox. Step 1 contents: `data/guns.json` (75 m/s, g 9.81, gun height 3 m, 0–10°, ripple 0.4 s, inheritVelocity 1), `ships.json` gunsPerSide/reloadSeconds (sloop 4 / 15 s), `sim/guns.ts` (gunPosition, launchBall, stepBall, predictLanding by the same steps, orderBroadside with pendingShots, stepGunsAndBalls), world `balls`, `pendingShots`, `nextBallId`, `events` (gunFired, splash), `Simulation.takeEvents()`; screen: balls above shadows, splashes, flashes, landing crosses; keys Q/E fire, R/F elevation; `tools/range_table.py` (10° → 212 m, 2.87 s). 117 tests in sandbox (118 with the developer's). M2 steps: 1 guns · 2 hit test, zones, damage, sinking · 3 accuracy + hit_table.py · 4 bot · 5 HUD bars, win/lose, restart, touch buttons · 6 juice · 7 art spike. Developer added a second island at x + 600 in `islands.json`.
-
-## Stage 2 backlog
-English captain with Spain as enemy nation; Spain and France with full reputation; more contract types (find a person, lost ship, ghost ship, hidden island); merchant guilds that hire pirates; weather, seasons, day and night; crew morale, rum and fresh water; fleets; buying ships; playable merchant; new maps. Stage 3: multiplayer, server-authoritative.
-
-## Open decisions (defaults in use; O2, O3, O4 closed 13 Nov → D29, D26/D27, D30)
-- **O1** backend order: after the web alpha (M9), default. Decide before M7.
-
-## Phaser 4 notes (most tutorials and AI answers describe Phaser 3)
-- 4.2.x ships its own types; check every call against `node_modules/phaser/types`.
-- `Phaser.Geom.Point` does not exist; `Graphics.fillPoints` wants `Phaser.Math.Vector2`.
-- With `pixelArt: true`, give text a `resolution` of 2–3 to keep it sharp.
-- Endless water: `TileSprite` + `setScrollFactor(0)`, `setTileScale(zoom)`, `tilePosition = camera scroll / zoom`.
-- Touch: `input.addPointer(2)`; `sys.game.device.input.touch`; CSS `touch-action: none`.
-- iOS Safari: unlock audio on the first tap; no fullscreen API on iPhone; respect `env(safe-area-inset-*)`.
-- Automated key tests must hold a key about 80 ms (`JustDown` misses shorter taps).
-- A Text drawn right after a Graphics broke the next sprite in our headless test (4.2.1): keep text labels above sprites, not between a Graphics and sprites.
-- Text after a Graphics glitch: draw static shapes (islands) once into a texture with `make.graphics` + `generateTexture` and show them as images.
-- Integer pixel scaling: `Scale.NONE`, then `scale.setZoom(pixelScale / devicePixelRatio)` and `scale.resize(w, h)` on every window resize.
+## Phaser 4 notes
+- Check calls against `node_modules/phaser/types` (most examples are Phaser 3). No `Geom.Point`; `fillPoints` needs `Math.Vector2`.
+- Keep text above sprites (a Text right after a Graphics broke the next sprite); draw static shapes once into textures.
+- Hit flash: `setTint(0xffffff).setTintMode(Phaser.TintModes.FILL)`.
+- Touch: `addPointer`, CSS `touch-action: none`; iOS audio starts after the first tap.
+- Automated key tests hold a key ~80 ms. Dev build exposes `window.naval` for headless tests.
 
 ## How to help
-- Work on the current milestone only. Give complete, runnable code with exact file paths and commands.
-- Add a unit test for every formula in `sim/`. Write TypeScript with types for all data and state.
-- Say so before proceeding if a request conflicts with a confirmed decision; do not build on proposed decisions before they are confirmed.
-- Suggest small Python helper scripts where they fit.
-- Reply in Russian when the developer writes in Russian; documents exist in EN and RU and both are updated together.
-- Every instruction lists `mkdir -p` for new folders. Remind to run `pwd` and `git rev-parse --show-toplevel` before `git add`; work only in `naval-battles`, add explicit paths.
-- Larger changes come as a zip unpacked into the repository root; the developer runs `npm test`, `npm run dev`, then commits. Test every change (Vitest, build, headless browser) before delivering.
-- Ask the developer to log hours per session in the dev log (D36).
+- Work on the current milestone only; say so if a request conflicts with a confirmed decision.
+- Deliver larger changes as a zip unpacked into the repo root; the developer runs `npm test`, `npm run dev`, then commits.
+- Test every change before delivery: Vitest, build, headless browser (computer and iPhone).
+- Every instruction lists `mkdir -p` for new folders; remind to run `pwd` and `git rev-parse --show-toplevel` before `git add` with explicit paths.
+- Update plan (EN+RU), dev log (EN+RU) and this summary after each step.

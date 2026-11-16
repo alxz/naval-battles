@@ -14,7 +14,7 @@ const g = { ...GUNS, gunSigmaDeg: 1.5, salvoSigmaDeg: 0.6 }; // the plan's numbe
 function sloopAt(id: number, x: number, y: number): ShipState {
   return {
     id, shipClass: 'sloop', x, y, headingRad: 0, speed: 0, rudder: 0, sailLevel: 0,
-    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4,
+    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: sloop.hullPoints, sunk: false, battleSkill: 4, team: id === 1 ? 0 : 1, repairing: false,
   };
 }
 

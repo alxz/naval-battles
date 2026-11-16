@@ -33,13 +33,26 @@ export function textStyle(kind: TextKind, colour = '#ffffff'): Phaser.Types.Game
   return { fontFamily: k.family, fontSize: `${k.size}px`, color: colour, resolution: TEXT_RESOLUTION };
 }
 
+const FONT_FILES: [family: string, file: string][] = [
+  ['Press Start 2P', 'assets/fonts/press-start-2p.woff2'],
+  ['Silkscreen', 'assets/fonts/silkscreen.woff2'],
+];
+
 /**
- * Load both fonts before the game starts: Phaser draws text once into a texture,
- * and a font that is not loaded yet would be drawn with a fallback font.
+ * Load both fonts before the game starts: Phaser draws text once into a texture and measures
+ * the font only once, so a font that arrives later leaves fallback letters and cut-off digits
+ * (seen on the iPhone, 15 Nov: Safari said "ready" before the files were there).
+ * So we fetch the font files ourselves (FontFace), add them to the page, and then make sure
+ * the browser can really draw with them before the game starts.
  */
 export async function loadFonts(): Promise<void> {
   try {
-    await Promise.all([document.fonts.load(`8px ${FONT_MAIN}`), document.fonts.load(`8px ${FONT_SMALL}`)]);
+    const faces = await Promise.all(FONT_FILES.map(([family, file]) => new FontFace(family, `url(${file})`).load()));
+    for (const face of faces) document.fonts.add(face);
+    await document.fonts.ready;
+    // Belt and braces: wait (at most 3 s) until both fonts answer "yes, I can draw this".
+    const ready = (): boolean => document.fonts.check(`8px ${FONT_MAIN}`) && document.fonts.check(`8px ${FONT_SMALL}`);
+    for (let i = 0; i < 60 && !ready(); i++) await new Promise((resolve) => setTimeout(resolve, 50));
   } catch {
     // No font? The game still runs with the browser's fallback font.
   }

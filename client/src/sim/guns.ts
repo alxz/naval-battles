@@ -1,6 +1,7 @@
 import { accuracyInputs, gunSigmaDeg, salvoSigmaDeg } from './accuracy';
 import { degToRad } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
+import { damageHull } from './damage';
 import { nextGaussian } from './random';
 import { ballHit } from './hits';
 import type { HitZone } from './hits';
@@ -165,14 +166,7 @@ function firstHit(world: World, ball: Ball, from: { x: number; y: number; z: num
 function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, point: { x: number; y: number; z: number }, g: GunParams): void {
   world.events.push({ type: 'hit', shipId: ship.id, byShipId: ball.shipId, zone, ...point });
   if (zone !== 'hull') return;
-  ship.hull = Math.max(0, ship.hull - g.damage);
-  if (ship.hull === 0 && !ship.sunk) {
-    ship.sunk = true;
-    ship.speed = 0;
-    ship.sailLevel = 0;
-    ship.rudder = 0;
-    world.events.push({ type: 'sunk', shipId: ship.id, byShipId: ball.shipId, x: ship.x, y: ship.y });
-  }
+  damageHull(world, ship, g.damage, ball.shipId);
 }
 
 /**

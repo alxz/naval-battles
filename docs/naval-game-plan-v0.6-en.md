@@ -86,7 +86,7 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D34 | Angles and units | One tested module (`sim/angles.ts`) converts between the three angle systems: sim heading (radians, 0 = east, clockwise), compass bearing (degrees, 0 = north) and wind angle (TWA, degrees off the wind). Angle fields carry their unit in the name (`headingRad`, `bearingDeg`, `twaDeg`) | Three conventions are easy to mix up; the compiler cannot catch it, a field name can | Adopted 13 Nov (review) |
 | D35 | Fun checks | Two fun checks with written pass/fail criteria: after R1 (combat) and after R3 (campaign). The second one sets the scope of R4 | "Is it fun?" needs a clear answer, or it gets skipped | Adopted 13 Nov (review) |
 | D36 | Schedule | Dates are **likely** estimates, not promises. You log hours per session in the dev log; after each release we recompute the remaining dates | The first estimate (30 weeks) was optimistic; measured hours give the real pace | Adopted 13 Nov (review) |
-| D37 | Open Sea before M3 | M2 is closed as R1 "First Duel". A new milestone **M2b "Open Sea"** brings small first versions of the developer's ideas of 15 Nov (map, chart, bigger sea, collisions, fleeing and repair, more bots, a neutral port, fog). Deep versions (economy, many ports, saves) stay in M5–M6 | The duel alone gives few decisions (fun check 1: 2–3); escape, repair, ramming and a safe port add them. Keeps the rule "new ideas never enter a started milestone" | **Proposed 15 Nov**, waiting for the developer |
+| D37 | Open Sea before M3 | M2 is closed as R1 "First Duel". A new milestone **M2b "Open Sea"** brings small first versions of the developer's ideas of 15 Nov (map, chart, bigger sea, collisions, fleeing and repair, more bots, a neutral port, fog). Deep versions (economy, many ports, saves) stay in M5–M6 | The duel alone gives few decisions (fun check 1: 2–3); escape, repair, ramming and a safe port add them. Keeps the rule "new ideas never enter a started milestone" | **Confirmed 15 Nov** |
 
 **Two plans existed.** The folder `web_claude` holds a different draft ("Sails & Powder": Three.js, TypeScript, Spain, 1700–1725). Your confirmed decisions above override it. Its best ideas are merged into this plan; Appendix B lists them. Please use only the latest plan version from now on, and replace the old `PROJECT_INSTRUCTIONS.md` with the new `project-summary.md`.
 
@@ -714,7 +714,7 @@ Based on 8–10 hours per week. Each release is a version you can play.
 - **You learn:** vectors, angles, sin and cos, delta time, unit tests, how screen scaling works.
 - **Done when:** you can tack upwind, the ship stops in irons, sailing feels good, and on every device you can see a target 150 m abeam.
 
-#### M2 — Guns and the first duel (3.5 weeks) — **in progress**
+#### M2 — Guns and the first duel (3.5 weeks) — **done 15 Nov, released as R1**
 
 Steps: 1 guns and ballistics · 2 hit test, hit zones, damage, sinking · 3 accuracy (salvo and gun error, ellipse) and `tools/hit_table.py` · 4 the bot · 5 HUD bars, win and lose, restart, touch buttons · 6 juice · 7 art spike.
 - [x] Broadsides, reload timers, elevation control, landing marker (it includes your ship's own velocity). **Step 1, 14 Nov:** `data/guns.json`, commands `fire` and `setElevation`, ripple fire, balls with height and shadow, splashes; keys Q / E fire, R / F elevation; `tools/range_table.py`.
@@ -744,9 +744,9 @@ Steps: 1 guns and ballistics · 2 hit test, hit zones, damage, sinking · 3 accu
 
 If a criterion fails, we tune for up to one week before M3. If the core is still not fun, we change the combat model (range, view, aiming) before adding content.
 
-#### M2b — Open Sea (new, D37; about 2 weeks)
+#### M2b — Open Sea (new, D37; about 2 weeks) — **in progress**
 - [x] **Package A, 15 Nov:** a closed sea 6 × 4 km (`data/world.json`) with a reef along all four edges (land for the rules, so ships ground on it and bots avoid it); 18 islands made by `tools/make_islands.py` (3 big with mountains, a river and bays; 6 medium; 9 small islets; trees, sand, shallow rim; shore polygons and pictures from the same seed); the chart (C or the map button): parchment, the reef, islands once you have seen them, your ship, other ships where you saw them last (pale with "?" when out of sight).
-- [ ] **Package B:** ship collisions (damage by size and speed, ships pushed apart, sprites never overlap); the bot flees when its hull is low; repair at sea up to 75% while nearly stopped (player and bots); two more bots at random places.
+- [x] **Package B, 15 Nov:** ship collisions (`sim/collide.ts`: hulls are turned rectangles; damage = closing speed × the other ship's share of the weight, the ship that strikes with its bow takes half; ships are pushed apart, the lighter one more, never onto land); the bot flees at 30% hull (`flee`) and repairs when safe (`repair`); repair at sea up to 75% at sails ≤ 25% with no enemy within 500 m (`sim/repair.ts`, player and bots, numbers in `data/damage.json`); three bots (1–3 in the tuning panel) at random open-water places, they keep clear of each other; a new duel starts where the last one ended. UI: minimap (can be switched off), ESC closes the chart, the tuning panel is a gear button on touch screens, pixel fonts loaded before the game starts (iOS).
 - [ ] **Package C:** one neutral port (no fighting near it, repair up to 90%, bots use it too); patches of fog that drift with the wind.
 - **Done when:** in one session you sail round the sea with the chart, fight two bots, flee, repair and come back. **→ Release R1b "Open Sea".**
 

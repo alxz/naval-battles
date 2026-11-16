@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
-import { ISLANDS, SHIP_CLASSES } from '../sim/data';
+import { DAMAGE, ISLANDS, SHIP_CLASSES } from '../sim/data';
+import { touchesLand } from '../sim/land';
+import { openWaterSpot } from '../sim/spawn';
 import { Simulation } from '../sim/simulation';
 import { circleRudder } from '../sim/circle';
 import type { Circle } from '../sim/circle';
@@ -22,6 +24,7 @@ import { EdgeMarkers } from './EdgeMarkers';
 import type { Contact } from './EdgeMarkers';
 import { Banner } from './Banner';
 import { Chart } from './Chart';
+import { Minimap } from './Minimap';
 import { Sounds, loadSounds } from './Sounds';
 import { Hud, debugLines } from './Hud';
 import { makeHudIcons } from './icons';
@@ -55,7 +58,10 @@ const RAISE_KEY_CODES = [187, 61, 107];
 const LOWER_KEY_CODES = [189, 173, 109];
 
 const ELEVATION_DEG_PER_SECOND = 4; // + / - held (the bot uses the same rate, data/bots.json)
-const START_BOT_DISTANCE = 400; // metres, to windward
+const START_BOT_DISTANCE = 400; // metres, to windward (the panel button "put 400 m upwind")
+const BOT_SPAWN_MIN = 600; // bots appear at random places this far from you...
+const BOT_SPAWN_MAX = 1200; // ...at most
+const SHAKE_COLLISION = { ms: 260, intensity: 0.009 };
 
 /**
  * The sea, set up for the M1 scale test (plan section 4.1, decision O3).
@@ -81,6 +87,9 @@ export class SeaScene extends Phaser.Scene {
   private hud!: Hud;
   private banner!: Banner;
   private chart!: Chart;
+  private minimap!: Minimap;
+  private escKey!: Phaser.Input.Keyboard.Key;
+  private started = false; // false until the first duel has been set up
   private chartState: ChartState = newChart(); // what you have seen so far (view/chart.ts)
   private sounds!: Sounds;
   private hitFlash: number[] = []; // seconds of white flash left, per ship index
@@ -96,6 +105,7 @@ export class SeaScene extends Phaser.Scene {
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
   private targetCircle: Circle | null = null; // the circle the moving target sails round
   private ballsFired = 0; // your balls since the last reset (for the hit count)
+  private sunkBy = 0; // the ship that sank you (for the banner)
   private enemyBalls = 0; // the enemy's balls this duel (for the banner)
   private enemyHullHits = 0; // its hull hits on you this duel
   private myDuelHullHits = 0; // your hull hits this duel (the panel's hit count can be reset by hand)
@@ -125,10 +135,6 @@ export class SeaScene extends Phaser.Scene {
     this.rings = new RangeRings(this);
     this.markers2 = new LandingMarkers(this);
     this.cannonballs = new Cannonballs(this);
-    for (const ship of this.sim.world.ships) {
-      const owner = ship.id === PLAYER_ID ? 'player' : 'enemy';
-      this.shipImages.push(this.add.image(0, 0, `box-${ship.shipClass}-${owner}`).setDepth(2));
-    }
     this.markers = new EdgeMarkers(this);
 
     const keyboard = this.input.keyboard;
@@ -140,6 +146,7 @@ export class SeaScene extends Phaser.Scene {
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.enterKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.escKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     makeHudIcons(this);
 
     // On phones and tablets there is no keyboard, so show buttons.
@@ -154,6 +161,7 @@ export class SeaScene extends Phaser.Scene {
     this.sounds = new Sounds(this);
     this.hud = new Hud(this, isTouch, () => this.panel.toggleSound(), () => this.chart.setOpen(!this.chart.isOpen()));
     this.chart = new Chart(this, isTouch, () => this.chart.setOpen(false));
+    this.minimap = new Minimap(this, isTouch, () => this.chart.setOpen(!this.chart.isOpen()));
     this.banner = new Banner(this, () => this.restart()); // last: drawn on top of everything
 
     // Integer pixel scaling: measure the screen now and after every resize.
@@ -179,6 +187,8 @@ export class SeaScene extends Phaser.Scene {
         windStrength: this.sim.world.wind.strength,
         windDrift: true,
         debugText: false,
+        minimap: true,
+        enemyCount: 3,
         sound: true,
         volume: 0.7,
         screenShake: true,
@@ -192,7 +202,7 @@ export class SeaScene extends Phaser.Scene {
         onTargetCircle: () => (this.targetCircle = null),
         onTargetBehaviour: () => (this.targetCircle = null),
         onRestart: () => this.restart(),
-        onPlaceUpwind: (d) => this.placeTargetUpwind(d),
+        onPlaceUpwind: (d) => this.placeTargetUpwind(d || START_BOT_DISTANCE),
         onResetHits: () => {
           this.ballsFired = 0;
           this.hullHits = 0;
@@ -203,8 +213,7 @@ export class SeaScene extends Phaser.Scene {
       isTouch,
     );
     this.screenFit.apply();
-    // The bot starts to windward, so it comes down on you at once (from leeward it would have to beat up first).
-    this.placeTargetUpwind(START_BOT_DISTANCE);
+    this.restart(); // the first duel: bots at random places
 
     // A click or tap on the sea gives the keyboard back to the game (see releaseFocus).
     this.input.on('pointerdown', () => releaseFocus());
@@ -254,8 +263,9 @@ export class SeaScene extends Phaser.Scene {
     for (const e of events) {
       if (e.type === 'gunFired' && e.shipId === PLAYER_ID) this.ballsFired++;
       if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.hullHits++;
-      if (e.type === 'gunFired' && e.shipId === TARGET_ID) this.enemyBalls++;
-      if (e.type === 'hit' && e.byShipId === TARGET_ID && e.zone === 'hull') this.enemyHullHits++;
+      if (e.type === 'gunFired' && e.shipId !== PLAYER_ID) this.enemyBalls++;
+      if (e.type === 'hit' && e.byShipId !== PLAYER_ID && e.shipId === PLAYER_ID && e.zone === 'hull') this.enemyHullHits++;
+      if (e.type === 'sunk' && e.shipId === PLAYER_ID) this.sunkBy = e.byShipId;
       if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.myDuelHullHits++;
     }
     this.playJuice(events, halfW);
@@ -319,12 +329,15 @@ export class SeaScene extends Phaser.Scene {
     const wind = this.sim.world.wind;
     const params = SHIP_CLASSES[myShip.shipClass];
     const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
-    const target = this.ship(TARGET_ID);
+    const target = this.nearestEnemy(myShip) ?? this.ship(TARGET_ID);
     const rangeM = params ? gunRange(myShip, params) : 0;
     // Ship centres on the screen: a HUD panel over one of them turns see-through.
     const shipsOnScreen = poses.map((p) => ({ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }));
+    this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom);
     this.hud.update({
       soundOn: v.sound,
+      minimapOn: v.minimap,
+      repairSeaShare: DAMAGE.repair.seaMaxShare,
       ships: shipsOnScreen,
       seconds,
       ship: myShip,
@@ -335,10 +348,11 @@ export class SeaScene extends Phaser.Scene {
       target: target
         ? {
             shipClass: target.shipClass,
-            distance: this.targetDistance(),
+            distance: Math.hypot(target.x - myShip.x, target.y - myShip.y),
             hull: target.hull,
             hullMax: SHIP_CLASSES[target.shipClass]?.hullPoints ?? 1,
             sunk: target.sunk,
+            repairing: target.repairing,
           }
         : null,
       debug: v.debugText,
@@ -363,8 +377,11 @@ export class SeaScene extends Phaser.Scene {
     });
 
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
-    if (myShip.sunk) this.banner.request('lose', `Sunk by the pirate ${target?.shipClass ?? 'ship'}`, this.duelStats());
-    else if (target?.sunk && v.targetBehaviour === 'bot') this.banner.request('win', `Enemy ${target.shipClass} sunk`, this.duelStats());
+    const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
+    if (myShip.sunk) this.banner.request('lose', `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
+    else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk)) {
+      this.banner.request('win', foes.length === 1 ? `Enemy ${foes[0]?.shipClass ?? 'ship'} sunk` : `All ${foes.length} enemies sunk`, this.duelStats());
+    }
     this.banner.update(seconds, this.touch !== null);
     if (this.banner.isShown() && Phaser.Input.Keyboard.JustDown(this.enterKey)) this.restart();
   }
@@ -399,6 +416,7 @@ export class SeaScene extends Phaser.Scene {
     this.banner.layout(layout.width, layout.height);
     const buttons = hudLayout(layout.width, layout.height, this.touch !== null).chart;
     this.chart.layout(layout.width, layout.height, buttons.y + buttons.h + 6);
+    this.minimap.layout(layout.width, layout.height);
   }
 
   /** Keys -> commands. Rudder and elevation are held; sails change one step per key press. */
@@ -422,6 +440,7 @@ export class SeaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
     if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
+    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.chart.setOpen(false);
     const up = this.keys.R.isDown || this.raiseKeys.some((k) => k.isDown) || this.hud.raise || (this.touch?.raise ?? false);
     const down = this.keys.F.isDown || this.lowerKeys.some((k) => k.isDown) || this.hud.lower || (this.touch?.lower ?? false);
     const raise = (up ? 1 : 0) - (down ? 1 : 0);
@@ -520,6 +539,16 @@ export class SeaScene extends Phaser.Scene {
           if (e.shipId === PLAYER_ID && e.zone === 'hull') shake(SHAKE_MY_HIT);
           break;
         }
+        case 'collision': {
+          // Two hulls crash together: a loud crack, both ships flash, the view jumps if you are one of them.
+          this.sounds.play('hit_wood', e.x, e.y, ear, halfWidthM, 1, 80);
+          for (const id of [e.shipA, e.shipB]) {
+            const index = this.sim.world.ships.findIndex((sh) => sh.id === id);
+            if (index >= 0) this.hitFlash[index] = HIT_FLASH_SECONDS * 2;
+          }
+          if (e.shipA === PLAYER_ID || e.shipB === PLAYER_ID) shake(SHAKE_COLLISION);
+          break;
+        }
         case 'sunk':
           this.sounds.play('sink', e.x, e.y, ear, halfWidthM, 1, 50);
           shake(SHAKE_SINK);
@@ -528,10 +557,23 @@ export class SeaScene extends Phaser.Scene {
     }
   }
 
-  /** "bot engage, port side, tack 0" for the debug text. */
+  /** One line per bot for the debug text: "bot 2 engage, port side". */
   private botLine(): string[] {
-    const bot = this.sim.world.bots.find((b) => b.shipId === TARGET_ID);
-    return bot ? [`bot ${bot.mode}${bot.side ? `, ${bot.side} side` : ''}${bot.tack !== 0 ? `, tack ${bot.tack > 0 ? '+' : '-'}` : ''}`] : [];
+    return this.sim.world.bots.map((bot) => {
+      const ship = this.ship(bot.shipId);
+      if (ship?.sunk) return `bot ${bot.shipId} sunk`;
+      return `bot ${bot.shipId} ${bot.mode}${bot.side ? `, ${bot.side} side` : ''}${bot.tack !== 0 ? `, tack ${bot.tack > 0 ? '+' : '-'}` : ''}`;
+    });
+  }
+
+  /** The nearest enemy still afloat. */
+  private nearestEnemy(me: ShipState): ShipState | undefined {
+    let best: ShipState | undefined;
+    for (const sh of this.sim.world.ships) {
+      if (sh.id === PLAYER_ID || sh.sunk) continue;
+      if (!best || Math.hypot(sh.x - me.x, sh.y - me.y) < Math.hypot(best.x - me.x, best.y - me.y)) best = sh;
+    }
+    return best;
   }
 
   /** Put the target `distance` metres to windward of you, heading for you. */
@@ -545,14 +587,46 @@ export class SeaScene extends Phaser.Scene {
     this.targetCircle = null;
   }
 
-  /** Start the duel again: a fresh world, the same settings from the panel. */
+  /**
+   * Start a duel: a fresh world, the same settings from the panel.
+   *   - You start where the last duel ended (easier to find your way on the chart); the very
+   *     first time, at the start place of the sea.
+   *   - In "bot" mode each bot appears at a random place in open water, 600-1200 m from you.
+   * A new seed each time, so every duel is different. (The time of day is only used here,
+   * on the screen side, to pick the seed; inside the simulation everything follows from it.)
+   */
   private restart(): void {
     const v = this.panel.values;
-    this.sim = new Simulation(createWorld());
+    const last = this.started ? this.ship(PLAYER_ID) : undefined;
+    const botMode = v.targetBehaviour === 'bot';
+    const seed = (Date.now() & 0x7fffffff) || 1;
+    this.sim = new Simulation(createWorld(seed, botMode ? v.enemyCount : 1));
     this.sim.tuning.speedScale = v.speedScale;
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(v.windFromBearingDeg), strength: v.windStrength });
-    this.sim.update(0.05); // apply the wind before the bot is placed to windward
+    const world = this.sim.world;
+    const me = world.ships[0];
+    const sloop = SHIP_CLASSES['sloop'];
+    if (me && sloop) {
+      // Where the last duel ended, if that is open water (a ship that sank on the shore starts at the old place).
+      if (last && !touchesLand({ ...me, x: last.x, y: last.y, headingRad: last.headingRad }, sloop, ISLANDS)) {
+        this.sim.queueCommand({ type: 'placeShip', shipId: PLAYER_ID, x: last.x, y: last.y, headingRad: last.headingRad, shipClass: 'sloop' });
+      }
+      const here = last ?? me;
+      if (botMode) {
+        const placed: ShipState[] = [{ ...me, x: here.x, y: here.y }];
+        for (const bot of world.ships.slice(1)) {
+          const shipClass = bot.id === TARGET_ID ? v.targetClass : 'sloop';
+          const spot = openWaterSpot(world, ISLANDS, here, BOT_SPAWN_MIN, BOT_SPAWN_MAX, SHIP_CLASSES[shipClass] ?? sloop, placed);
+          if (!spot) continue;
+          placed.push({ ...bot, x: spot.x, y: spot.y });
+          this.sim.queueCommand({ type: 'placeShip', shipId: bot.id, x: spot.x, y: spot.y, headingRad: Math.atan2(here.y - spot.y, here.x - spot.x), shipClass });
+        }
+      }
+    }
+    this.sim.update(0.05); // one step: the wind and the places take effect
+    this.started = true;
+    this.rebuildShipImages();
     this.elevationDeg = this.ship(PLAYER_ID)?.elevationDeg ?? 5;
     this.lastRudder = 0;
     this.ballsFired = 0;
@@ -560,17 +634,26 @@ export class SeaScene extends Phaser.Scene {
     this.enemyBalls = 0;
     this.enemyHullHits = 0;
     this.myDuelHullHits = 0;
+    this.sunkBy = 0;
     this.targetCircle = null;
     this.cameraCentre = null;
     this.banner.hide();
     this.hitFlash = [];
     this.chartState.sightings = []; // a new duel: the islands you know stay on the chart, the old ship marks go
-    if (v.targetBehaviour === 'bot') this.placeTargetUpwind(START_BOT_DISTANCE);
+  }
+
+  /** One picture per ship of the world (the number of ships can change between duels). */
+  private rebuildShipImages(): void {
+    for (const image of this.shipImages) image.destroy();
+    this.shipImages = this.sim.world.ships.map((ship) => {
+      const owner = ship.id === PLAYER_ID ? 'player' : 'enemy';
+      return this.add.image(0, 0, `box-${ship.shipClass}-${owner}`).setDepth(2);
+    });
   }
 
   /**
    * What the target does (panel "behaviour"):
-   *   bot     the computer fights you (sim/bot.ts); the scene only switches it on
+   *   bot     the computer fights you with every enemy ship (sim/bot.ts); the scene only switches it on
    *   circle  it sails slowly round a circle (M2 step 3), steered from here by commands
    *   moored  it lies still
    */
@@ -579,9 +662,13 @@ export class SeaScene extends Phaser.Scene {
     const target = this.ship(TARGET_ID);
     const params = target ? SHIP_CLASSES[target.shipClass] : undefined;
     if (!target || !params) return;
-    const isBot = this.sim.world.bots.some((b) => b.shipId === TARGET_ID);
-    if ((v.targetBehaviour === 'bot') !== isBot) {
-      this.sim.queueCommand({ type: 'setBot', shipId: TARGET_ID, enemyId: v.targetBehaviour === 'bot' ? PLAYER_ID : null });
+    // In "bot" mode the computer sails every enemy ship; in the other modes none.
+    for (const sh of this.sim.world.ships) {
+      if (sh.id === PLAYER_ID) continue;
+      const isBot = this.sim.world.bots.some((b) => b.shipId === sh.id);
+      if ((v.targetBehaviour === 'bot') !== isBot) {
+        this.sim.queueCommand({ type: 'setBot', shipId: sh.id, enemyId: v.targetBehaviour === 'bot' ? PLAYER_ID : null });
+      }
     }
     if (v.targetBehaviour === 'bot' || target.sunk) return;
     const circling = v.targetBehaviour === 'circle';

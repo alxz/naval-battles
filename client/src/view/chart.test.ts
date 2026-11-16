@@ -12,7 +12,7 @@ const view = { minX: 0, minY: 0, maxX: 600, maxY: 400 };
 function ship(id: number, x: number, y: number, sunk = false): ShipState {
   return {
     id, shipClass: 'sloop', x, y, headingRad: 1, speed: 0, rudder: 0, sailLevel: 0,
-    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk, battleSkill: 4,
+    aground: false, elevationDeg: 5, reloadPort: 0, reloadStarboard: 0, hull: 220, sunk, battleSkill: 4, team: id === 1 ? 0 : 1, repairing: false,
   };
 }
 

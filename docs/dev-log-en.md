@@ -4,11 +4,41 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 15 Nov 2026 (late night) — Package B: collisions, fleeing, repair, three bots; minimap and your UI wishes
+
+### Your test of package A
+
+Computer: all good. Wishes: close the chart with ESC; on iOS the Tuning panel covered the chart button; start the next duel near the place where the last one ended; a minimap that can be switched off. Your iPhone screenshot also showed plain letters instead of the pixel fonts.
+
+### Package B (rules, all in `sim/`)
+
+- **Collisions** (`sim/collide.ts`): a hull is a turned rectangle; two hulls that overlap are pushed apart (the lighter ship moves more; never onto land) and keep 20% of their speed. Damage = closing speed × 6 × the other ship's share of the weight; below 1 m/s nothing; the ship that strikes with its bow takes half. New `mass` in `ships.json` (sloop 100, brigantine 170, merchantman 420, frigate 600). All hull damage now goes through one function (`sim/damage.ts`), so ramming can sink a ship too.
+- **Repair at sea** (`sim/repair.ts`): sails at 25% or less, no enemy within 500 m, hull below 75% → +0.7% of the hull per second up to 75%. The same rule for bots. HUD: green "REPAIRING", a tick at 75% on the hull bar.
+- **Bot**: new modes `flee` (hull under 30%: sails away from the nearest enemy, still around land) and `repair` (safe → lowers sails and repairs, then comes back). Bots steer around other ships (`avoidShips`).
+- **Three bots** ("bots (next duel)" 1–3 in the tuning panel): placed at random open-water spots 600–1200 m away (`sim/spawn.ts`, from the world's seeded RNG). Victory = all enemies sunk. A new duel starts where the last one ended, with a new seed.
+- Numbers: `data/damage.json`, `data/bots.json` (`fleeHullShare`, `shipAvoidM`, `shipAvoidTurnDeg`).
+
+### UI
+
+- **Minimap** (`scenes/Minimap.ts`): the whole sea with what you know from the chart. Computer: bottom right (it steps left when the tuning panel is open); touch: in the top row in place of the chart button. A click or tap opens the chart. "minimap" check box in the tuning panel.
+- **ESC** closes the chart. **Tuning** on touch screens is a small gear button in the top right corner; opened, it is the usual panel and scrolls.
+- **Fonts on iOS**: the game now loads both pixel fonts itself (`FontFace`) and waits for them before Phaser draws any text. Checked only in iPhone emulation, so please check on the real iPhone.
+
+### Checks
+
+211 tests in the sandbox (212 with your angle test); build clean; headless on computer and iPhone: three bots chase, ramming damages both ships and they do not overlap, repair works, C / ESC, restart near the old place, no errors.
+
+**Known, small:** distance labels of far enemies at the screen edge can sit on top of a HUD panel or of each other.
+
+**Next:** package C (neutral port, fog).
+
+---
+
 ## 15 Nov 2026 (night) — New plan step "Open Sea" (D37, proposed); package A: sea, islands, chart
 
 **Your answers to the main question:** the approach can be long; there are few decisions in a duel; the bot is strong, and boarding, ammunition types and a stronger wind are missing. Your proposals for the next update: a chart, borders of the sea, fog, ship collisions, fleeing, repair at sea, more islands (bays, mountains, trees, rivers, islets), two more bots, a neutral port.
 
-**Plan:** M2 is closed as R1 "First Duel" (you confirmed you can win and lose on computer and iPhone). New milestone **M2b "Open Sea"** (decision D37, proposed) in three packages; this is package A.
+**Plan:** M2 is closed as R1 "First Duel" (you confirmed you can win and lose on computer and iPhone). New milestone **M2b "Open Sea"** (decision D37, confirmed by you the same evening) in three packages; this is package A.
 
 ### Package A
 

@@ -24,6 +24,8 @@ export interface TuningValues {
   windStrength: number; // 0..1
   windDrift: boolean;
   debugText: boolean; // the debug text with keys and numbers (H on a computer)
+  minimap: boolean; // the small map on the screen
+  enemyCount: number; // how many bots fight you (1-3); used when a duel starts
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
   screenShake: boolean; // shake the view when your ship is hit or fires
@@ -74,6 +76,21 @@ export class TuningPanel {
     this.values = { ...start };
     const v = this.values;
     this.gui = new GUI({ title: 'Tuning' });
+    if (startClosed) {
+      // Touch screens: when closed, the panel is a small gear button in the corner, so it covers
+      // nothing; opened, it is the full panel (it scrolls when it is taller than the screen).
+      const root = this.gui;
+      const fit = (): void => {
+        const closed = root._closed;
+        root.title(closed ? '\u2699' : 'Tuning');
+        root.domElement.style.setProperty('--width', closed ? '44px' : '245px');
+      };
+      root.onOpenClose((changed) => {
+        if (changed === root) fit();
+      });
+      root.close();
+      fit();
+    }
 
     const view = this.gui.addFolder('View');
     view.add(v, 'pixelsPerMetre', 0.5, 3, 0.5).name('pixels / metre');
@@ -87,6 +104,7 @@ export class TuningPanel {
     view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');
     this.debugController = view.add(v, 'debugText').name('debug text (H)');
+    view.add(v, 'minimap').name('minimap');
 
     const fx = this.gui.addFolder('Sound & effects');
     this.soundController = fx.add(v, 'sound').name('sound (M)');
@@ -117,6 +135,7 @@ export class TuningPanel {
       .add(v, 'targetBehaviour', { 'bot (fights you)': 'bot', 'circle (slow)': 'circle', moored: 'moored' })
       .name('behaviour')
       .onChange(() => callbacks.onTargetBehaviour());
+    target.add(v, 'enemyCount', 1, 3, 1).name('bots (next duel)');
     target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart duel');
     target
       .add(v, 'targetClass', Object.keys(SHIP_CLASSES))
@@ -159,6 +178,11 @@ export class TuningPanel {
     });
 
     if (startClosed) this.gui.close();
+  }
+
+  /** Width of the open panel in CSS pixels (0 when closed), so the minimap can step aside. */
+  openWidthCss(): number {
+    return this.gui._closed ? 0 : this.gui.domElement.offsetWidth;
   }
 
   /** The M key switches the sound; keep the check box in step. */

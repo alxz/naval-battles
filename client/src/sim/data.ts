@@ -1,4 +1,5 @@
 import botsJson from '../data/bots.json';
+import damageJson from '../data/damage.json';
 import gunsJson from '../data/guns.json';
 import islandsJson from '../data/islands.json';
 import generatedJson from '../data/islandsGenerated.json';
@@ -6,7 +7,7 @@ import polarsJson from '../data/polars.json';
 import shipsJson from '../data/ships.json';
 import windJson from '../data/wind.json';
 import worldJson from '../data/world.json';
-import type { BotParams, GunParams, Island, Polar, ShipParams, WorldBounds } from './types';
+import type { BotParams, DamageParams, GunParams, Island, Polar, ShipParams, WorldBounds } from './types';
 
 /** All ship classes, by id. Balance numbers live in JSON, not in code. */
 export const SHIP_CLASSES: Record<string, ShipParams> = shipsJson;
@@ -53,3 +54,6 @@ export const GUNS: GunParams = gunsJson;
 
 /** How bots behave (plan 4.9). */
 export const BOTS: BotParams = botsJson;
+
+/** Collisions between ships and repair at sea. */
+export const DAMAGE: DamageParams = damageJson;

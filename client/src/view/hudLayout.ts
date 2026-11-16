@@ -21,8 +21,10 @@ export interface HudLayout {
   debugY: number;
   /** The sound on/off button. */
   sound: Rect;
-  /** The chart (sea map) button, right of the sound button. */
+  /** The chart (sea map) button, right of the sound button. On touch screens it is as big as the minimap, which sits on it. */
   chart: Rect;
+  /** The minimap: bottom right on a computer; on touch screens it takes the place of the chart button. */
+  minimap: Rect;
   /** Size of a touch button (0 on a computer). */
   buttonSize: number;
 }
@@ -35,6 +37,8 @@ const SHIP_H = 64;
 const TARGET_W = 168; // "merchantman  110 m" in the 8 px pixel font
 const TARGET_H = 30;
 const GUNS_H = 46;
+const MINIMAP_W = 132; // computer: 6 x 4 km at 22 px per km
+const MINIMAP_H = 88;
 const GUNS_W_COMPUTER = 210; // room for the small +/- gun icons
 const GUNS_W_TOUCH = 180;
 
@@ -66,7 +70,10 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   // Touch: the sound button sits right of the zoom button. Computer: a small icon in the corner.
   const z = smallButtonSize(height);
   const sound: Rect = touch ? { x: zoomButtonX() + z + m, y: m, w: z, h: z } : { x: m, y: m, w: SOUND_ICON, h: SOUND_ICON };
-  const chart: Rect = { x: sound.x + sound.w + (touch ? m : 6), y: sound.y, w: sound.w, h: sound.h };
+  const chart: Rect = touch
+    ? { x: sound.x + sound.w + m, y: sound.y, w: Math.round(z * 1.5), h: z } // the sea is 3 : 2
+    : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
+  const minimap: Rect = touch ? chart : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
   // Computer: the target card in the top middle. Touch: under the zoom and sound buttons
   // (the top right corner holds the collapsed tuning panel, which covered the card on the iPhone).
   const target: Rect = touch
@@ -81,6 +88,7 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
     debugY: touch ? ship.y + ship.h + 22 : m + SOUND_ICON + 8,
     sound,
     chart,
+    minimap,
     buttonSize,
   };
 }

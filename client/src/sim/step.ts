@@ -1,3 +1,5 @@
+import { collideShips } from './collide';
+import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
 import { ISLANDS, POLARS, SHIP_CLASSES, WIND } from './data';
 import { stepGunsAndBalls } from './guns';
@@ -127,6 +129,8 @@ export function stepWorld(
       ship.aground = false;
     }
   }
+  collideShips(world, islands); // ships cannot sail through each other
+  stepRepair(world, dt); // crews mend the hull when it is safe
   stepGunsAndBalls(world, dt);
   world.tick += 1;
 }
