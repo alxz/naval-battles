@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { touchButtonRects } from '../view/hudLayout';
 import type { ButtonName } from '../view/hudLayout';
 import { ICON_SIZE } from './icons';
-import { TEXT_RESOLUTION } from './text';
+import { textStyle } from './text';
 
 interface Button {
   name: ButtonName;
@@ -85,12 +85,7 @@ export class TouchControls {
     const label = text.startsWith('icon-')
       ? scene.add.image(0, 0, text).setScrollFactor(0).setDepth(111)
       : scene.add
-          .text(0, 0, text, {
-            fontFamily: 'monospace',
-            fontSize: small ? '16px' : '28px',
-            color: '#ffffff',
-            resolution: TEXT_RESOLUTION,
-          })
+          .text(0, 0, text, textStyle(small ? 'main' : 'huge'))
           .setOrigin(0.5)
           .setScrollFactor(0)
           .setDepth(111);

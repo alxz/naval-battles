@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
-import { TEXT_RESOLUTION } from './text';
+import { textStyle } from './text';
 
 /**
  * Distance rings around your ship (100, 150, 200 m) and a light preview of the
@@ -16,7 +16,7 @@ export class RangeRings {
     this.g = scene.add.graphics().setDepth(1);
     this.labels = viewJson.rangeRings.map((r) =>
       scene.add
-        .text(0, 0, `${r} m`, { fontFamily: 'monospace', fontSize: '9px', color: '#d8ecff', resolution: TEXT_RESOLUTION })
+        .text(0, 0, `${r} m`, textStyle('small', '#d8ecff'))
         .setOrigin(1, 1)
         .setAlpha(0.8)
         // Above the ships. (Text drawn right after a Graphics and before a ship broke the

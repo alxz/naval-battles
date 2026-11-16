@@ -110,10 +110,28 @@ export interface Wind extends WindNow {
   baseFromRad: number; // the drift wanders around this direction
 }
 
-/** An island: a polygon of corners in game metres. Loaded from `data/islands.json`. */
+/**
+ * A piece of land: a polygon of corners in game metres. Three sources (sim/data.ts):
+ *   data/islands.json           islands made by hand
+ *   data/islandsGenerated.json  islands made by tools/make_islands.py, each with a picture
+ *   the reef at the edge of the chart, built from data/world.json
+ */
 export interface Island {
   name: string;
   points: { x: number; y: number }[];
+  /** 'reef' = the edge of the chart; 'big' | 'medium' | 'small' from the generator; none = hand-made. */
+  kind?: string;
+  /** A ready picture at 1 pixel per metre: file in assets/islands/, and where its top left corner goes. */
+  picture?: { file: string; x: number; y: number };
+}
+
+/** The sea: a rectangle closed by a reef (data/world.json). Beyond it lies the open ocean, not in this game. */
+export interface WorldBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  reefWidth: number; // metres; the reef lies inside the rectangle, along its four sides
 }
 
 export interface World {

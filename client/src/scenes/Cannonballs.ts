@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import artJson from '../data/shipArt.json';
+import { sideAngleRad } from '../sim/guns';
 import type { Ball, SimEvent, WindNow } from '../sim/types';
 
 /** Screen pixels up per metre of height: the same number the ship pictures were drawn with. */
@@ -8,8 +9,10 @@ const HEIGHT_SCALE = artJson.heightScale;
 const SPLASH_SECONDS = 0.7;
 const FLASH_SECONDS = 0.15;
 
-const SMOKE_SECONDS = 2.8;
-const SMOKE_DRIFT = 5; // m/s at full wind strength
+const SMOKE_SECONDS = 3.6;
+const SMOKE_DRIFT = 8; // m/s at full wind strength
+const SMOKE_BLAST = 3; // m/s: the puff first leaves the gun port outward
+const SMOKE_OUT = 4; // metres outside the hull where it starts
 const BUBBLES = 10; // small splashes around a sinking ship
 
 /** A short effect: placed in game metres (so it stays put when the zoom changes), it may drift. */
@@ -48,22 +51,34 @@ export class Cannonballs {
    *   sunk      a big ring and bubbles for two seconds
    * Random numbers here only change the picture, never the game, so Math.random is fine.
    */
-  play(events: readonly SimEvent[], s: number, wind: WindNow): void {
+  play(events: readonly SimEvent[], s: number, wind: WindNow, headingOf: (shipId: number) => number | undefined): void {
     const downwind = wind.fromRad + Math.PI;
     const drift = SMOKE_DRIFT * wind.strength;
     for (const e of events) {
       if (e.type === 'splash') this.addFading('splash', e.x, e.y, s, SPLASH_SECONDS, 2.5);
       if (e.type === 'gunFired') {
         this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
+        // The smoke leaves the gun port outward (a blast), then the wind carries it away.
+        const heading = headingOf(e.shipId);
+        const out = heading === undefined ? downwind : sideAngleRad(heading, e.side);
         for (let i = 0; i < 2; i++) {
           const jitter = (Math.random() - 0.5) * 0.8;
           const speed = drift * (0.7 + Math.random() * 0.6);
-          this.addFading('smoke', e.x + (Math.random() - 0.5) * 3, e.y - 2 + (Math.random() - 0.5) * 3, s, SMOKE_SECONDS * (0.8 + Math.random() * 0.4), 3, {
-            vx: Math.cos(downwind + jitter) * speed,
-            vy: Math.sin(downwind + jitter) * speed - 0.6, // and it rises a little (up the screen)
-            alpha: 0.55,
-            delay: i * 0.05,
-          });
+          const blast = SMOKE_BLAST * (0.6 + Math.random() * 0.8);
+          this.addFading(
+            'smoke',
+            e.x + Math.cos(out) * SMOKE_OUT + (Math.random() - 0.5) * 3,
+            e.y + Math.sin(out) * SMOKE_OUT - 2 + (Math.random() - 0.5) * 3,
+            s,
+            SMOKE_SECONDS * (0.8 + Math.random() * 0.4),
+            2,
+            {
+              vx: Math.cos(downwind + jitter) * speed + Math.cos(out) * blast,
+              vy: Math.sin(downwind + jitter) * speed + Math.sin(out) * blast - 0.6, // and it rises a little (up the screen)
+              alpha: 0.45,
+              delay: i * 0.05,
+            },
+          );
         }
       }
       if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z * HEIGHT_SCALE, s, 0.6, 2);

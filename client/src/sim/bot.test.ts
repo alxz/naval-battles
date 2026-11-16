@@ -88,6 +88,11 @@ describe('broadsideHeading', () => {
     expect(broadsideHeading(east, BOTS.preferredRange, 'starboard', BOTS)).toBeCloseTo(-Math.PI / 2, 6);
   });
 
+  it('bends a little when a little off the preferred range (a smooth pull, no dead band)', () => {
+    const half = ((BOTS.rangeBendDeg / 2) * Math.PI) / 180;
+    expect(broadsideHeading(east, BOTS.preferredRange + BOTS.rangeBand / 2, 'port', BOTS)).toBeCloseTo(Math.PI / 2 - half, 6);
+  });
+
   it('bends the bow toward a far enemy and away from a near one', () => {
     const bend = (BOTS.rangeBendDeg * Math.PI) / 180;
     expect(broadsideHeading(east, 300, 'port', BOTS)).toBeCloseTo(Math.PI / 2 - bend, 6); // south-east-ish: closer
@@ -152,6 +157,18 @@ describe('bot scenarios (headless)', () => {
     expect(closest).toBeLessThan(BOTS.engageRange);
     expect(tackChanges).toBeGreaterThanOrEqual(1);
     expect(tackChanges).toBeLessThanOrEqual(240 / BOTS.tackCooldownSeconds);
+  });
+
+  it('from leeward it closes in to its preferred range and stays there (no hovering at long range)', () => {
+    const w = duel(0, 240, -Math.PI / 2); // 240 m straight downwind of you
+    const late: number[] = [];
+    run(w, 150, [], (world) => {
+      world.ships[0]!.hull = sloop.hullPoints; // keep you afloat for the whole test
+      if (world.tick > 100 * 30) late.push(Math.hypot(world.ships[1]!.x, world.ships[1]!.y));
+    });
+    const preferred = w.bots[0]!.personality.preferredRange;
+    const average = late.reduce((a, b) => a + b, 0) / late.length;
+    expect(Math.abs(average - preferred)).toBeLessThan(BOTS.rangeBand);
   });
 
   it('keeps clear of an island between it and the enemy', () => {

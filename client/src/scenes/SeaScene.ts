@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
-import { SHIP_CLASSES } from '../sim/data';
+import { ISLANDS, SHIP_CLASSES } from '../sim/data';
 import { Simulation } from '../sim/simulation';
 import { circleRudder } from '../sim/circle';
 import type { Circle } from '../sim/circle';
@@ -11,6 +11,9 @@ import { predictLanding, reloadLeft } from '../sim/guns';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
 import { createWorld } from '../sim/world';
 import { autoZoom } from '../view/autoZoom';
+import { discover, newChart, updateSightings } from '../view/chart';
+import { hudLayout } from '../view/hudLayout';
+import type { ChartState } from '../view/chart';
 import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
@@ -18,10 +21,11 @@ import { Cannonballs } from './Cannonballs';
 import { EdgeMarkers } from './EdgeMarkers';
 import type { Contact } from './EdgeMarkers';
 import { Banner } from './Banner';
+import { Chart } from './Chart';
 import { Sounds, loadSounds } from './Sounds';
 import { Hud, debugLines } from './Hud';
 import { makeHudIcons } from './icons';
-import { Islands } from './Islands';
+import { Islands, loadIslandPictures } from './Islands';
 import { LandingMarkers } from './LandingMarkers';
 import { RangeRings } from './RangeRings';
 import { ScreenFit } from './ScreenFit';
@@ -35,7 +39,7 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C', Phaser.Input.Keyboard.Key>;
 
 /** Juice (M2 step 6): how long a hit ship flashes white, and how the view shakes (ms, share of the view). */
 const HIT_FLASH_SECONDS = 0.1;
@@ -76,6 +80,8 @@ export class SeaScene extends Phaser.Scene {
   private markers!: EdgeMarkers;
   private hud!: Hud;
   private banner!: Banner;
+  private chart!: Chart;
+  private chartState: ChartState = newChart(); // what you have seen so far (view/chart.ts)
   private sounds!: Sounds;
   private hitFlash: number[] = []; // seconds of white flash left, per ship index
   private enterKey!: Phaser.Input.Keyboard.Key;
@@ -90,6 +96,9 @@ export class SeaScene extends Phaser.Scene {
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
   private targetCircle: Circle | null = null; // the circle the moving target sails round
   private ballsFired = 0; // your balls since the last reset (for the hit count)
+  private enemyBalls = 0; // the enemy's balls this duel (for the banner)
+  private enemyHullHits = 0; // its hull hits on you this duel
+  private myDuelHullHits = 0; // your hull hits this duel (the panel's hit count can be reset by hand)
   private hullHits = 0;
 
   constructor() {
@@ -99,6 +108,7 @@ export class SeaScene extends Phaser.Scene {
   preload(): void {
     loadShipSheets(this);
     loadSounds(this);
+    loadIslandPictures(this);
   }
 
   create(): void {
@@ -126,7 +136,7 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M,C') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.enterKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
@@ -142,7 +152,8 @@ export class SeaScene extends Phaser.Scene {
       );
     }
     this.sounds = new Sounds(this);
-    this.hud = new Hud(this, isTouch);
+    this.hud = new Hud(this, isTouch, () => this.panel.toggleSound(), () => this.chart.setOpen(!this.chart.isOpen()));
+    this.chart = new Chart(this, isTouch, () => this.chart.setOpen(false));
     this.banner = new Banner(this, () => this.restart()); // last: drawn on top of everything
 
     // Integer pixel scaling: measure the screen now and after every resize.
@@ -157,7 +168,7 @@ export class SeaScene extends Phaser.Scene {
         combatCamera: true,
         autoZoom: viewJson.autoZoom,
         closeFightRange: viewJson.closeFightRange,
-        shipArt: 16,
+        shipArt: 32, // decided 15 Nov (D33): 32 directions
         detailAtZoom: true,
         rangeRings: true,
         targetClass: 'sloop',
@@ -243,9 +254,12 @@ export class SeaScene extends Phaser.Scene {
     for (const e of events) {
       if (e.type === 'gunFired' && e.shipId === PLAYER_ID) this.ballsFired++;
       if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.hullHits++;
+      if (e.type === 'gunFired' && e.shipId === TARGET_ID) this.enemyBalls++;
+      if (e.type === 'hit' && e.byShipId === TARGET_ID && e.zone === 'hull') this.enemyHullHits++;
+      if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.myDuelHullHits++;
     }
     this.playJuice(events, halfW);
-    this.cannonballs.play(events, s, this.sim.world.wind);
+    this.cannonballs.play(events, s, this.sim.world.wind, (id) => this.ship(id)?.headingRad);
     this.cannonballs.update(this.sim.world.balls, alpha * STEP_SECONDS, s, seconds);
 
     const me = poses[0];
@@ -277,6 +291,17 @@ export class SeaScene extends Phaser.Scene {
     this.water.tilePositionX = cam.scrollX / z;
     this.water.tilePositionY = cam.scrollY / z;
 
+    // The chart learns what is on the screen now: islands, and where the other ships are.
+    const seaView = {
+      minX: this.cameraCentre.x - halfW,
+      maxX: this.cameraCentre.x + halfW,
+      minY: this.cameraCentre.y - halfH,
+      maxY: this.cameraCentre.y + halfH,
+    };
+    discover(this.chartState, ISLANDS, seaView);
+    updateSightings(this.chartState, this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID), seaView);
+    this.chart.update(this.chartState, myShip, this.sim.world.wind);
+
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
     for (const p of enemies) {
@@ -296,7 +321,12 @@ export class SeaScene extends Phaser.Scene {
     const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
     const target = this.ship(TARGET_ID);
     const rangeM = params ? gunRange(myShip, params) : 0;
+    // Ship centres on the screen: a HUD panel over one of them turns see-through.
+    const shipsOnScreen = poses.map((p) => ({ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }));
     this.hud.update({
+      soundOn: v.sound,
+      ships: shipsOnScreen,
+      seconds,
       ship: myShip,
       hullMax: params?.hullPoints ?? 1,
       sailing,
@@ -333,8 +363,8 @@ export class SeaScene extends Phaser.Scene {
     });
 
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
-    if (myShip.sunk) this.banner.request('lose', 'Sunk by the pirate sloop');
-    else if (target?.sunk && v.targetBehaviour === 'bot') this.banner.request('win', `Enemy ${target.shipClass} sunk`);
+    if (myShip.sunk) this.banner.request('lose', `Sunk by the pirate ${target?.shipClass ?? 'ship'}`, this.duelStats());
+    else if (target?.sunk && v.targetBehaviour === 'bot') this.banner.request('win', `Enemy ${target.shipClass} sunk`, this.duelStats());
     this.banner.update(seconds, this.touch !== null);
     if (this.banner.isShown() && Phaser.Input.Keyboard.JustDown(this.enterKey)) this.restart();
   }
@@ -367,6 +397,8 @@ export class SeaScene extends Phaser.Scene {
     this.touch?.layout(layout.width, layout.height);
     this.hud.layout(layout.width, layout.height);
     this.banner.layout(layout.width, layout.height);
+    const buttons = hudLayout(layout.width, layout.height, this.touch !== null).chart;
+    this.chart.layout(layout.width, layout.height, buttons.y + buttons.h + 6);
   }
 
   /** Keys -> commands. Rudder and elevation are held; sails change one step per key press. */
@@ -389,6 +421,7 @@ export class SeaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.firePlayer('port');
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
     const up = this.keys.R.isDown || this.raiseKeys.some((k) => k.isDown) || this.hud.raise || (this.touch?.raise ?? false);
     const down = this.keys.F.isDown || this.lowerKeys.some((k) => k.isDown) || this.hud.lower || (this.touch?.lower ?? false);
     const raise = (up ? 1 : 0) - (down ? 1 : 0);
@@ -438,6 +471,13 @@ export class SeaScene extends Phaser.Scene {
     this.targetCircle = this.circleFrom(x, y, me.headingRad);
   }
 
+  /** "3:42  hits: you 9  enemy 7" for the banner (fun check 1 wants duel times and hits). */
+  private duelStats(): string {
+    const seconds = Math.round(this.sim.world.tick * STEP_SECONDS);
+    const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    return `${time}  hits: you ${this.myDuelHullHits}  enemy ${this.enemyHullHits}`;
+  }
+
   /** Fire a broadside. A loaded battery also leaves a ghost cross where it was aimed. */
   private firePlayer(side: Side): void {
     const me = this.ship(PLAYER_ID);
@@ -472,7 +512,9 @@ export class SeaScene extends Phaser.Scene {
           this.sounds.play('splash', e.x, e.y, ear, halfWidthM, 0.35, 250);
           break;
         case 'hit': {
-          this.sounds.play(e.zone === 'hull' ? 'hit_wood' : 'hit_canvas', e.x, e.y, ear, halfWidthM, e.zone === 'hull' ? 0.9 : 0.6, 200);
+          // Hits on your own ship are right under your ear, so they are played softer (your feedback, 15 Nov).
+          const own = e.shipId === PLAYER_ID ? 0.55 : 1;
+          this.sounds.play(e.zone === 'hull' ? 'hit_wood' : 'hit_canvas', e.x, e.y, ear, halfWidthM, (e.zone === 'hull' ? 0.6 : 0.5) * own, 200);
           const index = this.sim.world.ships.findIndex((sh) => sh.id === e.shipId);
           if (index >= 0) this.hitFlash[index] = HIT_FLASH_SECONDS;
           if (e.shipId === PLAYER_ID && e.zone === 'hull') shake(SHAKE_MY_HIT);
@@ -515,10 +557,14 @@ export class SeaScene extends Phaser.Scene {
     this.lastRudder = 0;
     this.ballsFired = 0;
     this.hullHits = 0;
+    this.enemyBalls = 0;
+    this.enemyHullHits = 0;
+    this.myDuelHullHits = 0;
     this.targetCircle = null;
     this.cameraCentre = null;
     this.banner.hide();
     this.hitFlash = [];
+    this.chartState.sightings = []; // a new duel: the islands you know stay on the chart, the old ship marks go
     if (v.targetBehaviour === 'bot') this.placeTargetUpwind(START_BOT_DISTANCE);
   }
 

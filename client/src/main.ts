@@ -1,22 +1,30 @@
 import Phaser from 'phaser';
 import './style.css';
 import { SeaScene } from './scenes/SeaScene';
+import { loadFonts } from './scenes/text';
 
-// The size here is only a first guess. SeaScene measures the screen and picks
-// a logical size with integer pixel scaling (plan D27, see scenes/ScreenFit.ts).
-const game = new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game',
-  width: 640,
-  height: 360,
-  backgroundColor: '#1d5b8f',
-  pixelArt: true,
-  scale: {
-    // NONE: we set the canvas size and its CSS zoom ourselves.
-    mode: Phaser.Scale.NONE,
-  },
-  scene: [SeaScene],
-});
+function start(): void {
+  // The size here is only a first guess. SeaScene measures the screen and picks
+  // a logical size with integer pixel scaling (plan D27, see scenes/ScreenFit.ts).
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    width: 640,
+    height: 360,
+    backgroundColor: '#1d5b8f',
+    pixelArt: true,
+    // Draw everything on whole pixels: no shimmering text or sprites between two pixels.
+    roundPixels: true,
+    scale: {
+      // NONE: we set the canvas size and its CSS zoom ourselves.
+      mode: Phaser.Scale.NONE,
+    },
+    scene: [SeaScene],
+  });
 
-// Development only: lets automated browser tests reach the game (window.naval). Not in the release build.
-if (import.meta.env.DEV) (window as unknown as { naval?: Phaser.Game }).naval = game;
+  // Development only: lets automated browser tests reach the game (window.naval). Not in the release build.
+  if (import.meta.env.DEV) (window as unknown as { naval?: Phaser.Game }).naval = game;
+}
+
+// The pixel fonts must be ready before Phaser draws any text (see scenes/text.ts).
+void loadFonts().then(start);

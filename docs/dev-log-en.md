@@ -4,6 +4,62 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 15 Nov 2026 (night) — New plan step "Open Sea" (D37, proposed); package A: sea, islands, chart
+
+**Your answers to the main question:** the approach can be long; there are few decisions in a duel; the bot is strong, and boarding, ammunition types and a stronger wind are missing. Your proposals for the next update: a chart, borders of the sea, fog, ship collisions, fleeing, repair at sea, more islands (bays, mountains, trees, rivers, islets), two more bots, a neutral port.
+
+**Plan:** M2 is closed as R1 "First Duel" (you confirmed you can win and lose on computer and iPhone). New milestone **M2b "Open Sea"** (decision D37, proposed) in three packages; this is package A.
+
+### Package A
+
+- **The sea** (`data/world.json`): 6 × 4 km, closed by a **reef** 60 m wide along the four edges. For the rules the reef is land, so ships ground on it and bots avoid it with the rules that already exist; the picture is pale water with rocks and foam.
+- **Islands by code** (`tools/make_islands.py`, numpy + Pillow, about 3 s): 3 big islands with a mountain (height bands lit from the west), a small river and one or two bays deep enough to sail into; 6 medium islands, some with a bay; 9 small islets with palms. Each island has a shore polygon (40 corners, for collisions) and a picture at 1 px per metre, made from the same numbers, so they always fit. Kept clear of the start, of your islands and of the reef; at least 170 m of water between islands. `docs/art/world-preview.png` shows the whole sea.
+- **The chart** (key **C** or the map button next to the sound button): parchment over the screen; the reef, the islands **you have seen** (big names written), a 1 km grid and scale bar, the wind; your ship as a yellow arrow; other ships red while on your screen, pale with "?" at the place you saw them last. A click or tap on the chart closes it; the game goes on behind it.
+- New: `sim/types.ts` (`Island.kind`, `Island.picture`, `WorldBounds`), `sim/data.ts` (`WORLD`, `reefs`, all land in `ISLANDS`), `scenes/Islands.ts` (pictures, reef tiles), `view/chart.ts` (what you know: `discover`, `updateSightings`, `chartFit`; 4 tests), `scenes/Chart.ts`, chart icon, `sim/worldData.test.ts` (4 tests: reef on all sides, islands inside and apart, open water at the start, a ship cannot leave the sea).
+- 187 tests in the sandbox (188 with your angle test); build clean; headless: islands, reef, chart on computer and iPhone, no errors.
+
+---
+
+## 15 Nov 2026 (evening) — Your test of steps 4–7; UI fixes, pixel fonts, bot closes in
+
+### Your test results
+
+| Area | Result |
+|---|---|
+| Bot | Closes in to about 160–180 m, turns its side, fires when lined up; tacks upwind; gives up a long chase; turns to keep you off its bow and stern; avoids islands well |
+| Problem | With you stuck at an island, the bot stayed to leeward at about 180 m, firing badly, and never closed in |
+| Difficulty | The bot feels quite accurate; frigate broadsides are almost always fatal |
+| Duels | You can win against a sloop; against a big ship almost never. A duel lasts **about 5 minutes** |
+| Banner | Works (button, Enter, restart); **the font looked jagged and the text shook** on the computer (much less on the iPhone) |
+| Sound | All events have sounds; hull hits a bit loud, hits on your own ship much too loud; **M mutes but nothing shows it** |
+| Effects | Shake, ghost cross, hit flash, sinking: good; **gun smoke drifts too little** |
+| Classes | Look fine; most should be even bigger; a merchantman could be frigate-sized, but heavy, few guns, small crew |
+| 16 or 32 | 32 looks a little more natural → **D33 decided: 32** |
+| iPhone/iPad | Everything works; a mute button on the screen would help; text hard to read on the iPhone; panels sometimes cover a ship |
+| Fun check 1 | Your mark: **2 to 3** |
+| Hours | Not recorded; this log keeps a short account of the work instead |
+
+### What changed
+
+- **Pixel fonts (the jagged, shaking text).** The game draws in logical pixels and scales the whole picture by a whole number (x3 on your computer, x4 on the iPhone). Text was drawn 4 times larger and squeezed into that grid; at x3 that broke the letters and made them shimmer. Now: two real pixel fonts drawn exactly on the grid (resolution 1): **Press Start 2P** (main, 8/16/24 px) and **Silkscreen** (dense text, 8 px), both SIL Open Font License, in `client/public/assets/fonts` with their licence files; loaded before the game starts (`scenes/text.ts`, `loadFonts`). The game also uses `roundPixels`, so nothing is drawn between two pixels. A browser test found the sizes at which each font has no blurred pixels.
+- **Sound button** (a speaker icon; red cross when muted): top left on the computer, next to the zoom button on touch screens; click or tap to switch; M still works.
+- **Panels never hide a ship:** when a ship's centre comes within 18 px of a panel, the panel fades to 25% (smoothly). Touch screens use lighter plates (0.42). The target card moved under the zoom and sound buttons on touch screens (the collapsed Tuning panel covered it on the iPhone). Layout tests extended.
+- **Banner** shows the duel in numbers: time and hull hits ("3:42 hits: you 9 enemy 4"); this measures fun check 1.
+- **Sounds:** hull hits softer (0.6), hits on your own ship about half as loud again.
+- **Gun smoke** now leaves the gun port outward and drifts with the wind 8 m/s at full strength, lasts 3.6 s, grows less (it no longer hides the ship).
+- **Bot closes in:** the range bend is now smooth (no dead band, which let it sit at the band edge, about 180 m, for ever), and when it is much too far (more than preferred + 60 m) it sails straight at you under full sail, beating if needed. Headless: from 240 m to leeward it reaches its preferred range in about 50 s and stays there (new test).
+- **Bot accuracy** a little lower: judgement error 0.5–1.1° and it fires when the aim point is within 16 m of its line of fire. Headless against a ship lying still: about 0.8 hull hits per salvo, the same as your 0.82 by hand. Its edge is the perfect lead; skill tiers (green/regular/veteran) come in M3.
+- **Frigate too strong:** by design for now: 12 guns against 4. Class sizes and balance go to M3 (plan updated).
+- **32 directions** are the default now.
+
+### Open
+
+- Fun check 1 at 2–3: what made it boring or frustrating? (Long approach? Too few decisions? Bot too strong?) Your answer decides the tuning week before M3.
+
+179 tests in the sandbox (180 with your angle test); build clean; headless on the computer and iPhone: crisp text, mute icon, fading panel, banner with numbers; no errors.
+
+---
+
 ## 15 Nov 2026 (later afternoon) — Bot gives up; win/lose; step 6 juice; step 7 ship classes
 
 Built while you test the bot. Your question: *a bot on the same course chases me for ever — how can we add chance and variety?*

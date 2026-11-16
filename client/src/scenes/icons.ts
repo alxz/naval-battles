@@ -14,10 +14,72 @@ const ARROW = 0xffe066;
  * note about Text after Graphics in RangeRings.ts):
  *   icon-gun-up    a gun on its carriage, barrel raised, arrow up    (raise the guns)
  *   icon-gun-down  the same gun, barrel lowered, arrow down          (lower the guns)
+ *   icon-sound-on  a speaker with sound waves                         (sound is on; tap to mute)
+ *   icon-sound-off the speaker with a red cross                       (sound is off)
+ *   icon-chart     a folded sea chart with an island and a red cross  (open the chart)
  */
 export function makeHudIcons(scene: Phaser.Scene): void {
   drawGun(scene, 'icon-gun-up', -35);
   drawGun(scene, 'icon-gun-down', 12);
+  drawSpeaker(scene, 'icon-sound-on', true);
+  drawSpeaker(scene, 'icon-sound-off', false);
+  drawChart(scene, 'icon-chart');
+}
+
+/** A small sea chart: parchment, an island, a dotted course and a red cross. */
+function drawChart(scene: Phaser.Scene, key: string): void {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics(new Phaser.Math.Vector2(0, 0), false);
+  g.fillStyle(DARK, 1);
+  g.fillRect(1, 2, 14, 12);
+  g.fillStyle(0xe6d5a8, 1);
+  g.fillRect(2, 3, 12, 10);
+  g.fillStyle(0xcdb98a, 1); // two fold lines
+  g.fillRect(6, 3, 1, 10);
+  g.fillRect(10, 3, 1, 10);
+  g.fillStyle(0x5f9e4b, 1); // an island
+  g.fillRect(3, 5, 3, 2);
+  g.fillRect(4, 7, 2, 1);
+  g.fillStyle(0x5a4326, 1); // a dotted course
+  g.fillRect(7, 9, 1, 1);
+  g.fillRect(9, 8, 1, 1);
+  g.fillRect(11, 7, 1, 1);
+  g.fillStyle(0xe0533d, 1); // the cross
+  g.fillRect(11, 10, 1, 1);
+  g.fillRect(13, 10, 1, 1);
+  g.fillRect(12, 11, 1, 1);
+  g.fillRect(11, 12, 1, 1);
+  g.fillRect(13, 12, 1, 1);
+  g.generateTexture(key, ICON_SIZE, ICON_SIZE);
+  g.destroy();
+}
+
+/** A speaker; with two waves when the sound is on, with a red cross when it is off. */
+function drawSpeaker(scene: Phaser.Scene, key: string, on: boolean): void {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics(new Phaser.Math.Vector2(0, 0), false);
+  const white = 0xffffff;
+  g.fillStyle(DARK, 1);
+  g.fillRect(1, 5, 5, 7);
+  g.fillTriangle(4, 8, 10, 1, 10, 15);
+  g.fillStyle(white, 1);
+  g.fillRect(2, 6, 3, 5);
+  g.fillTriangle(5, 8, 9, 3, 9, 13);
+  if (on) {
+    g.fillStyle(white, 1);
+    g.fillRect(12, 6, 1, 5);
+    g.fillRect(14, 4, 1, 9);
+    g.fillRect(13, 5, 1, 1);
+    g.fillRect(13, 11, 1, 1);
+  } else {
+    g.fillStyle(0xe0533d, 1);
+    for (let i = 0; i < 5; i++) {
+      g.fillRect(11 + i, 5 + i, 1, 1);
+      g.fillRect(11 + i, 9 - i, 1, 1);
+    }
+  }
+  g.generateTexture(key, ICON_SIZE, ICON_SIZE);
+  g.destroy();
 }
 
 /** One gun icon. `barrelDeg`: barrel angle on screen, negative = muzzle up. */

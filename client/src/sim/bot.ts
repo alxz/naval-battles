@@ -127,11 +127,14 @@ export function steerWithTacks(goalRad: number, params: ShipParams, wind: WindNo
 
 /**
  * The heading that turns `side` toward a point at this bearing, bent toward it when we are too
- * far and away from it when too close (so the bot keeps about `preferredRange`).
+ * far and away from it when too close (so the bot keeps about `preferredRange`); the bend grows
+ * smoothly with the distance from the preferred range.
  * Port faces left of the bow: to have the enemy to port, head 90 degrees clockwise of the bearing.
  */
 export function broadsideHeading(bearingRad: number, distance: number, side: Side, p: BotParams): number {
-  const bend = distance > p.preferredRange + p.rangeBand ? 1 : distance < p.preferredRange - p.rangeBand ? -1 : 0;
+  // A smooth pull toward the preferred range: no bend at it, the full bend `rangeBand` metres
+  // or more away from it. (A dead band let the bot sit at its outer edge, at 180 m, for ever.)
+  const bend = clamp((distance - p.preferredRange) / p.rangeBand, -1, 1);
   const b = degToRad(p.rangeBendDeg) * bend; // > 0: turn the bow toward the enemy
   return side === 'port' ? normalizeAngle(bearingRad + Math.PI / 2 - b) : normalizeAngle(bearingRad - Math.PI / 2 + b);
 }
@@ -249,6 +252,13 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     }
     goal = broadsideHeading(bearing, distance, bot.side, mine);
     sails = sailsForSpeed(ship, params, world.wind, p.fightSpeed, p.minSails);
+    // Much too far for a good broadside (for example it fell to leeward): close in straight
+    // at the enemy under full sail, beating against the wind if needed, instead of sailing
+    // beam-on and firing at long range (your test, 15 Nov). It still fires when lined up.
+    if (distance > mine.preferredRange + 2 * p.rangeBand) {
+      goal = bearing;
+      sails = 1;
+    }
   }
   let steer = steerWithTacks(goal, params, world.wind, bot, p);
   const away = avoidLand(ship, params, islands, steer, p);

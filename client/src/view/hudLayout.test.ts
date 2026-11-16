@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barColour, hudLayout, overlaps, touchButtonRects } from './hudLayout';
+import { barColour, hudLayout, overlaps, panelCovers, touchButtonRects } from './hudLayout';
 import type { Rect } from './hudLayout';
 
 // Logical screen sizes we use: computer, iPad, iPhone (landscape).
@@ -18,7 +18,12 @@ describe('hudLayout', () => {
   for (const [name, sc] of Object.entries(screens)) {
     it(`${name}: panels on the screen and not on top of each other`, () => {
       const l = hudLayout(sc.w, sc.h, sc.touch);
-      for (const r of [l.ship, l.target, l.guns]) expect(inside(r, sc.w, sc.h)).toBe(true);
+      for (const r of [l.ship, l.target, l.guns, l.sound, l.chart]) expect(inside(r, sc.w, sc.h)).toBe(true);
+      for (const r of [l.ship, l.target, l.guns]) {
+        expect(overlaps(l.sound, r)).toBe(false);
+        expect(overlaps(l.chart, r)).toBe(false);
+      }
+      expect(overlaps(l.sound, l.chart)).toBe(false);
       expect(overlaps(l.ship, l.target)).toBe(false);
       expect(overlaps(l.ship, l.guns)).toBe(false);
       expect(overlaps(l.target, l.guns)).toBe(false);
@@ -29,7 +34,7 @@ describe('hudLayout', () => {
     it(`${name}: no panel under a touch button, buttons do not overlap`, () => {
       const sc = screens[name];
       const l = hudLayout(sc.w, sc.h, true);
-      const buttons = Object.values(touchButtonRects(sc.w, sc.h));
+      const buttons = [...Object.values(touchButtonRects(sc.w, sc.h)), l.sound, l.chart];
       for (const b of buttons) {
         expect(inside(b, sc.w, sc.h)).toBe(true);
         for (const r of [l.ship, l.target, l.guns]) expect(overlaps(b, r)).toBe(false);
@@ -43,6 +48,16 @@ describe('hudLayout', () => {
     const b = touchButtonRects(590, 410);
     expect(b.gunsUp.x).toBe(b.gunsDown.x);
     expect(b.gunsUp.y).toBeLessThan(b.gunsDown.y);
+  });
+});
+
+describe('panelCovers', () => {
+  const panel = { x: 100, y: 100, w: 50, h: 20 };
+  it('a ship under the panel or close to its edge counts; one far away does not', () => {
+    expect(panelCovers(panel, [{ x: 120, y: 110 }])).toBe(true);
+    expect(panelCovers(panel, [{ x: 90, y: 110 }], 18)).toBe(true); // 10 px left of the edge: its hull reaches in
+    expect(panelCovers(panel, [{ x: 40, y: 110 }, { x: 300, y: 300 }])).toBe(false);
+    expect(panelCovers(panel, [])).toBe(false);
   });
 });
 

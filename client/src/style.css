@@ -36,3 +36,15 @@ html, body, #game {
   --input-font-size: 13px;
   --widget-height: 24px;
 }
+
+/* Pixel fonts for the game text (SIL Open Font License; see public/assets/fonts). */
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('/assets/fonts/press-start-2p.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('/assets/fonts/silkscreen.woff2') format('woff2');
+  font-display: block;
+}

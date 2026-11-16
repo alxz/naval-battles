@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { edgeMarker } from '../view/edgeMarker';
-import { TEXT_RESOLUTION } from './text';
+import { textStyle } from './text';
 
 const MARGIN = 14; // pixels from the screen edge
 const POOL = 8;
@@ -25,7 +25,7 @@ export class EdgeMarkers {
     for (let i = 0; i < POOL; i++) {
       this.labels.push(
         scene.add
-          .text(0, 0, '', { fontFamily: 'monospace', fontSize: '10px', color: '#ffffff', resolution: TEXT_RESOLUTION })
+          .text(0, 0, '', textStyle('small'))
           .setOrigin(0.5)
           .setScrollFactor(0)
           .setDepth(91)

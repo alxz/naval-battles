@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TEXT_RESOLUTION } from './text';
+import { textStyle } from './text';
 
 /** What the compass shows. All angles in sim radians/degrees as named. */
 export interface CompassInfo {
@@ -28,7 +28,7 @@ export class Compass {
     // see the note about Text after Graphics in RangeRings.ts.
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(102);
     this.north = scene.add
-      .text(0, 0, 'N', { fontFamily: 'monospace', fontSize: '9px', color: '#ffffff', resolution: TEXT_RESOLUTION })
+      .text(0, 0, 'N', textStyle('main'))
       .setOrigin(0.5, 1)
       .setScrollFactor(0)
       .setDepth(103);
@@ -40,6 +40,12 @@ export class Compass {
     this.cy = cy;
     this.r = r;
     this.north.setPosition(cx, cy - r + 9);
+  }
+
+  /** See-through when a ship passes under the panel. */
+  setAlpha(alpha: number): void {
+    this.g.setAlpha(alpha);
+    this.north.setAlpha(alpha);
   }
 
   update(info: CompassInfo): void {

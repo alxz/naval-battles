@@ -3,14 +3,18 @@ import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { GUNS, SHIP_CLASSES } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
 import type { ShipState, Side, Wind } from '../sim/types';
-import { barColour, hudLayout } from '../view/hudLayout';
+import { barColour, hudLayout, panelCovers } from '../view/hudLayout';
 import type { HudLayout, Rect } from '../view/hudLayout';
 import { Compass } from './Compass';
 import { ICON_SIZE } from './icons';
-import { TEXT_RESOLUTION } from './text';
+import { textStyle } from './text';
+import type { TextKind } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
-const PANEL_ALPHA = 0.55;
+const PANEL_ALPHA = 0.55; // dark plates on a computer
+const PANEL_ALPHA_TOUCH = 0.42; // lighter on phones and tablets, where the sea is smaller
+const COVERED_ALPHA = 0.25; // a panel with a ship under it becomes this see-through
+const FADE_PER_SECOND = 6; // how fast it fades in and out
 const GAUGE_SPREAD_DEG = 60; // the gauge draws 0-10 degrees of elevation as 0-60 degrees, so it is easy to see
 const READY = 0xffe066;
 
@@ -33,7 +37,12 @@ export interface HudData {
   target: TargetInfo | null;
   debug: boolean; // show the debug text
   debugLines: string[];
+  soundOn: boolean;
+  ships: { x: number; y: number }[]; // ship centres on the screen (logical px): panels over them fade
+  seconds: number; // since the last frame
 }
+
+type PanelName = 'ship' | 'target' | 'guns';
 
 /**
  * The HUD (heads-up display): three small panels on dark plates, so they can be read
@@ -44,13 +53,19 @@ export interface HudData {
  *             an elevation gauge with the angle and the range;
  *             on a computer also the gun up / down icons with their keys (+ and -), which can be clicked
  * The debug text (all the numbers, keys) shows with H on a computer or the panel switch.
+ * A sound button (speaker icon) shows whether the sound is on; click or tap it to switch.
+ * A chart button (map icon) opens and closes the sea chart (scenes/Chart.ts).
+ * When a ship passes under a panel, the panel fades to see-through, so it never hides a ship.
+ * Text uses the pixel fonts of text.ts, on whole pixels.
  */
 export class Hud {
   /** True while the mouse holds a gun icon (computer). */
   raise = false;
   lower = false;
   private readonly touch: boolean;
-  private readonly g: Phaser.GameObjects.Graphics;
+  /** One Graphics per panel, so a whole panel can fade. */
+  private readonly gfx: Record<PanelName | 'debug' | 'sound', Phaser.GameObjects.Graphics>;
+  private readonly fade: Record<PanelName, number> = { ship: 1, target: 1, guns: 1 };
   private readonly compass: Compass;
   private readonly speed: Phaser.GameObjects.Text;
   private readonly unit: Phaser.GameObjects.Text;
@@ -61,36 +76,30 @@ export class Hud {
   private readonly sideText: Record<Side, Phaser.GameObjects.Text>;
   private readonly keyHints: Phaser.GameObjects.Text[] = [];
   private readonly gunIcons: Phaser.GameObjects.Image[] = [];
+  private readonly soundIcon: Phaser.GameObjects.Image;
+  private readonly chartIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
   private l: HudLayout = hudLayout(640, 360, false);
 
-  constructor(scene: Phaser.Scene, touch: boolean) {
+  constructor(scene: Phaser.Scene, touch: boolean, onToggleSound: () => void, onToggleChart: () => void) {
     this.touch = touch;
     // Order matters (see the note about Text after Graphics in RangeRings.ts): the plates
     // and bars first, then the compass, then all text and icons on top.
-    this.g = scene.add.graphics().setScrollFactor(0).setDepth(100);
+    const graphics = (): Phaser.GameObjects.Graphics => scene.add.graphics().setScrollFactor(0).setDepth(100);
+    this.gfx = { ship: graphics(), target: graphics(), guns: graphics(), debug: graphics(), sound: graphics() };
     this.compass = new Compass(scene);
-    const text = (size: number, colour = '#ffffff', bold = false): Phaser.GameObjects.Text =>
-      scene.add
-        .text(0, 0, '', {
-          fontFamily: 'monospace',
-          fontSize: `${size}px`,
-          fontStyle: bold ? 'bold' : 'normal',
-          color: colour,
-          resolution: TEXT_RESOLUTION,
-        })
-        .setScrollFactor(0)
-        .setDepth(104);
-    this.speed = text(18, '#ffffff', true);
-    this.unit = text(9, '#cfe6f7').setText('m/s');
-    this.status = text(10, '#ff8070', true);
-    this.targetText = text(10);
-    this.elevation = text(12, '#ffffff', true);
-    this.range = text(10, '#cfe6f7');
-    this.sideText = { port: text(10, '#1b1b1b', true).setOrigin(0.5), starboard: text(10, '#1b1b1b', true).setOrigin(0.5) };
-    this.debugText = text(10);
-    this.hint = text(9, '#cfe6f7').setAlpha(0.7);
+    const text = (kind: TextKind, colour = '#ffffff'): Phaser.GameObjects.Text =>
+      scene.add.text(0, 0, '', textStyle(kind, colour)).setScrollFactor(0).setDepth(104);
+    this.speed = text('big');
+    this.unit = text('small', '#cfe6f7').setText('m/s');
+    this.status = text('main', '#ff8070');
+    this.targetText = text('main');
+    this.elevation = text('main');
+    this.range = text('main', '#cfe6f7');
+    this.sideText = { port: text('main', '#1b1b1b').setOrigin(0.5), starboard: text('main', '#1b1b1b').setOrigin(0.5) };
+    this.debugText = text('small');
+    this.hint = text('small', '#cfe6f7').setAlpha(0.75);
 
     if (!touch) {
       // Computer: the gun icons are a reminder of the keys, and they can be clicked too.
@@ -102,9 +111,14 @@ export class Hud {
         icon.on('pointerdown', () => hold(true));
         for (const ev of ['pointerup', 'pointerout', 'pointerupoutside']) icon.on(ev, () => hold(false));
         this.gunIcons.push(icon);
-        this.keyHints.push(text(10, '#cfe6f7', true).setText(label));
+        this.keyHints.push(text('main', '#cfe6f7').setText(label));
       }
     }
+    this.soundIcon = scene.add.image(0, 0, 'icon-sound-on').setScrollFactor(0).setDepth(104).setInteractive();
+    this.soundIcon.on('pointerdown', () => onToggleSound());
+    // Depth 126: above the open chart (120-122), so the same button closes it.
+    this.chartIcon = scene.add.image(0, 0, 'icon-chart').setScrollFactor(0).setDepth(126).setInteractive();
+    this.chartIcon.on('pointerdown', () => onToggleChart());
   }
 
   /** The screen got a new logical size: move the panels. */
@@ -113,37 +127,55 @@ export class Hud {
     this.l = l;
     const s = l.ship;
     this.compass.place(s.x + 32, s.y + s.h / 2, 26);
-    this.speed.setPosition(s.x + 64, s.y + 5);
-    this.unit.setPosition(s.x + 112, s.y + 13);
+    this.speed.setPosition(s.x + 64, s.y + 7);
     // Status: just outside my ship panel (above it on a computer, below it on touch).
-    this.status.setPosition(s.x + 2, this.touch ? s.y + s.h + 4 : s.y - 15);
+    this.status.setPosition(s.x + 2, this.touch ? s.y + s.h + 6 : s.y - 14);
     const t = l.target;
-    this.targetText.setPosition(t.x + 8, t.y + 4);
+    this.targetText.setPosition(t.x + 8, t.y + 6);
     const gn = l.guns;
     this.sideText.port.setPosition(gn.x + 20, gn.y + gn.h / 2);
     this.sideText.starboard.setPosition(gn.x + gn.w - 20, gn.y + gn.h / 2);
-    this.elevation.setPosition(gn.x + 80, gn.y + 7);
-    this.range.setPosition(gn.x + 80, gn.y + 25);
+    this.elevation.setPosition(gn.x + 80, gn.y + 11);
+    this.range.setPosition(gn.x + 80, gn.y + 27);
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
-    this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 155, gn.y + 7 + i * (ICON_SIZE + 4)));
+    this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
+    const so = l.sound;
+    this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
     this.debugText.setPosition(l.debugX, l.debugY);
-    this.hint.setPosition(l.debugX, l.debugY);
+    const ch = l.chart;
+    this.chartIcon.setPosition(ch.x + ch.w / 2, ch.y + ch.h / 2).setScale(Math.max(1, Math.floor((ch.w * 0.8) / ICON_SIZE)));
+    this.hint.setPosition(ch.x + ch.w + 6, ch.y + 4);
   }
 
   update(d: HudData): void {
     const { ship, sailing } = d;
     const l = this.l;
-    const g = this.g;
-    g.clear();
+    for (const g of Object.values(this.gfx)) g.clear();
+    const plate = this.touch ? PANEL_ALPHA_TOUCH : PANEL_ALPHA;
+
+    // --- See-through panels: fade a panel smoothly while a ship is under it. ---
+    const step = Math.min(1, d.seconds * FADE_PER_SECOND);
+    for (const name of ['ship', 'target', 'guns'] as PanelName[]) {
+      const goal = panelCovers(l[name], d.ships) ? COVERED_ALPHA : 1;
+      this.fade[name] += (goal - this.fade[name]) * step;
+      this.gfx[name].setAlpha(this.fade[name]);
+    }
+    this.compass.setAlpha(this.fade.ship);
+    for (const t of [this.speed, this.unit]) t.setAlpha(this.fade.ship);
+    this.targetText.setAlpha(this.fade.target);
+    for (const t of [this.elevation, this.range, this.sideText.port, this.sideText.starboard, ...this.keyHints, ...this.gunIcons]) t.setAlpha(this.fade.guns);
 
     // --- Plates ---
-    for (const r of [l.ship, l.guns, ...(d.target ? [l.target] : [])]) {
-      g.fillStyle(0x000000, PANEL_ALPHA);
-      g.fillRoundedRect(r.x, r.y, r.w, r.h, 6);
+    const panels: PanelName[] = d.target ? ['ship', 'guns', 'target'] : ['ship', 'guns'];
+    for (const name of panels) {
+      const r = l[name];
+      this.gfx[name].fillStyle(0x000000, plate);
+      this.gfx[name].fillRoundedRect(r.x, r.y, r.w, r.h, 6);
     }
 
     // --- My ship ---
     const s = l.ship;
+    const gs = this.gfx.ship;
     this.compass.update({
       headingRad: ship.headingRad,
       windFromRad: d.wind.fromRad,
@@ -152,24 +184,25 @@ export class Hud {
       twaDeg: sailing.twaDeg,
     });
     this.speed.setText(ship.speed.toFixed(1));
+    this.unit.setPosition(this.speed.x + this.speed.width + 4, s.y + 15);
     // Sail icon and pips: filled = sails set.
     const px = s.x + 64;
     const py = s.y + 30;
-    g.fillStyle(0xf2e8c9, 1);
-    g.fillRect(px, py, 1, 12);
-    g.fillTriangle(px + 2, py, px + 2, py + 11, px + 10, py + 11);
+    gs.fillStyle(0xf2e8c9, 1);
+    gs.fillRect(px, py, 1, 12);
+    gs.fillTriangle(px + 2, py, px + 2, py + 11, px + 10, py + 11);
     const set = Math.round(ship.sailLevel * SAIL_PIPS);
     for (let i = 0; i < SAIL_PIPS; i++) {
       const x = px + 16 + i * 14;
       if (i < set) {
-        g.fillStyle(0xffffff, 1);
-        g.fillRect(x, py + 1, 10, 10);
+        gs.fillStyle(0xffffff, 1);
+        gs.fillRect(x, py + 1, 10, 10);
       } else {
-        g.lineStyle(1, 0xffffff, 0.5);
-        g.strokeRect(x + 0.5, py + 1.5, 9, 9);
+        gs.lineStyle(1, 0xffffff, 0.5);
+        gs.strokeRect(x + 0.5, py + 1.5, 9, 9);
       }
     }
-    this.bar(g, { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 }, ship.hull / Math.max(1, d.hullMax));
+    this.bar(gs, { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 }, ship.hull / Math.max(1, d.hullMax));
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
     this.status.setText(ship.aground ? 'AGROUND!' : inIrons ? 'IN IRONS!' : ship.sunk ? 'SUNK!' : '');
 
@@ -179,24 +212,36 @@ export class Hud {
       const t = l.target;
       const tg = d.target;
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m`}`);
-      this.bar(g, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+      this.bar(this.gfx.target, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
     }
 
     // --- Guns ---
     const gn = l.guns;
-    this.side(g, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
-    this.side(g, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
-    this.gauge(g, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
+    const gg = this.gfx.guns;
+    this.side(gg, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
+    this.side(gg, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
+    this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
     this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
     this.range.setText(`${Math.round(d.rangeM)} m`);
 
+    // --- Sound button: a plate on touch screens (like the other buttons), the icon shows on / off. ---
+    this.soundIcon.setTexture(d.soundOn ? 'icon-sound-on' : 'icon-sound-off');
+    if (this.touch) {
+      for (const b of [l.sound, l.chart]) {
+        this.gfx.sound.fillStyle(0xffffff, 0.22);
+        this.gfx.sound.fillRect(b.x, b.y, b.w, b.h);
+        this.gfx.sound.lineStyle(1, 0xffffff, 0.6);
+        this.gfx.sound.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+      }
+    }
+
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
-    this.hint.setVisible(!d.debug).setText(this.touch ? '' : 'H  help & debug');
+    this.hint.setVisible(!d.debug && !this.touch).setText('C  chart    H  help & debug');
     if (d.debug) {
       const b = this.debugText.getBounds();
-      g.fillStyle(0x000000, PANEL_ALPHA);
-      g.fillRoundedRect(b.x - 4, b.y - 3, b.width + 8, b.height + 6, 6);
+      this.gfx.debug.fillStyle(0x000000, plate);
+      this.gfx.debug.fillRoundedRect(b.x - 4, b.y - 3, b.width + 8, b.height + 6, 6);
     }
   }
 
@@ -287,7 +332,8 @@ export function debugLines(info: {
     'A / D rudder     W / S sails',
     'Q / E fire port / starboard',
     '+ / - guns up / down',
-    'Z / X zoom   M sound   H hide this',
+    'Z / X zoom   M sound   C chart',
+    'H hide this',
     '',
     `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
     `speed ${info.ship.speed.toFixed(1)} m/s`,
