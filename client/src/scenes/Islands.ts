@@ -37,6 +37,7 @@ export class Islands {
   constructor(scene: Phaser.Scene) {
     this.makeReefTile(scene);
     ISLANDS.forEach((island, i) => {
+      if (island.kind === 'structure') return; // piers and moored boats: already in the island's picture
       const box = bounds(island.points);
       if (island.kind === 'reef') {
         const strip = scene.add.tileSprite(0, 0, box.maxX - box.minX, box.maxY - box.minY, 'reef').setOrigin(0, 0).setDepth(0.5);

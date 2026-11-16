@@ -16,7 +16,7 @@ interface Button {
  *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo);
  *          they also show the reload (see setReload)
  *   right: "-" "+" sails (one step per tap); above "+" the gun up / gun down icons (held)
- *   top:   a small zoom button
+ *   top:   a small spyglass button (look far for a while)
  * They only report what the finger does; SeaScene turns it into commands.
  */
 export class TouchControls {
@@ -26,7 +26,7 @@ export class TouchControls {
   raise = false;
   lower = false;
   private readonly buttons: Button[] = [];
-  private zoomText: Phaser.GameObjects.Text | null = null;
+  private spyglass: Button | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -44,8 +44,8 @@ export class TouchControls {
     this.add(scene, 'sailsMore', '+', undefined, () => onSails(1));
     this.add(scene, 'gunsUp', 'icon-gun-up', (down) => (this.raise = down));
     this.add(scene, 'gunsDown', 'icon-gun-down', (down) => (this.lower = down));
-    const zoom = this.add(scene, 'zoom', 'x1', undefined, onZoom, true);
-    if (zoom.label instanceof Phaser.GameObjects.Text) this.zoomText = zoom.label;
+    // The button at the top ("zoom" in the layout) is the spyglass: tap to look far for a while.
+    this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);
   }
 
   /** Put the buttons in place for a screen of this logical size. */
@@ -84,9 +84,9 @@ export class TouchControls {
     }
   }
 
-  /** Show the zoom step on the zoom button, e.g. "x2". */
-  setZoomLabel(zoom: number): void {
-    this.zoomText?.setText(`x${zoom}`);
+  /** The spyglass button is lit (yellow frame) while you look through it. */
+  setSpyglass(on: boolean): void {
+    this.spyglass?.box.setStrokeStyle(1, on ? 0xffe066 : 0xffffff, on ? 1 : 0.6);
   }
 
   /** `text` is a label, or the key of an icon texture when it starts with "icon-". */

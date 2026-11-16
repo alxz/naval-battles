@@ -46,8 +46,19 @@ export function reefs(w: WorldBounds): Island[] {
   ];
 }
 
-/** All land: your hand-made islands, the generated ones, and the reef round the sea. */
-export const ISLANDS: Island[] = [...islandsJson.islands, ...generatedJson.islands, ...reefs(WORLD)];
+/**
+ * The solid things on the water of these islands (the port's quay, piers and moored boats), as
+ * small "islands" of kind 'structure'. Ships cannot sail through them, like through land; the
+ * screen draws nothing for them (they are already in the island's picture).
+ */
+export function structures(islands: readonly Island[]): Island[] {
+  return islands.flatMap((island) => (island.solids ?? []).map((s) => ({ name: `${island.name}: ${s.name}`, kind: 'structure', points: s.points })));
+}
+
+const LAND: Island[] = [...islandsJson.islands, ...generatedJson.islands];
+
+/** All land: your hand-made islands, the generated ones, their piers and moored boats, and the reef round the sea. */
+export const ISLANDS: Island[] = [...LAND, ...structures(LAND), ...reefs(WORLD)];
 
 /** Guns and balls (plan 4.4). */
 export const GUNS: GunParams = gunsJson;

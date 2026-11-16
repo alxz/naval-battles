@@ -1,3 +1,4 @@
+import { PORTS } from '../sim/port';
 import Phaser from 'phaser';
 import { ISLANDS, WORLD } from '../sim/data';
 import type { ShipState } from '../sim/types';
@@ -85,6 +86,15 @@ export class Minimap {
       g.fillPoints(points, true);
       const first = points[0];
       if (first) g.fillRect(Math.round(first.x), Math.round(first.y), 1, 1);
+    }
+
+    // The port: a white dot with a red middle.
+    for (const port of PORTS) {
+      const c = at(port);
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(Math.round(c.x) - 1, Math.round(c.y) - 1, 3, 3);
+      g.fillStyle(0xe0533d, 1);
+      g.fillRect(Math.round(c.x), Math.round(c.y), 1, 1);
     }
 
     // Other ships where you saw them last.

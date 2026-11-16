@@ -2,10 +2,11 @@
 //
 //   computer:  sound and chart buttons top left; target card top centre; my ship bottom left; guns bottom centre;
 //              debug text top left under the sound button (hidden until H).
-//   touch:     my ship top left (the bottom corners hold the buttons), then the zoom and sound buttons and,
-//              only in a fight, the target card. Bottom right, in the free column left of the gun buttons:
-//              the minimap (it is also the chart button) and above it the gun angle and range.
-//              There is no guns panel: the fire buttons themselves show the reload. Debug text under my ship.
+//   touch:     my ship top left (smaller on a phone); the zoom and sound buttons in the middle of the top
+//              edge; under my ship, only in a fight, a short target card. The minimap (it is also the chart
+//              button) at the right edge under the tuning gear. Fire buttons L R above the rudder; they show
+//              the reload, so there is no guns panel; the gun angle and range sit left of the gun buttons.
+//              Debug text under the target card.
 
 export interface Rect {
   x: number;
@@ -29,6 +30,8 @@ export interface HudLayout {
   minimap: Rect;
   /** Size of a touch button (0 on a computer). */
   buttonSize: number;
+  /** A phone: my ship panel is drawn smaller (see Hud.ts). */
+  compact: boolean;
 }
 
 export const HUD_MARGIN = 8;
@@ -36,7 +39,11 @@ export const HUD_MARGIN = 8;
 export const BUTTON_MARGIN = 10;
 const SHIP_W = 160; // room for the speed in the 16 px pixel font
 const SHIP_H = 64;
+const SHIP_W_COMPACT = 112; // phone: a small compass and the speed in the 8 px font
+const SHIP_H_COMPACT = 44;
 const TARGET_W = 168; // "merchantman  110 m" in the 8 px pixel font
+const TARGET_W_TOUCH = 112; // touch: the same in the narrow 8 px font (Silkscreen)
+const TARGET_H_TOUCH = 22;
 const TARGET_H = 30;
 const GUNS_H = 46;
 const MINIMAP_W = 108; // computer: 6 x 4 km at 18 px per km
@@ -46,16 +53,21 @@ export const TARGET_CARD_RANGE_TOUCH = 400;
 const GUNS_W_COMPUTER = 210; // room for the small +/- gun icons
 const GUNS_TOUCH_H = 26; // touch: two short lines, the angle and the range
 const GUNS_TOUCH_EXTRA = 6; // "10.0°" needs a little more than a button's width
-const GEAR_W = 34; // touch: room kept free in the top right corner for the tuning gear
+const GEAR_H = 32; // touch: the tuning gear in the top right corner is about this high
 
 /** Touch button size: a bit under a fifth of the screen height, at most 48 logical pixels. */
 export function touchButtonSize(height: number): number {
   return Math.round(Math.min(48, height * 0.17));
 }
 
+/** A phone (a low screen): the HUD uses its small forms. */
+export function isCompact(height: number): boolean {
+  return height < 300;
+}
+
 /** The zoom button (touch) sits to the right of my ship panel; its left edge. */
-export function zoomButtonX(): number {
-  return HUD_MARGIN + SHIP_W + HUD_MARGIN;
+export function zoomButtonX(width: number, height: number): number {
+  return Math.round(width / 2 - smallButtonSize(height) - HUD_MARGIN / 2);
 }
 
 /** The small buttons at the top on touch screens (zoom, sound) are this big. */
@@ -70,27 +82,23 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   const m = HUD_MARGIN;
   const buttonSize = touch ? touchButtonSize(height) : 0;
   const gunsW = GUNS_W_COMPUTER;
+  const compact = touch && isCompact(height);
   const ship: Rect = touch
-    ? { x: m, y: m, w: SHIP_W, h: SHIP_H }
+    ? { x: m, y: m, w: compact ? SHIP_W_COMPACT : SHIP_W, h: compact ? SHIP_H_COMPACT : SHIP_H }
     : { x: m, y: height - m - SHIP_H, w: SHIP_W, h: SHIP_H };
   // Touch: the sound button sits right of the zoom button. Computer: a small icon in the corner.
   const z = smallButtonSize(height);
-  const sound: Rect = touch ? { x: zoomButtonX() + z + m, y: m, w: z, h: z } : { x: m, y: m, w: SOUND_ICON, h: SOUND_ICON };
-  // Touch: the column left of the gun buttons is free above "sails less": the minimap (the sea is 3 : 2)
-  // sits just above that button, the gun read-out above the minimap.
+  const sound: Rect = touch ? { x: zoomButtonX(width, height) + z + m, y: m, w: z, h: z } : { x: m, y: m, w: SOUND_ICON, h: SOUND_ICON };
+  // Touch: the minimap (the sea is 3 : 2) at the right edge, under the tuning gear.
   const b = touchButtonRects(width, height);
   const mapH = Math.round((buttonSize * 2) / 3);
   const minimap: Rect = touch
-    ? { x: b.sailsLess.x, y: b.gunsDown.y + buttonSize - mapH, w: buttonSize, h: mapH }
+    ? { x: width - m - buttonSize, y: GEAR_H + 2, w: buttonSize, h: mapH }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
   const chart: Rect = touch ? minimap : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
-  // Computer: the target card in the top middle. Touch: right of the sound button when there is room
-  // left of the tuning gear (GEAR_W), else under the small buttons.
-  const besideX = sound.x + sound.w + m;
+  // Computer: the target card in the top middle. Touch: at the left edge, under my ship.
   const target: Rect = touch
-    ? besideX + TARGET_W <= width - GEAR_W - m
-      ? { x: besideX, y: m, w: TARGET_W, h: TARGET_H }
-      : { x: zoomButtonX(), y: m + z + 4, w: TARGET_W, h: TARGET_H }
+    ? { x: m, y: ship.y + ship.h + 4, w: TARGET_W_TOUCH, h: TARGET_H_TOUCH }
     : { x: Math.round(width / 2 - TARGET_W / 2), y: m, w: TARGET_W, h: TARGET_H };
   const guns: Rect = touch
     ? { x: b.sailsLess.x - GUNS_TOUCH_EXTRA, y: b.gunsUp.y + buttonSize - GUNS_TOUCH_H, w: buttonSize + GUNS_TOUCH_EXTRA, h: GUNS_TOUCH_H }
@@ -100,11 +108,12 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
     target,
     guns,
     debugX: m,
-    debugY: touch ? ship.y + ship.h + 22 : m + SOUND_ICON + 8,
+    debugY: touch ? target.y + target.h + 18 : m + SOUND_ICON + 8,
     sound,
     chart,
     minimap,
     buttonSize,
+    compact,
   };
 }
 
@@ -114,7 +123,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /** Room around a ship's centre that counts as "the ship" when we check what a panel covers (logical px). */
-export const SHIP_CLEARANCE_PX = 18;
+export const SHIP_CLEARANCE_PX = 26; // ships are 1.5x bigger since M3 step 1 (D39)
 
 /**
  * Is any of these points (ship centres on the screen, logical px) under this panel?
@@ -165,6 +174,6 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
     sailsMore: at(right(1), row(1)),
     gunsDown: at(right(1), row(2)),
     gunsUp: at(right(1), row(3)),
-    zoom: at(zoomButtonX(), HUD_MARGIN, z),
+    zoom: at(zoomButtonX(width, height), HUD_MARGIN, z),
   };
 }

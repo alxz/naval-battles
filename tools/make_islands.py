@@ -23,6 +23,7 @@ It writes
 import json
 import math
 import re
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,14 @@ PREVIEW = ROOT / "docs" / "art" / "world-preview.png"
 
 SEED = 1650
 RIM = 14  # metres of pale shallow water drawn round the sand (picture only)
+INLET_ISLAND = "Isla Verde"  # this big island gets a river mouth that ships can sail into
+INLET_WIDTH = 110  # metres at the mouth (a little narrower inside)
+INLET_LENGTH = 320  # metres from the shore to the head
+INLET_BEND = 70  # metres the inlet swings to the side and back
+INLET_TURN = 0.45  # radians: the inlet faces a little south of the middle of the sea (away from the big bay)
+SHOAL = 56  # metres from the sand where the water is still a little paler, with small breaking waves (picture only)
+SHOAL_WATER = (70, 140, 190)
+RIVER_WATER = (112, 176, 168)  # muddy green water where a river meets the sea
 CORNERS = 40  # corners of a shore polygon
 START = (160.0, 90.0)  # where the player starts; keep the sea open here
 START_CLEAR = 520.0
@@ -65,6 +74,10 @@ WALL = (226, 208, 170)
 PLANK = (122, 86, 52)
 PATH = (206, 184, 132)
 # Looks for the islands you drew by hand (islands.json), in their order. An island may also carry its own "theme".
+ANCHORAGE = 70  # metres from the end of the pier to the port's anchorage (where ships stop to repair)
+LAST_PIER: dict[str, float] = {}
+SOLIDS: list[dict] = []  # set by paint() for a village: quay, piers and boats as polygons in world metres
+MOUTHS: list[tuple[float, float]] = []  # set by paint(): river mouths in world metres, printed for testing  # set by paint() for a village: the world position of the end of its pier
 HANDMADE_THEMES = ["volcano", "village"]
 
 NAMES_BIG = ["Isla Verde", "Hawk's Nest", "Blackwater Island", "Tortoise Head"]
@@ -95,6 +108,71 @@ def shore(rng, radius: float, stretch: float, bays: list[tuple[float, float, flo
     x = np.cos(angles) * r * stretch
     y = np.sin(angles) * r
     return np.stack([x * math.cos(turn) - y * math.sin(turn), x * math.sin(turn) + y * math.cos(turn)], axis=1)
+
+
+def crosses_itself(points: np.ndarray) -> bool:
+    """Does the shore cross itself anywhere? (Then the polygon would be broken.)"""
+    n = len(points)
+
+    def side(p, q, r) -> float:
+        return float((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]))
+
+    for i in range(n):
+        a, b = points[i], points[(i + 1) % n]
+        for j in range(i + 2, n):
+            if (j + 1) % n == i:
+                continue
+            c, d = points[j], points[(j + 1) % n]
+            if side(c, d, a) * side(c, d, b) < 0 and side(a, b, c) * side(a, b, d) < 0:
+                return True
+    return False
+
+
+def carve_inlet(
+    rng, points: np.ndarray, centre: tuple[float, float], direction: float, width: float, length: float, bend: float
+) -> tuple[np.ndarray, list[tuple[float, float]]]:
+    """
+    Cut a winding river mouth a ship can sail into. It runs from the shore toward the centre
+    along `direction` (radians, from the centre out to the sea), `length` metres deep, and swings
+    `bend` metres to one side and back (an S); it is `width` metres wide at the mouth, narrower
+    inside, with ragged banks and a round end. Returns the new shore and the middle line of the
+    inlet from the mouth to the head.
+    """
+    cx, cy = centre
+    ux, uy = math.cos(direction), math.sin(direction)
+    rel = points - [cx, cy]
+    along = rel[:, 0] * ux + rel[:, 1] * uy  # out toward the sea
+    side = -rel[:, 0] * uy + rel[:, 1] * ux  # across
+    cut = (along > 0) & (np.abs(side) < width / 2 + 14)
+    n = len(points)
+    start = next(i for i in range(n) if cut[i] and not cut[i - 1])
+    points, along, side, cut = (np.roll(a, -start, axis=0) for a in (points, along, side, cut))
+    m = int(np.argmin(cut))  # the first corner after the cut
+    a_side = 1 if side[-1] > 0 else -1  # the corner before the cut lies on this side of the inlet
+    shore_at = float(max(along[:m].max(), along[-1], along[m]))
+    steps = 18
+    phases = rng.uniform(0, 2 * math.pi, 4)
+
+    def middle(t: float) -> float:  # how far the middle line swings to the side, 0 at the mouth
+        return bend * math.sin(1.5 * math.pi * t) * (1 - 0.3 * t)
+
+    def half(t: float, k: int) -> float:  # half the width, with ragged banks
+        rough = 7 * math.sin(9 * t + phases[k]) + 4 * math.sin(23 * t + phases[k + 2])
+        return width / 2 * (1 - 0.3 * t) + rough * min(1.0, t * 4)
+
+    def at(t: float, q: float) -> tuple[float, float]:
+        s_ = shore_at - t * length
+        return cx + ux * s_ - uy * q, cy + uy * s_ + ux * q
+
+    wall = [at(k / steps, middle(k / steps) + a_side * half(k / steps, 0)) for k in range(steps + 1)]
+    end_half = half(1.0, 0)
+    for k in range(1, 6):  # the round end
+        u = math.pi * k / 6
+        wall.append(at(1 + math.sin(u) * end_half / length, middle(1.0) + a_side * end_half * math.cos(u)))
+    wall += [at(k / steps, middle(k / steps) - a_side * half(k / steps, 1)) for k in range(steps, -1, -1)]
+    new = np.round(np.concatenate([np.array(wall), points[m:]]))
+    path = [at(k / steps, middle(k / steps)) for k in range(steps + 1)]
+    return new, path
 
 
 def distance_inside(mask: np.ndarray, most: int) -> np.ndarray:
@@ -136,13 +214,13 @@ def soft_noise(rng, shape: tuple[int, int], cell: int) -> np.ndarray:
     return np.asarray(image, dtype=np.float32) / 255
 
 
-def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Image, float, float]:
+def paint(rng, points: np.ndarray, kind: str, theme: str = "", river_from: tuple[float, float] | None = None) -> tuple[Image.Image, float, float]:
     """The island's picture and the world position of its top left corner.
     theme: "" (plain), "volcano" (a dark cone with a glowing crater) or "village" (huts, a path and a pier)."""
-    min_x = math.floor(points[:, 0].min()) - RIM
-    min_y = math.floor(points[:, 1].min()) - RIM
-    w = math.ceil(points[:, 0].max()) + RIM - min_x
-    h = math.ceil(points[:, 1].max()) + RIM - min_y
+    min_x = math.floor(points[:, 0].min()) - SHOAL
+    min_y = math.floor(points[:, 1].min()) - SHOAL
+    w = math.ceil(points[:, 0].max()) + SHOAL - min_x
+    h = math.ceil(points[:, 1].max()) + SHOAL - min_y
     mask_image = Image.new("1", (w, h), 0)
     ImageDraw.Draw(mask_image).polygon([(float(x - min_x), float(y - min_y)) for x, y in points], fill=1)
     land = np.asarray(mask_image, dtype=bool)
@@ -150,6 +228,18 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Im
     wobble = (soft_noise(rng, (h, w), 18) - 0.5) * 10  # the edges of the colour bands are not ruler-straight
 
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    # The shoal: paler, half see-through water with a dotted outer edge and small white wave crests.
+    yy0, xx0 = np.mgrid[0:h, 0:w]
+    near = grow(land, SHOAL - 12)
+    edge = grow(near, 10) & ~near & ((yy0 + xx0) % 2 == 0)
+    rgba[near] = (*SHOAL_WATER, 120)
+    rgba[edge] = (*SHOAL_WATER, 90)
+    crests = (near | edge) & ~grow(land, RIM + 2)
+    for _ in range(int(crests.sum() / 45)):
+        y, x = int(rng.integers(1, h - 1)), int(rng.integers(4, w - 4))
+        if crests[y, x]:
+            rgba[y, x - 3 : x + 3] = (255, 255, 255, 110)
+            rgba[y - 1, x - 1 : x + 1] = (255, 255, 255, 70)
     rgba[grow(land, RIM)] = (*SHALLOW, 255)
     rgba[land] = (*SAND, 255)
     rgba[land & (soft_noise(rng, (h, w), 5) > 0.72)] = (*SAND_DARK, 255)
@@ -175,13 +265,32 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Im
             rgba[band & (slope_east >= 0)] = (*ROCK[level], 255)  # rising toward the east = facing the west light
             rgba[band & (slope_east < 0)] = (*ROCK_SHADE[level], 255)
 
-        # A small river from the foot of the mountain down to the sea: always step toward the shore.
-        angle = rng.uniform(0, 2 * math.pi)
-        y, x = int(cy + math.sin(angle) * reach * 0.8), int(cx + math.cos(angle) * reach * 0.8)
+    # Rivers: three on a big island (from the foot of the mountain), one on a medium island.
+    # Each steps toward the shore and ends in a fan of muddy water.
+    cy, cx = np.unravel_index(np.argmax(dist), dist.shape)
+    top = float(dist[cy, cx])
+    rivers = {"big": 3, "medium": 1}.get(kind, 0) if theme == "" else 0
+    first = rng.uniform(0, 2 * math.pi)
+    starts = []
+    for n in range(rivers):
+        angle = first + n * 2 * math.pi / max(1, rivers) + rng.uniform(-0.4, 0.4)
+        share = 0.6 if kind == "big" else 0.25
+        starts.append((int(cy + math.sin(angle) * top * share), int(cx + math.cos(angle) * top * share)))
+    if river_from:  # the river that runs into the inlet: wider, from inland down to the head of the inlet
+        starts.insert(0, (int(river_from[1] - min_y), int(river_from[0] - min_x)))
+    for n, (y, x) in enumerate(starts):
+        wide = river_from is not None and n == 0
         for _ in range(2000):
             if not (1 <= y < h - 1 and 1 <= x < w - 1) or not land[y, x]:
+                # The river mouth: a fan of muddy water in the sea.
+                fan = (np.hypot(yy0 - y, xx0 - x) < 22 + soft_noise(rng, (h, w), 6) * 12) & ~land
+                rgba[fan] = (*RIVER_WATER, 200)
+                rgba[fan & ((yy0 + xx0) % 3 == 0)] = (*SHALLOW, 230)
+                MOUTHS.append((float(min_x + x), float(min_y + y)))
                 break
-            rgba[y, x] = rgba[y, x + 1] = (*RIVER, 255)
+            rgba[y, x] = rgba[y, x + 1] = rgba[y + 1, x] = (*RIVER, 255)  # 2-3 px wide
+            if wide:
+                rgba[y - 1 : y + 3, x - 1 : x + 3] = (*RIVER, 255)  # the big river: 4-5 px
             steps = [(dy_, dx_) for dy_ in (-1, 0, 1) for dx_ in (-1, 0, 1) if (dy_, dx_) != (0, 0)]
             lower = [s for s in steps if dist[y + s[0], x + s[1]] < dist[y, x]]
             level_ = [s for s in steps if dist[y + s[0], x + s[1]] == dist[y, x]]
@@ -189,37 +298,59 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Im
             step = choice[rng.integers(len(choice))]
             y, x = y + step[0], x + step[1]
 
+    blocked = np.zeros((h, w), dtype=bool)  # pixels a mountain picture covers: no trees there
     if theme == "volcano":
-        # A round cone in the middle: dark rock bands lit from the west, and lava in the crater.
+        # A mountain over nearly the whole island, drawn as if seen a little from the south
+        # ("pseudo-3D"): every point of the ground is lifted up the picture by its height, and
+        # we paint from the north to the south, so nearer slopes cover farther ones.
         cy, cx = np.unravel_index(np.argmax(dist), dist.shape)
-        reach = dist[cy, cx] * 0.9
+        top = float(dist[cy, cx])
         yy, xx = np.mgrid[0:h, 0:w]
         away = np.hypot(xx - cx, yy - cy)
-        high = np.clip(1 - away / reach, 0, 1) + (soft_noise(rng, (h, w), 9) - 0.5) * 0.16
-        high[dist < 20] = 0
+        angle = np.arctan2(yy - cy, xx - cx)
+        high = np.clip((dist - 12) / (top - 12), 0, 1) ** 0.85
+        high = high * (1 + 0.1 * np.sin(angle * 7 + soft_noise(rng, (h, w), 20) * 5))  # gullies down the slopes
+        high = np.clip(high + (soft_noise(rng, (h, w), 7) - 0.5) * 0.07, 0, 1.05) * (dist > 12)
+        crater = max(5.0, top * 0.16)
+        bowl = away < crater
+        high[bowl] = high[bowl] * 0.0 + 0.72 + 0.1 * (away[bowl] / crater)  # a hollow in the top
+        lift = min(40.0, top * 0.5)  # pixels the summit is lifted
         slope_east = np.zeros_like(high)
-        slope_east[:, 1:-1] = high[:, 2:] - high[:, :-2]
-        for level, limit in enumerate((0.2, 0.4, 0.58, 0.74)):
-            band = high > limit
-            rgba[band & (slope_east >= 0)] = (*LAVA_ROCK[level], 255)
-            rgba[band & (slope_east < 0)] = (*LAVA_ROCK_SHADE[level], 255)
-        crater = max(4.0, reach * 0.11)
-        rgba[away < crater + 2] = (30, 24, 24, 255)  # the dark rim
-        rgba[away < crater] = (*LAVA, 255)
-        rgba[away < crater * 0.5] = (*LAVA_HOT, 255)
-        # Two thin streams of lava a short way down the cone.
-        for angle in (rng.uniform(0.3, 1.2), rng.uniform(2.6, 3.6)):
-            y, x = float(cy), float(cx)
-            for step in range(int(reach * 0.45)):
-                angle += rng.uniform(-0.25, 0.25)
-                y, x = y + math.sin(angle), x + math.cos(angle)
-                if step > crater:
-                    rgba[int(y), int(x)] = (*(LAVA if step % 5 else LAVA_HOT), 255)
+        slope_east[:, 2:-2] = high[:, 4:] - high[:, :-4]
+        light = 0.5 + np.clip(slope_east * 7, -0.45, 0.4) + (soft_noise(rng, (h, w), 4) - 0.5) * 0.12
+        rock = np.array([(60, 50, 48), (84, 70, 62), (108, 92, 78), (134, 116, 96), (160, 142, 116)], dtype=np.uint8)
+        wood = np.array([(38, 84, 44), (48, 104, 52), (60, 124, 58), (76, 142, 66), (96, 160, 76)], dtype=np.uint8)
+        level = np.clip((light * 5).astype(int), 0, 4)
+        colour = np.where((high < 0.3 + (soft_noise(rng, (h, w), 10) - 0.5) * 0.2)[..., None], wood[level], rock[level])
+        colour[bowl] = (34, 26, 26)
+        colour[away < crater * 0.62] = LAVA
+        colour[away < crater * 0.3] = LAVA_HOT
+        colour[(away >= crater) & (away < crater + 1.6)] = (176, 158, 130)  # the lit rim of the crater
+        for y in range(h):
+            rise = (high[y] * lift).astype(int)
+            on = high[y] > 0.02
+            for k in range(int(rise.max()) + 1 if on.any() else 0):
+                cols = on & (rise >= k)
+                if y - k < 0 or not cols.any():
+                    break
+                rgba[y - k, cols, :3] = colour[y, cols]
+                rgba[y - k, cols, 3] = 255
+                blocked[y - k, cols] = True
+        blocked |= high > 0.02
+        # Smoke from the crater, drifting down the trade wind (to the west-south-west).
+        smoke = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        smoke_pen = ImageDraw.Draw(smoke)
+        sy = cy - int(0.75 * lift)
+        for i in range(7):
+            r = 3 + i * 1.3
+            px, py = cx - i * 6 + rng.uniform(-2, 2), sy - 4 - i * 2.5 + rng.uniform(-2, 2)
+            smoke_pen.ellipse((px - r, py - r * 0.7, px + r, py + r * 0.7), fill=(214, 208, 200, max(40, 150 - i * 18)))
+        rgba = np.asarray(Image.alpha_composite(Image.fromarray(rgba, "RGBA"), smoke)).copy()
 
     # A village: an open place near the shore that looks south, kept free of trees.
     village: tuple[int, int] | None = None
     if theme == "village":
-        ring = np.argwhere((dist > 20) & (dist < 24))
+        ring = np.argwhere((dist > 26) & (dist < 30))
         vy, vx = ring[np.argmax(ring[:, 0] - 0.4 * np.abs(ring[:, 1] - w / 2))]  # far south, near the middle
         village = (int(vy), int(vx))
 
@@ -235,7 +366,9 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Im
                 continue
             if tuple(rgba[y, x, :3]) == RIVER:
                 continue
-            if village and math.hypot(y - village[0], x - village[1]) < 30:
+            if blocked[y, x]:
+                continue
+            if village and abs(x - village[1]) < 58 and -36 < y - village[0] < 40:
                 continue
             if theme == "village" and dist[y, x] < 16:
                 if dist[y, x] > 5 and rng.uniform() < 0.45:  # palms along the beach
@@ -257,17 +390,85 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "") -> tuple[Image.Im
 
     if village:
         vy, vx = village
-        pen.ellipse((vx - 24, vy - 15, vx + 24, vy + 15), fill=(*PATH, 255))  # the trodden village place
-        # A path to the beach and a wooden pier into the shallow water (a picture only: the shore polygon is the land).
-        y = vy
-        while y < h - 1 and land[y, vx]:
-            y += 1
-        pen.rectangle((vx - 1, vy, vx + 1, y), fill=(*PATH, 255))
-        pen.rectangle((vx - 1, y - 3, vx + 1, min(h - 1, y + RIM - 3)), fill=(*PLANK, 255))
-        for py in range(y - 2, min(h - 1, y + RIM - 3), 3):
-            pen.line((vx - 1, py, vx + 1, py), fill=(96, 66, 40, 255))
-        # Huts: a roof lit from the west with a shadow to the east, a pale wall to the south.
-        for hx, hy in ((-18, -6), (-8, -10), (6, -9), (16, -4), (-13, 5), (11, 6), (0, -2)):
+        dark_plank = (96, 66, 40, 255)
+        post = (60, 42, 28, 255)
+
+        def shore_y(x: int) -> int:
+            """The first water pixel below the village in this column (the south shore)."""
+            y = vy
+            while y < h - 1 and land[y, x]:
+                y += 1
+            return y
+
+        def solid(name: str, corners: list[tuple[float, float]]) -> None:
+            """Something ships cannot sail through: a polygon in picture pixels, kept in world metres."""
+            SOLIDS.append({"name": name, "points": [{"x": float(min_x + x), "y": float(min_y + y)} for x, y in corners]})
+
+        def boat(bx: int, by: int, length: int, beam: int, masts: int) -> None:
+            """A boat seen from above, bow up (north): shadow, dark hull, planked deck, furled sails."""
+            hl, hb = length / 2, beam / 2
+            solid("boat", [(bx, by - hl), (bx + hb, by - hl / 2), (bx + hb, by + hl * 0.6), (bx, by + hl), (bx - hb, by + hl * 0.6), (bx - hb, by - hl / 2)])
+            pen.ellipse((bx - beam // 2 + 1, by - length // 2 + 1, bx + beam // 2 + 2, by + length // 2 + 2), fill=(30, 52, 74, 255))
+            pen.ellipse((bx - beam // 2, by - length // 2, bx + beam // 2, by + length // 2), fill=(58, 38, 24, 255))
+            pen.ellipse((bx - beam // 2 + 1, by - length // 2 + 2, bx + beam // 2 - 1, by + length // 2 - 1), fill=(156, 110, 66, 255))
+            for k in range(masts):  # a mast with the sail furled on its yard
+                my = by - length // 4 + k * (length // 3)
+                pen.rectangle((bx - beam // 2 - 1, my, bx + beam // 2 + 1, my + 1), fill=(236, 228, 206, 255))
+                pen.point((bx, my), fill=(40, 28, 20, 255))
+
+        pen.ellipse((vx - 46, vy - 30, vx + 46, vy + 16), fill=(*PATH, 255))  # the town square and lanes
+        # The quay: a plank wharf along the shore, 100 m long, with posts on the water side.
+        for x in range(vx - 50, vx + 51):
+            y = shore_y(x)
+            pen.rectangle((x, y - 4, x, y + 5), fill=(*PLANK, 255))
+            if x % 3 == 0:
+                pen.point((x, y - 4), fill=dark_plank)
+            if x % 8 == 0:
+                pen.point((x, y + 6), fill=post)
+        quay_top = min(shore_y(x) for x in range(vx - 50, vx + 51)) - 4
+        solid("quay", [(vx - 50, quay_top), (vx + 51, quay_top)] + [(x, shore_y(x) + 6) for x in range(vx + 50, vx - 51, -5)])
+        # Three piers out from the quay; the middle one is the long main pier.
+        piers = []
+        for px_, extra in ((vx - 32, 8), (vx, 20), (vx + 32, 12)):
+            y = shore_y(px_) + 5
+            end = min(h - 1, y + RIM + extra)
+            pen.rectangle((px_ - 2, y, px_ + 2, end), fill=(*PLANK, 255))
+            pen.rectangle((px_ + 3, y + 1, px_ + 3, end + 1), fill=(46, 70, 92, 255))  # shadow on the water
+            for py in range(y, end, 3):
+                pen.line((px_ - 2, py, px_ + 2, py), fill=dark_plank)
+            for py in range(y + 4, end + 1, 6):  # posts
+                pen.point((px_ - 3, py), fill=post)
+                pen.point((px_ + 3, py), fill=post)
+            piers.append((px_, end))
+            solid("pier", [(px_ - 2.5, y), (px_ + 3, y), (px_ + 3, end + 1), (px_ - 2.5, end + 1)])
+        main_x, main_end = piers[1]
+        LAST_PIER.update(x=float(min_x + main_x), y=float(min_y + main_end))
+        # Five boats: two sloops and a ketch along the piers, two rowing boats at the quay.
+        boat(piers[0][0] + 9, piers[0][1] - 7, 24, 8, 1)
+        boat(piers[1][0] - 9, piers[1][1] - 12, 30, 9, 2)
+        boat(piers[2][0] + 9, piers[2][1] - 9, 24, 8, 1)
+        boat(vx - 16, shore_y(vx - 16) + 12, 11, 5, 0)
+        boat(vx + 17, shore_y(vx + 17) + 11, 10, 5, 0)
+        # Warehouses along the quay (long roofs) and a harbour office.
+        for wx, length in ((vx - 44, 18), (vx - 20, 14), (vx + 8, 18), (vx + 32, 14)):
+            wy = shore_y(wx + length // 2) - 15
+            pen.rectangle((wx + 1, wy + 1, wx + length + 1, wy + 10), fill=(150, 130, 92, 255))
+            pen.rectangle((wx, wy, wx + length, wy + 7), fill=(*ROOF, 255))
+            pen.rectangle((wx, wy + 4, wx + length, wy + 7), fill=(*ROOF_SHADE, 255))
+            pen.line((wx, wy + 8, wx + length, wy + 8), fill=(*WALL, 255))
+        # A flag of our own invention on a tall pole by the main pier:
+        # teal over gold, with a white anchor-cross in the red hoist.
+        fx, fy = vx + 5, shore_y(vx + 5) - 3
+        pen.line((fx, fy - 16, fx, fy), fill=post)
+        pen.rectangle((fx + 1, fy - 16, fx + 10, fy - 13), fill=(42, 157, 143, 255))
+        pen.rectangle((fx + 1, fy - 12, fx + 10, fy - 10), fill=(233, 196, 106, 255))
+        pen.rectangle((fx + 1, fy - 16, fx + 3, fy - 10), fill=(192, 57, 43, 255))
+        pen.point((fx + 2, fy - 14), fill=(255, 255, 255, 255))
+        pen.point((fx + 2, fy - 12), fill=(255, 255, 255, 255))
+        pen.point((fx + 2, fy - 13), fill=(255, 255, 255, 255))
+        # Houses of the town behind the warehouses.
+        for hx, hy in ((-40, -12), (-30, -22), (-18, -27), (-6, -29), (6, -28), (18, -25), (30, -20), (40, -12),
+                       (-34, -8), (-22, -15), (-9, -18), (4, -17), (16, -14), (28, -9), (-14, -6), (10, -5)):
             x0, y0 = vx + hx + int(rng.integers(-1, 2)), vy + hy + int(rng.integers(-1, 2))
             pen.rectangle((x0 + 1, y0 + 1, x0 + 7, y0 + 6), fill=(150, 130, 92, 255))  # shadow
             pen.rectangle((x0, y0, x0 + 6, y0 + 4), fill=(*ROOF, 255))
@@ -322,7 +523,29 @@ def main() -> None:
             raise SystemExit(f"no room for {name}")
         taken.append((cx, cy, reach))
         points = np.round(shape + [cx, cy])
-        picture, px, py = paint(rng, points, kind)
+        inlet = None
+        river_from = None
+        if name == INLET_ISLAND:
+            # A river mouth a ship can sail into, on the side that faces the middle of the sea.
+            direction = math.atan2(-cy, -cx) + INLET_TURN
+            inlet_rng = np.random.default_rng([SEED, 7])
+            for bend in (-INLET_BEND, INLET_BEND):  # swing to the side where the shore stays whole
+                carved, path = carve_inlet(inlet_rng, points, (cx, cy), direction, INLET_WIDTH, INLET_LENGTH, bend)
+                if not crosses_itself(carved):
+                    break
+            else:
+                raise SystemExit("the inlet breaks the shore of " + name)
+            points = carved
+            mouth, tip = path[0], path[-1]
+            inlet = {
+                "x": round(mouth[0]),
+                "y": round(mouth[1]),
+                "headX": round(tip[0]),
+                "headY": round(tip[1]),
+                "path": [{"x": round(x), "y": round(y)} for x, y in path],
+            }
+            river_from = (tip[0] - math.cos(direction) * 160, tip[1] - math.sin(direction) * 160)
+        picture, px, py = paint(np.random.default_rng([SEED, zlib.crc32(name.encode())]), points, kind, river_from=river_from)
         file = f"{slug(name)}.png"
         picture.save(PICTURES / file)
         islands.append(
@@ -331,9 +554,14 @@ def main() -> None:
                 "kind": kind,
                 "points": [{"x": float(x), "y": float(y)} for x, y in points],
                 "picture": {"file": file, "x": px, "y": py},
+                **({"inlet": inlet} if inlet else {}),
             }
         )
-        print(f"{name:20} {kind:6} centre ({cx:6.0f}, {cy:6.0f})  about {2 * reach:4.0f} m across  {picture.width} x {picture.height} px")
+        if inlet:
+            print(f"{name:20} inlet: mouth ({inlet['x']}, {inlet['y']}), head ({inlet['headX']}, {inlet['headY']})")
+        mouths = ", ".join(f"({x:.0f}, {y:.0f})" for x, y in MOUTHS)
+        MOUTHS.clear()
+        print(f"{name:20} {kind:6} centre ({cx:6.0f}, {cy:6.0f})  about {2 * reach:4.0f} m across  {picture.width} x {picture.height} px" + (f"  river mouths {mouths}" if mouths else ""))
 
     # The islands you drew by hand get a picture too: the first a volcano, the second a village
     # (or what their own "theme" says). Their own random numbers, so the generated islands stay the same.
@@ -344,6 +572,14 @@ def main() -> None:
         file = f"handmade-{i + 1}-{slug(island['name'])}.png"
         picture.save(PICTURES / file)
         island["picture"] = {"file": file, "x": px, "y": py}
+        island.pop("port", None)
+        island.pop("solids", None)
+        if SOLIDS:
+            island["solids"] = list(SOLIDS)
+            SOLIDS.clear()
+        if theme == "village":
+            # The village is the neutral port: its anchorage lies in open water, south of the pier.
+            island["port"] = {"x": LAST_PIER["x"], "y": LAST_PIER["y"] + ANCHORAGE}
         print(f"{island['name']:20} hand-made, {theme or 'plain'}  {picture.width} x {picture.height} px")
     (DATA / "islands.json").write_text(json.dumps({"islands": handmade}, indent=2) + "\n", encoding="utf-8")
     print("written islands.json (pictures added)")

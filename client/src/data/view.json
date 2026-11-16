@@ -23,5 +23,7 @@
     200
   ],
   "fireArcPreviewDeg": 25,
-  "landingEllipseSigmas": 1
+  "landingEllipseSigmas": 1,
+  "spyglassZoom": 0.5,
+  "spyglassSeconds": 12
 }

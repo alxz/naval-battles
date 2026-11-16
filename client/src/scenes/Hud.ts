@@ -12,7 +12,8 @@ import type { TextKind } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
 const PANEL_ALPHA = 0.55; // dark plates on a computer
-const PANEL_ALPHA_TOUCH = 0.34; // lighter on phones and tablets, where the sea is smaller
+const PANEL_ALPHA_TOUCH = 0.34;
+const TARGET_ALPHA_TOUCH = 0.12; // the target card on touch screens: lighter still // lighter on phones and tablets, where the sea is smaller
 const COVERED_ALPHA = 0.25; // a panel with a ship under it becomes this see-through
 const FADE_PER_SECOND = 6; // how fast it fades in and out
 const GAUGE_SPREAD_DEG = 60; // the gauge draws 0-10 degrees of elevation as 0-60 degrees, so it is easy to see
@@ -41,6 +42,8 @@ export interface HudData {
   soundOn: boolean;
   minimapOn: boolean; // on touch screens the minimap sits where the chart button is
   repairSeaShare: number; // repair at sea mends up to this share of the hull (a tick on the bar)
+  repairPortShare: number; // a port mends up to this share (a second tick); 0 = the sea has no port
+  safeWater: boolean; // my ship is in the safe water of a port
   ships: { x: number; y: number }[]; // ship centres on the screen (logical px): panels over them fade
   seconds: number; // since the last frame
 }
@@ -131,12 +134,19 @@ export class Hud {
     const l = hudLayout(width, height, this.touch);
     this.l = l;
     const s = l.ship;
-    this.compass.place(s.x + 32, s.y + s.h / 2, 26);
-    this.speed.setPosition(s.x + 64, s.y + 7);
-    // Status: just outside my ship panel (above it on a computer, below it on touch).
-    this.status.setPosition(s.x + 2, this.touch ? s.y + s.h + 6 : s.y - 14);
+    if (l.compact) {
+      // Phone: a small compass and the speed in the 8 px font.
+      this.compass.place(s.x + 22, s.y + s.h / 2, 18);
+      this.speed.setStyle(textStyle('main')).setPosition(s.x + 46, s.y + 5);
+    } else {
+      this.compass.place(s.x + 32, s.y + s.h / 2, 26);
+      this.speed.setStyle(textStyle('big')).setPosition(s.x + 64, s.y + 7);
+    }
     const t = l.target;
-    this.targetText.setPosition(t.x + 8, t.y + 6);
+    // Status: just outside the panels (above my ship on a computer, below the target card on touch).
+    this.status.setPosition(s.x + 2, this.touch ? t.y + t.h + 5 : s.y - 14);
+    if (this.touch) this.targetText.setStyle(textStyle('small')).setPosition(t.x + 6, t.y + 3);
+    else this.targetText.setPosition(t.x + 8, t.y + 6);
     const gn = l.guns;
     this.sideText.port.setPosition(gn.x + 20, gn.y + gn.h / 2).setVisible(!this.touch);
     this.sideText.starboard.setPosition(gn.x + gn.w - 20, gn.y + gn.h / 2).setVisible(!this.touch);
@@ -182,7 +192,7 @@ export class Hud {
     const panels: PanelName[] = target ? ['ship', 'guns', 'target'] : ['ship', 'guns'];
     for (const name of panels) {
       const r = l[name];
-      this.gfx[name].fillStyle(0x000000, plate);
+      this.gfx[name].fillStyle(0x000000, this.touch && name === 'target' ? TARGET_ALPHA_TOUCH : plate);
       this.gfx[name].fillRoundedRect(r.x, r.y, r.w, r.h, 6);
     }
 
@@ -197,32 +207,35 @@ export class Hud {
       twaDeg: sailing.twaDeg,
     });
     this.speed.setText(ship.speed.toFixed(1));
-    this.unit.setPosition(this.speed.x + this.speed.width + 4, s.y + 15);
-    // Sail icon and pips: filled = sails set.
-    const px = s.x + 64;
-    const py = s.y + 30;
+    const c = l.compact;
+    this.unit.setPosition(this.speed.x + this.speed.width + 4, s.y + (c ? 6 : 15));
+    // Sail icon and pips: filled = sails set. (Phone: smaller.)
+    const px = s.x + (c ? 46 : 64);
+    const py = s.y + (c ? 17 : 30);
+    const pip = c ? 7 : 10;
     gs.fillStyle(0xf2e8c9, 1);
-    gs.fillRect(px, py, 1, 12);
-    gs.fillTriangle(px + 2, py, px + 2, py + 11, px + 10, py + 11);
+    gs.fillRect(px, py, 1, pip + 2);
+    gs.fillTriangle(px + 2, py, px + 2, py + pip + 1, px + pip, py + pip + 1);
     const set = Math.round(ship.sailLevel * SAIL_PIPS);
     for (let i = 0; i < SAIL_PIPS; i++) {
-      const x = px + 16 + i * 14;
+      const x = px + pip + 6 + i * (pip + 4);
       if (i < set) {
         gs.fillStyle(0xffffff, 1);
-        gs.fillRect(x, py + 1, 10, 10);
+        gs.fillRect(x, py + 1, pip, pip);
       } else {
         gs.lineStyle(1, 0xffffff, 0.5);
-        gs.strokeRect(x + 0.5, py + 1.5, 9, 9);
+        gs.strokeRect(x + 0.5, py + 1.5, pip - 1, pip - 1);
       }
     }
-    const hullBar = { x: px, y: s.y + s.h - 12, w: s.w - 64 - 8, h: 5 };
+    const hullBar = { x: px, y: s.y + s.h - (c ? 10 : 12), w: s.w - (c ? 46 : 64) - 8, h: c ? 4 : 5 };
     this.bar(gs, hullBar, ship.hull / Math.max(1, d.hullMax));
     // A tick at the share that repair at sea can reach.
     gs.fillStyle(0xffffff, 0.9);
     gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
+    if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
-    const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : ship.repairing ? 'REPAIRING' : inIrons ? 'IN IRONS!' : '';
-    this.status.setText(status).setColor(status === 'REPAIRING' ? '#7be07a' : '#ff8070');
+    const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
+    this.status.setText(status).setColor(status === 'REPAIRING' || status === 'SAFE WATER' ? '#7be07a' : '#ff8070');
 
     // --- Target ---
     this.targetText.setVisible(target !== null);
@@ -231,7 +244,8 @@ export class Hud {
       const tg = target;
       // "+" after the distance: its crew is repairing.
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
-      this.bar(this.gfx.target, { x: t.x + 8, y: t.y + t.h - 10, w: t.w - 16, h: 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+      const pad = this.touch ? 6 : 8;
+      this.bar(this.gfx.target, { x: t.x + pad, y: t.y + t.h - (this.touch ? 7 : 10), w: t.w - 2 * pad, h: this.touch ? 3 : 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
     }
 
     // --- Guns ---
@@ -261,7 +275,7 @@ export class Hud {
 
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
-    this.hint.setVisible(!d.debug && !this.touch).setText('C  chart    H  help & debug');
+    this.hint.setVisible(!d.debug && !this.touch).setText('C  chart    V  spyglass    H  help & debug');
     if (d.debug) {
       const b = this.debugText.getBounds();
       this.gfx.debug.fillStyle(0x000000, plate);

@@ -12,5 +12,12 @@
     "maxSails": 0.25,
     "safeRange": 500,
     "sharePerSecond": 0.005
+  },
+  "port": {
+    "safeRange": 300,
+    "dockRange": 90,
+    "maxDockSpeed": 2,
+    "maxShare": 0.9,
+    "sharePerSecond": 0.02
   }
 }

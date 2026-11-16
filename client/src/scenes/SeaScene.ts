@@ -1,3 +1,7 @@
+import { PORTS, inSafeWater } from '../sim/port';
+import { Fog } from './Fog';
+import { Spyglass } from './Spyglass';
+import { PortMarks } from './PortMarks';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
@@ -14,7 +18,7 @@ import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
 import { createWorld } from '../sim/world';
 import { autoZoom } from '../view/autoZoom';
 import { discover, newChart, updateSightings } from '../view/chart';
-import { hudLayout } from '../view/hudLayout';
+import { hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
 import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
@@ -42,7 +46,7 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V', Phaser.Input.Keyboard.Key>;
 
 /** Juice (M2 step 6): how long a hit ship flashes white, and how the view shakes (ms, share of the view). */
 const HIT_FLASH_SECONDS = 0.1;
@@ -88,9 +92,11 @@ export class SeaScene extends Phaser.Scene {
   private banner!: Banner;
   private chart!: Chart;
   private minimap!: Minimap;
+  private portMarks!: PortMarks;
+  private fog!: Fog;
   private escKey!: Phaser.Input.Keyboard.Key;
   private started = false; // false until the first duel has been set up
-  private chartState: ChartState = newChart(); // what you have seen so far (view/chart.ts)
+  private chartState: ChartState = newChart(ISLANDS); // what you have seen so far (view/chart.ts)
   private sounds!: Sounds;
   private hitFlash: number[] = []; // seconds of white flash left, per ship index
   private enterKey!: Phaser.Input.Keyboard.Key;
@@ -101,6 +107,8 @@ export class SeaScene extends Phaser.Scene {
   private touch: TouchControls | null = null;
   private lastRudder = 0;
   private cameraCentre: Point | null = null; // metres
+  private spyglassLeft = 0; // seconds of looking through the spyglass left (0 = not looking)
+  private spyglass!: Spyglass;
   private zoomGoal = 1; // the whole zoom step we are heading for
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
   private targetCircle: Circle | null = null; // the circle the moving target sails round
@@ -132,6 +140,9 @@ export class SeaScene extends Phaser.Scene {
     this.water = this.add.tileSprite(0, 0, 640, 360, 'water').setOrigin(0, 0).setScrollFactor(0);
     this.wake = new Wake(this);
     this.islands = new Islands(this);
+    this.spyglass = new Spyglass(this);
+    this.portMarks = new PortMarks(this);
+    this.fog = new Fog(this);
     this.rings = new RangeRings(this);
     this.markers2 = new LandingMarkers(this);
     this.cannonballs = new Cannonballs(this);
@@ -142,7 +153,7 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M,C') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M,C,V') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.enterKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
@@ -154,7 +165,7 @@ export class SeaScene extends Phaser.Scene {
       this.touch = new TouchControls(
         this,
         (direction) => this.changeSails(direction),
-        () => this.stepZoom(),
+        () => this.toggleSpyglass(),
         (side) => this.firePlayer(side),
       );
     }
@@ -188,6 +199,7 @@ export class SeaScene extends Phaser.Scene {
         windDrift: true,
         debugText: false,
         minimap: true,
+        fog: true,
         enemyCount: 3,
         sound: true,
         volume: 0.7,
@@ -231,7 +243,10 @@ export class SeaScene extends Phaser.Scene {
     // 2. Zoom. Sailing: your zoom (keys, button, slider). Enemy near and auto zoom on:
     //    the largest whole step that shows both ships. The change is smoothed over ~0.25 s.
     const cam = this.cameras.main;
-    this.zoomGoal = this.chooseZoom();
+    this.spyglassLeft = Math.max(0, this.spyglassLeft - seconds);
+    this.touch?.setSpyglass(this.spyglassLeft > 0);
+    this.spyglass.update(this.spyglassLeft > 0, seconds, cam.width, cam.height);
+    this.zoomGoal = this.spyglassLeft > 0 ? viewJson.spyglassZoom : this.chooseZoom();
     const k = 1 - Math.exp(-seconds / viewJson.zoomSmoothing);
     this.shownZoom += (this.zoomGoal - this.shownZoom) * k;
     if (Math.abs(this.zoomGoal - this.shownZoom) < 0.01) this.shownZoom = this.zoomGoal;
@@ -259,6 +274,8 @@ export class SeaScene extends Phaser.Scene {
     });
 
     this.islands.update(s);
+    this.portMarks.update(s, this.time.now / 1000);
+    this.fog.update(seconds, this.sim.world.wind, s, v.fog);
     const events = this.sim.takeEvents();
     for (const e of events) {
       if (e.type === 'gunFired' && e.shipId === PLAYER_ID) this.ballsFired++;
@@ -329,13 +346,14 @@ export class SeaScene extends Phaser.Scene {
       contacts.push({ screenX: p.x * s - cam.scrollX, screenY: p.y * s - cam.scrollY, distance });
     }
     const hudRects = hudLayout(cam.width, cam.height, this.touch !== null);
-    this.markers.update(contacts, cam.width, cam.height, [hudRects.ship, hudRects.target, hudRects.guns, hudRects.minimap, hudRects.sound]);
+    const buttonRects = this.touch ? Object.values(touchButtonRects(cam.width, cam.height)) : [];
+    this.markers.update(contacts, cam.width, cam.height, [hudRects.ship, hudRects.target, hudRects.guns, hudRects.minimap, hudRects.sound, ...buttonRects]);
 
     // 6. Numbers.
     const layout = this.screenFit.layout;
     this.panel.info.pixelScale = `x${layout.pixelScale} (${layout.width} x ${layout.height})`;
     this.panel.info.view = `${Math.round(halfW * 2)} x ${Math.round(halfH * 2)}`;
-    this.panel.info.zoomNow = `x${this.zoomGoal}${this.zoomGoal !== v.zoom ? ' (auto)' : ''}`;
+    this.panel.info.zoomNow = `x${this.zoomGoal}${this.spyglassLeft > 0 ? ' (spyglass)' : this.zoomGoal !== v.zoom ? ' (auto)' : ''}`;
     const wind = this.sim.world.wind;
     const params = SHIP_CLASSES[myShip.shipClass];
     const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
@@ -348,6 +366,8 @@ export class SeaScene extends Phaser.Scene {
       soundOn: v.sound,
       minimapOn: v.minimap,
       repairSeaShare: DAMAGE.repair.seaMaxShare,
+      repairPortShare: PORTS.length > 0 ? DAMAGE.port.maxShare : 0,
+      safeWater: inSafeWater(myShip.x, myShip.y),
       ships: shipsOnScreen,
       seconds,
       ship: myShip,
@@ -468,19 +488,20 @@ export class SeaScene extends Phaser.Scene {
     // Zoom is only about the picture, so it does not go through the simulation.
     if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.setZoom(this.panel.values.zoom + 1);
     if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.setZoom(this.panel.values.zoom - 1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.V)) this.toggleSpyglass();
   }
 
   private setZoom(zoom: number): void {
     const z = Math.max(1, Math.min(4, Math.round(zoom)));
     this.panel.setZoom(z);
-    this.touch?.setZoomLabel(z);
   }
 
-  /** The zoom button on touch screens: go through the zoom steps from view.json. */
-  private stepZoom(): void {
-    const steps = viewJson.zoomSteps;
-    const i = steps.indexOf(this.panel.values.zoom);
-    this.setZoom(steps[(i + 1) % steps.length] ?? 1);
+  /**
+   * The spyglass (V, or the button at the top on touch screens): the view zooms out
+   * for spyglassSeconds, so you see far. Again to put it away sooner.
+   */
+  private toggleSpyglass(): void {
+    this.spyglassLeft = this.spyglassLeft > 0 ? 0 : viewJson.spyglassSeconds;
   }
 
   /** One step more or less sail. Used by the keys and by the touch buttons. */

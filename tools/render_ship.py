@@ -41,9 +41,13 @@ META_FILE = ROOT / "client" / "src" / "data" / "shipArt.json"
 ART_DIR = ROOT / "docs" / "art"
 PREVIEW_FILE = ART_DIR / "ship-art-preview.png"
 
-FRAME = 64  # frame size in pixels at detail 1 (1 pixel per game metre) for the sloop
+# D39 (M3 step 1): every ship is 1.5 times bigger in the world than the models below were drawn
+# (sloop 30 -> 45 m). The models keep their old measurements; the whole model is scaled by SIZE
+# when it is drawn, so ships.json (length, beam, heights) must be scaled by the same factor.
+SIZE = 1.5
+FRAME = 96  # frame size in pixels at detail 1 (1 pixel per game metre) for the sloop
 # Bigger ships need bigger frames (bowsprit and booms included; height x HEIGHT_SCALE above the anchor).
-FRAMES = {"sloop": 64, "brigantine": 80, "merchantman": 96, "frigate": 112}
+FRAMES = {"sloop": 96, "brigantine": 120, "merchantman": 144, "frigate": 168}
 ANCHOR = (0.5, 0.6)  # where the middle of the hull at the water sits in the frame (share of the frame)
 COLUMNS = 8  # frames per row in a sheet
 DIRECTIONS = (16, 32)
@@ -686,7 +690,7 @@ def render_sheet(model: Model, name: str, directions: int, detail: int, frame_si
     anchor = (frame * ANCHOR[0], frame * ANCHOR[1])
     sheet = Image.new("RGBA", (frame * COLUMNS, frame * math.ceil(directions / COLUMNS)))
     for i in range(directions):
-        picture = render_frame(model, 2 * math.pi * i / directions, frame, anchor, detail)
+        picture = render_frame(model, 2 * math.pi * i / directions, frame, anchor, detail * SIZE)
         sheet.paste(picture, ((i % COLUMNS) * frame, (i // COLUMNS) * frame))
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUT_DIR / f"{name}_{directions}_{detail}x.png"
@@ -725,6 +729,7 @@ def main() -> None:
 
     meta = {
         "frame": FRAME,
+        "size": SIZE,
         "frames": {name: FRAMES[name] for name in models},
         "anchorX": ANCHOR[0],
         "anchorY": ANCHOR[1],

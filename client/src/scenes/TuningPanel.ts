@@ -25,6 +25,7 @@ export interface TuningValues {
   windDrift: boolean;
   debugText: boolean; // the debug text with keys and numbers (H on a computer)
   minimap: boolean; // the small map on the screen
+  fog: boolean; // drifting fog banks
   enemyCount: number; // how many bots fight you (1-3); used when a duel starts
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
@@ -105,6 +106,7 @@ export class TuningPanel {
     view.add(v, 'rangeRings').name('range rings');
     this.debugController = view.add(v, 'debugText').name('debug text (H)');
     view.add(v, 'minimap').name('minimap');
+    view.add(v, 'fog').name('fog');
 
     const fx = this.gui.addFolder('Sound & effects');
     this.soundController = fx.add(v, 'sound').name('sound (M)');

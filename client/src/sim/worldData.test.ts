@@ -22,7 +22,7 @@ describe('the sea (data/world.json, islands)', () => {
   });
 
   it('every island lies inside the reef, and none of them touches another', () => {
-    const land = ISLANDS.filter((i) => i.kind !== 'reef');
+    const land = ISLANDS.filter((i) => i.kind !== 'reef' && i.kind !== 'structure'); // piers stand on their own island's shore
     expect(land.length).toBeGreaterThan(10);
     for (const island of land) {
       const b = bounds(island.points);
@@ -59,5 +59,49 @@ describe('the sea (data/world.json, islands)', () => {
     }
     expect(grounded).toBe(true);
     expect(me.x + sloop.length / 2).toBeLessThan(WORLD.maxX - WORLD.reefWidth + 0.5);
+  });
+});
+
+describe('the inlet (a river mouth ships can sail into)', () => {
+  it('one big island has a winding inlet; a sloop, even half again as long, fits all along its middle line', () => {
+    const withInlet = ISLANDS.filter((i) => i.inlet);
+    expect(withInlet).toHaveLength(1);
+    const path = withInlet[0]!.inlet!.path!;
+    expect(path.length).toBeGreaterThan(10);
+    // It winds: the middle line is not straight.
+    const first = path[0]!;
+    const last = path[path.length - 1]!;
+    const straight = Math.hypot(last.x - first.x, last.y - first.y);
+    const swing = Math.max(...path.map((p) => Math.abs((last.x - first.x) * (p.y - first.y) - (last.y - first.y) * (p.x - first.x)) / straight));
+    expect(swing).toBeGreaterThan(20);
+    const bigSloop = { ...sloop, length: sloop.length * 1.5, beam: sloop.beam * 1.5 };
+    for (let i = 1; i < path.length - 2; i++) {
+      const a = path[i - 1]!;
+      const b = path[i + 1]!;
+      const ship = { ...createWorld(1).ships[0]!, x: path[i]!.x, y: path[i]!.y, headingRad: Math.atan2(b.y - a.y, b.x - a.x) };
+      expect(touchesLand(ship, sloop, ISLANDS)).toBe(false);
+      expect(touchesLand(ship, bigSloop, ISLANDS)).toBe(false);
+    }
+  });
+});
+
+describe('the port (piers and moored boats are solid)', () => {
+  it('the port island has a quay, three piers and five boats, all solid', () => {
+    const structures = ISLANDS.filter((i) => i.kind === 'structure');
+    expect(structures.filter((s) => s.name.endsWith('pier'))).toHaveLength(3);
+    expect(structures.filter((s) => s.name.endsWith('boat'))).toHaveLength(5);
+    expect(structures.filter((s) => s.name.endsWith('quay'))).toHaveLength(1);
+  });
+
+  it('a ship lying across the end of a pier touches it, even though no hull point is on the planks', () => {
+    const pier = ISLANDS.find((i) => i.kind === 'structure' && i.name.endsWith('pier'))!;
+    const ys = pier.points.map((p) => p.y);
+    const xs = pier.points.map((p) => p.x);
+    const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const y = Math.max(...ys) - 3; // 3 m from the end of the pier
+    // Heading east, the hull's middle point 8 m east of the pier: bow and middle in the water, the hull over the planks.
+    const ship = { ...createWorld(1).ships[0]!, x: x + 8, y, headingRad: 0 };
+    expect(touchesLand(ship, sloop, ISLANDS)).toBe(true);
+    expect(touchesLand({ ...ship, y: y + 30 }, sloop, ISLANDS)).toBe(false);
   });
 });

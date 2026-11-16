@@ -17,6 +17,7 @@ const ARROW = 0xffe066;
  *   icon-sound-on  a speaker with sound waves                         (sound is on; tap to mute)
  *   icon-sound-off the speaker with a red cross                       (sound is off)
  *   icon-chart     a folded sea chart with an island and a red cross  (open the chart)
+ *   icon-spyglass  a brass spyglass                                   (look far: the view zooms out for a while)
  */
 export function makeHudIcons(scene: Phaser.Scene): void {
   drawGun(scene, 'icon-gun-up', -35);
@@ -24,6 +25,36 @@ export function makeHudIcons(scene: Phaser.Scene): void {
   drawSpeaker(scene, 'icon-sound-on', true);
   drawSpeaker(scene, 'icon-sound-off', false);
   drawChart(scene, 'icon-chart');
+  drawSpyglass(scene, 'icon-spyglass');
+}
+
+/** A spyglass lying from bottom left to top right: three brass sections, a dark eyepiece, a lit lens. */
+function drawSpyglass(scene: Phaser.Scene, key: string): void {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics(new Phaser.Math.Vector2(0, 0), false);
+  const sections: [number, number, number][] = [
+    [2, 13, 2], // eyepiece end: thin
+    [6, 9, 3],
+    [10, 5, 4], // objective end: thick
+  ];
+  for (const [x, y, r] of sections) {
+    for (let t = 0; t < 4; t++) {
+      g.fillStyle(DARK, 1);
+      g.fillRect(x + t - r / 2 - 1, y - t - r / 2 - 1, r + 2, r + 2);
+    }
+  }
+  for (const [x, y, r] of sections) {
+    for (let t = 0; t < 4; t++) {
+      g.fillStyle(t < 2 ? 0xd9a441 : 0xb07d2a, 1);
+      g.fillRect(x + t - r / 2, y - t - r / 2, r, r);
+    }
+  }
+  g.fillStyle(0x3a2a18, 1);
+  g.fillRect(1, 14, 2, 2); // eyepiece
+  g.fillStyle(0xbfe3ff, 1);
+  g.fillRect(13, 1, 2, 2); // the lens catches the light
+  g.generateTexture(key, ICON_SIZE, ICON_SIZE);
+  g.destroy();
 }
 
 /** A small sea chart: parchment, an island, a dotted course and a red cross. */

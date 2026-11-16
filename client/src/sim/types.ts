@@ -124,10 +124,16 @@ export interface Wind extends WindNow {
 export interface Island {
   name: string;
   points: { x: number; y: number }[];
-  /** 'reef' = the edge of the chart; 'big' | 'medium' | 'small' from the generator; none = hand-made. */
+  /** 'reef' = the edge of the chart; 'big' | 'medium' | 'small' from the generator; 'structure' = a pier or a moored boat; none = hand-made. */
   kind?: string;
   /** A ready picture at 1 pixel per metre: file in assets/islands/, and where its top left corner goes. */
   picture?: { file: string; x: number; y: number };
+  /** A neutral port on this island: the anchorage, a point in open water off the pier (written by make_islands.py). */
+  port?: { x: number; y: number };
+  /** A river mouth a ship can sail into: the middle of its mouth and its head (written by make_islands.py). */
+  inlet?: { x: number; y: number; headX: number; headY: number; path?: { x: number; y: number }[] };
+  /** Solid things on the water that belong to this island: quay, piers, moored boats (written by make_islands.py). */
+  solids?: { name: string; points: { x: number; y: number }[] }[];
 }
 
 /** The sea: a rectangle closed by a reef (data/world.json). Beyond it lies the open ocean, not in this game. */
@@ -152,7 +158,7 @@ export interface World {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'idle';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'idle';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
@@ -209,6 +215,7 @@ export interface BotParams {
   fleeHullShare: number; // with less hull than this share it runs away, then repairs at sea
   shipAvoidM: number; // it turns away from another ship this close ahead (plus half of both lengths)
   shipAvoidTurnDeg: number; // by this much
+  portSeekRange: number; // a badly hurt bot runs for a port if one is within this many metres
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -247,5 +254,13 @@ export interface DamageParams {
     maxSails: number; // only with the sails at or below this (almost stopped)
     safeRange: number; // only with no enemy afloat within this many metres
     sharePerSecond: number; // share of the full hull mended per second
+  };
+  /** A neutral port ("Open Sea" package C). */
+  port: {
+    safeRange: number; // metres round the anchorage: no ship here can fire or be damaged
+    dockRange: number; // within this of the anchorage a ship can repair
+    maxDockSpeed: number; // ... if it moves no faster than this, m/s
+    maxShare: number; // the port mends the hull up to this share of the full hull
+    sharePerSecond: number; // share of the full hull mended per second in port
   };
 }

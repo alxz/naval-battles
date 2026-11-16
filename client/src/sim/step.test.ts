@@ -145,8 +145,8 @@ describe('ship data (game metres)', () => {
     }
   });
 
-  it('the sloop is 30 game metres long (plan section 4.0)', () => {
-    expect(sloop.length).toBe(30);
+  it('the sloop is 45 game metres long (30 m in plan section 4.0, x 1.5 by D39)', () => {
+    expect(sloop.length).toBe(45);
   });
 });
 
@@ -164,5 +164,16 @@ describe('stepWorld', () => {
     for (let i = 0; i < 90; i++) stepWorld(w);
     expect(w.ships[1]!.x).toBe(before.x);
     expect(w.ships[1]!.y).toBe(before.y);
+  });
+});
+
+describe('getting off the land', () => {
+  it('an aground ship turns at the full rate (the crew warps it round), a stopped ship afloat only slowly', () => {
+    const aground = { ...newShip(), aground: true, rudder: 1 };
+    const afloat = { ...newShip(), rudder: 1 };
+    stepShip(aground, sloop, northWind, 1, { speedScale: 1, windDrift: false });
+    stepShip(afloat, sloop, northWind, 1, { speedScale: 1, windDrift: false });
+    expect(aground.headingRad).toBeCloseTo(sloop.turnRate, 1);
+    expect(afloat.headingRad).toBeLessThan(aground.headingRad * 0.5);
   });
 });

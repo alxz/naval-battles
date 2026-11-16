@@ -1,3 +1,4 @@
+import { inSafeWater } from './port';
 import { normalizeAngle } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
 import { newBot } from './bot';
@@ -50,6 +51,8 @@ export function applyCommand(world: World, command: Command): void {
       ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);
       break;
     case 'fire':
+      // No fighting near a port: the guns of a ship in safe water stay silent.
+      if (inSafeWater(ship.x, ship.y)) break;
       orderBroadside(world, ship, command.side, STEP_SECONDS);
       break;
   }

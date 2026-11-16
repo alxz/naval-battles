@@ -8,6 +8,7 @@ import { clamp } from './math';
 import { polarShare } from './polar';
 import type { Island, ShipParams, ShipState, Tuning, WindNow, World } from './types';
 import { DEFAULT_TUNING } from './types';
+import { stepPortRepair } from './port';
 import { driftWind } from './wind';
 
 /** One simulation step is 1/30 of a second. */
@@ -60,27 +61,31 @@ export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt:
   const target = targetSpeed(ship, params, wind, tuning);
   ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / params.speedTimeConstant));
 
-  const steer = steerShare(ship, params, tuning);
+  // Aground, the crew warps the ship round with boats and anchors: it turns at the full rate.
+  const steer = ship.aground ? 1 : steerShare(ship, params, tuning);
   ship.headingRad = normalizeAngle(ship.headingRad + params.turnRate * ship.rudder * steer * dt);
 
   ship.x += Math.cos(ship.headingRad) * ship.speed * dt;
   ship.y += Math.sin(ship.headingRad) * ship.speed * dt;
 }
 
-/** How far an aground ship slides back per step while it turns away (0.1 m x 30 = 3 m/s). */
-export const PUSH_OFF_METRES = 0.1;
+/** How far an aground ship slides back per step while it turns away (0.15 m x 30 = 4.5 m/s). */
+export const PUSH_OFF_METRES = 0.15;
 
 /**
- * Try to slide the ship PUSH_OFF_METRES back, forward, then to either side of where it was
+ * Try to slide the ship PUSH_OFF_METRES (then 3x, then 6x) back, forward, then to either side of where it was
  * (keeping its new heading). Takes the first place that is clear of land. True if one was found.
  */
 function pushOff(ship: ShipState, params: ShipParams, islands: readonly Island[], from: { x: number; y: number; headingRad: number }): boolean {
   const ways = [Math.PI, 0, Math.PI / 2, -Math.PI / 2]; // relative to the old heading
-  for (const way of ways) {
-    const a = from.headingRad + way;
-    ship.x = from.x + Math.cos(a) * PUSH_OFF_METRES;
-    ship.y = from.y + Math.sin(a) * PUSH_OFF_METRES;
-    if (!touchesLand(ship, params, islands)) return true;
+  // A short slide first; if the turn needs more room (the ship turns fast while aground), a longer one.
+  for (const metres of [PUSH_OFF_METRES, 3 * PUSH_OFF_METRES, 6 * PUSH_OFF_METRES]) {
+    for (const way of ways) {
+      const a = from.headingRad + way;
+      ship.x = from.x + Math.cos(a) * metres;
+      ship.y = from.y + Math.sin(a) * metres;
+      if (!touchesLand(ship, params, islands)) return true;
+    }
   }
   return false;
 }
@@ -131,6 +136,7 @@ export function stepWorld(
   }
   collideShips(world, islands); // ships cannot sail through each other
   stepRepair(world, dt); // crews mend the hull when it is safe
+  stepPortRepair(world, dt); // a port does it faster and better
   stepGunsAndBalls(world, dt);
   world.tick += 1;
 }

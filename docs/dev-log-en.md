@@ -4,6 +4,98 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 16 Nov 2026 (night) — Package C4 and M3 step 1: ships × 1.5
+
+### Your test of C3
+
+Spyglass: good. Wishes: the port's piers and boats must be solid; the inlet looked like a pipe. Go on to M3.
+
+### C4
+
+- Solid port: `make_islands.py` writes the quay, three piers and five boats as polygons (`solids`); `data.ts` turns them into islands of kind `structure` (no picture, not on the chart). `touchesLand` now also checks land corners inside the hull's rectangle and land edges crossing it, so a thin pier between the bow and the middle point counts.
+- Winding inlet: S-shaped, swinging 70 m, ragged banks, faces a little south of the middle of the sea; the tool checks that the shore does not cross itself. Tests: a 1.5 × sloop fits along the whole middle line; a ship lying across a pier touches it.
+
+### M3 step 1 (D39)
+
+- `ships.json`: length, beam, hull height, mast height × 1.5; hull points × 1.5 (the bigger target is hit more often; `hit_table.py`: 3.6 / 2.2 / 1.8 / 1.4 hull hits per salvo at 50 / 100 / 150 / 200 m, salvos to sink at 150 m ≈ 7 as before).
+- `render_ship.py`: `SIZE = 1.5`, bigger frames; all sheets re-rendered (4 min).
+- Bot: when steering clear of an enemy it keeps 40 m from its hull (with 130 m it shied away from its own fighting range).
+- HUD: panels fade 26 px round a ship (was 18).
+
+225 tests; build clean; headless computer and iPhone without errors.
+
+**Next:** M3 step 2 — port law (D40).
+
+---
+
+## 16 Nov 2026 (evening) — Your test of C2; package C3: port, inlet, spyglass, Linux server
+
+### Your test
+
+Phone layout, getting off the reef and the fog: fine. Wishes: a bigger port along the shore, an invented flag, 4–5 bigger boats; a river a ship can enter; the touch zoom button seemed to do nothing. Decisions: ships × 1.5 (D39) and the port law (D40) both in M3. Question: running the game on an Ubuntu server.
+
+### Done (C3)
+
+- Port picture: 100 m quay along the shore, three piers, five boats (two sloops, a ketch, two rowing boats), four warehouses, 16 houses, an invented flag. Anchorage now 70 m off the main pier.
+- Inlet on Isla Verde: `carve_inlet()` in `make_islands.py` cuts a 110 m wide, 300 m deep channel toward the middle of the sea, with a wide river at its head. A test checks that a sloop, and one 1.5 × bigger, fits all along it.
+- Spyglass: the zoom button did change the zoom, but in a fight the automatic combat zoom overrode it. Now it is a spyglass: tap (touch) or V (keyboard) → view x0.5 for 12 s with a dark round ring, the button frame lit; again to put it away. Z / X still zoom on a computer.
+- Linux: `scripts/setup-linux.sh` (git, curl, Node 22+ from Ubuntu or NodeSource 24, uv, `npm ci`, islands, tests, build, ufw ports 5173 / 4173) and `scripts/run-linux.sh dev | preview | test | update`.
+
+223 tests (1 new: the inlet); build clean; headless computer and iPhone without errors; `run-linux.sh test` and `preview` checked here (Ubuntu itself not tested).
+
+**Next:** M3 step 1 — ships × 1.5.
+
+---
+
+## 16 Nov 2026 (later) — Your test of package C; package C2
+
+### Your test
+
+Port, safe water, repair and bots waiting outside: all work. Wishes: big islands on the chart from the start; more and longer fog; wider shoals; more rivers to find; L R back where they were; zoom and sound to the top middle; a shorter, lighter target card; a port that looks like a port; ships get stuck on the reef and islands. Wake accepted; the volcano waits for a later stage. New idea: port law with shore guns.
+
+### Done (C2)
+
+- Touch: L R above the rudder again, gun buttons at the right edge again; zoom and sound in the middle of the top edge; target card 112 × 22 in the narrow font, plate at 12%. Distance labels at the edge are not written over buttons.
+- Chart: big islands and the port island known from the start (`newChart(ISLANDS)`).
+- Fog: 5 bands of 16 puffs, 0.9–1.6 km long, lying along the wind.
+- `make_islands.py`: shoal 56 m; rivers 3 per big island, 1 per medium (2–3 px wide), river mouths printed; port: bigger village, two plank piers with posts, a sloop and a rowing boat, a warehouse, a flag; anchorage 70 m off the main pier. Each island picture has its own random numbers (shapes are stable from now on; this time the generated islands moved once).
+- Grounding: an aground ship turns at the full turn rate (the crew warps it round), the push-off tries 0.15, 0.45 and 0.9 m.
+- Port law with shore guns: recorded as D40 (proposed) in the plan.
+
+222 tests in the sandbox (2 new: aground turning, getting off the reef); build clean; headless computer and iPhone without errors.
+
+---
+
+## 16 Nov 2026 (afternoon) — Fixes after your test of B2; package C: port, fog, shoal water. M2b complete
+
+### Your test of B2
+
+"pixels / metre" 1.5 is too tight; bigger ships in the world are the better way (D39, M3). Speed: 1.5–2.0 felt right; wind 0.8 with slow changes (D38). Phone: better; wishes for the minimap, the target card, a smaller ship panel, L and R at the screen edges. The wake was too heavy at the bow; the volcano looked flat.
+
+### Fixes
+
+- **D38**: `maxSpeed` × 1.75 in `ships.json`; wind starts at 0.8 and drifts between 0.6 and 1.0 (`wind.json`); bots fight at 7.5 m/s and keep 130 m clear of other ships.
+- **Touch layout**: L above "<" at the left edge, R above "+" at the right edge, gun up / down in the column beside R, angle and range above R; minimap at the right edge under the gear; target card under my ship, lighter; phone: ship panel 112 × 44 with a small compass and the speed in the 8 px font.
+- **Wake**: small foam specks behind the stern (each a little different), bow waves faint and short.
+- **Volcano**: `make_islands.py` draws a mountain over the whole island as seen a little from the south (heights lifted up the picture, nearer slopes cover farther ones), gullies, wooded foot, crater with lava and smoke.
+
+### Package C
+
+- **Port** (`sim/port.ts`): the village island. Safe water 300 m round the anchorage: no ship inside can fire, none takes damage. A ship lying still (≤ 2 m/s) within 90 m of the anchorage is repaired to 90% at 2% per second. Bots: under 30% hull and a port within 2500 m → mode `port` (sail there, stop, leave at 90%); an enemy in safe water is not attacked, the bot waits outside (`idle`).
+- At sea: a dotted green ring round the safe water, a buoy at the anchorage; the port on the chart and the minimap; HUD "SAFE WATER", a second tick (90%) on the hull bar.
+- **Fog** (`scenes/Fog.ts`): six banks drift down the wind. Picture only; "fog" check box.
+- **Shoal water**: every island picture now has paler water with wave crests round it and muddy water at river mouths.
+
+### Checks
+
+220 tests (221 with your angle test): 9 new for the port, among them a bot that sails in, is repaired and comes out. Build clean; headless on computer, iPad, iPhone without errors.
+
+**Not checked:** your own `islands.json` (the port's anchorage is computed from your second island; in my copy it lies in open water).
+
+**Next:** M3 — starts with D39 (bigger ships, new sprites) and class balance.
+
+---
+
 ## 16 Nov 2026 — Your test of package B; package B2: lighter phone HUD, minimap, wake, island pictures
 
 ### Your test results

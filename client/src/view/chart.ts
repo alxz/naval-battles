@@ -35,8 +35,12 @@ export interface ChartState {
   sightings: Sighting[];
 }
 
-export function newChart(): ChartState {
-  return { known: [], sightings: [] };
+/**
+ * A new chart. The big islands are on it from the start (other captains charted them long ago),
+ * and so is the port's island; the small ones you find yourself.
+ */
+export function newChart(islands: readonly Island[] = []): ChartState {
+  return { known: islands.filter((i) => i.kind === 'big' || i.port !== undefined).map((i) => i.name), sightings: [] };
 }
 
 function inside(p: { x: number; y: number }, r: SeaRect): boolean {
@@ -46,7 +50,7 @@ function inside(p: { x: number; y: number }, r: SeaRect): boolean {
 /** Add every island that shows on the screen now (its box reaches into the view). */
 export function discover(state: ChartState, islands: readonly Island[], view: SeaRect): void {
   for (const island of islands) {
-    if (island.kind === 'reef' || state.known.includes(island.name)) continue;
+    if (island.kind === 'reef' || island.kind === 'structure' || state.known.includes(island.name)) continue;
     const b = bounds(island.points);
     if (b.minX <= view.maxX && b.maxX >= view.minX && b.minY <= view.maxY && b.maxY >= view.minY) state.known.push(island.name);
   }

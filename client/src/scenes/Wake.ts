@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
 
-const SPACING = 1.6; // metres of travel between two puffs of foam
-const STERN_LIFE = 4.5; // seconds the foam behind the stern lives
-const ARM_LIFE = 6; // seconds the two bow waves live
-const ARM_SPREAD = 0.36; // the bow waves move sideways at this share of the ship's speed
+const SPACING = 1.5; // metres of travel between two puffs of foam
+const STERN_LIFE = 5; // seconds the foam behind the stern lives
+const ARM_LIFE = 3.5; // seconds the two bow waves live
+const ARM_SPREAD = 0.22; // the bow waves move sideways at this share of the ship's speed
 const MIN_SPEED = 0.5; // m/s: a ship slower than this leaves no wake
-const POOL_SIZE = 320;
+const POOL_SIZE = 600;
 
 interface FoamDot {
   x: number; // metres
@@ -31,8 +31,8 @@ export interface WakeShip {
 }
 
 /**
- * The wake of every ship: a "V" of two bow waves that spread and fade, and a band of foam
- * behind the stern that widens. A faster ship leaves a brighter, longer wake.
+ * The wake of every ship: a band of small foam specks behind the stern that widens and fades,
+ * and two faint bow waves. A faster ship leaves a brighter, longer wake.
  * It is only a picture: the simulation knows nothing about it.
  */
 export class Wake {
@@ -69,31 +69,37 @@ export class Wake {
       const cos = Math.cos(ship.headingRad);
       const sin = Math.sin(ship.headingRad);
       const strength = Math.min(1, ship.speed / 8); // 0..1
-      // Foam behind the stern: as wide as the hull, it widens as it fades.
-      this.push({
-        x: ship.x - cos * ship.length * 0.45,
-        y: ship.y - sin * ship.length * 0.45,
-        vx: 0,
-        vy: 0,
-        age: 0,
-        life: STERN_LIFE * (0.6 + 0.4 * strength),
-        size: ship.beam * 0.55,
-        alpha: 0.3 + 0.35 * strength,
-        grow: 2.2,
-      });
-      // The two bow waves: they start at the shoulders of the bow and move out sideways.
+      // Foam behind the stern: a few small specks across the width of the hull, each a little
+      // different (Math.random is fine here: this is only a picture). They widen and fade.
+      const specks = 2 + (Math.random() < strength ? 1 : 0);
+      for (let i = 0; i < specks; i++) {
+        const across = (Math.random() - 0.5) * ship.beam * 0.8;
+        const back = ship.length * (0.42 + Math.random() * 0.12);
+        this.push({
+          x: ship.x - cos * back - sin * across,
+          y: ship.y - sin * back + cos * across,
+          vx: -sin * across * 0.06,
+          vy: cos * across * 0.06,
+          age: 0,
+          life: STERN_LIFE * (0.5 + 0.5 * strength) * (0.7 + Math.random() * 0.6),
+          size: 1.5 + Math.random() * 2.5,
+          alpha: (0.12 + 0.2 * strength) * (0.6 + Math.random() * 0.4),
+          grow: 1.6 + Math.random(),
+        });
+      }
+      // The two bow waves: faint, they start at the shoulders of the bow and move out sideways.
       for (const side of [-1, 1]) {
         const out = ARM_SPREAD * ship.speed * side;
         this.push({
-          x: ship.x + cos * ship.length * 0.3 - sin * ship.beam * 0.4 * side,
-          y: ship.y + sin * ship.length * 0.3 + cos * ship.beam * 0.4 * side,
+          x: ship.x + cos * ship.length * 0.25 - sin * ship.beam * 0.45 * side,
+          y: ship.y + sin * ship.length * 0.25 + cos * ship.beam * 0.45 * side,
           vx: -sin * out,
           vy: cos * out,
           age: 0,
           life: ARM_LIFE * (0.5 + 0.5 * strength),
-          size: 3 + ship.beam * 0.12,
-          alpha: 0.3 + 0.4 * strength,
-          grow: 1.6,
+          size: 1.5 + Math.random(),
+          alpha: 0.05 + 0.09 * strength,
+          grow: 1.8,
         });
       }
     }

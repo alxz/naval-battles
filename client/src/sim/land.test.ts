@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ISLANDS, SHIP_CLASSES } from './data';
+import { ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { hullPoints, touchesLand } from './land';
 import { STEP_SECONDS, stepWorld } from './step';
 import type { Island, ShipState, World } from './types';
@@ -110,5 +110,27 @@ describe('the test sea', () => {
   it('neither ship starts on land', () => {
     const w = createWorld();
     for (const s of w.ships) expect(touchesLand(s, SHIP_CLASSES[s.shipClass]!, ISLANDS)).toBe(false);
+  });
+});
+
+describe('the reef (package C2: easier to get off)', () => {
+  it('a ship run onto the west reef at full sail, downwind, turns away and sails free within 15 s', () => {
+    const w = createWorld();
+    const s = w.ships[0]!;
+    Object.assign(s, { x: WORLD.minX + WORLD.reefWidth + 40, y: 0, headingRad: Math.PI, speed: 8, sailLevel: 1 });
+    w.ships.length = 1;
+    let grounded = false;
+    for (let i = 0; i < 3 * 30; i++) {
+      stepWorld(w, STEP_SECONDS, noDrift);
+      grounded ||= s.aground;
+    }
+    expect(grounded).toBe(true);
+    s.rudder = 1;
+    let free = false;
+    for (let i = 0; i < 15 * 30 && !free; i++) {
+      stepWorld(w, STEP_SECONDS, noDrift);
+      free = !s.aground && Math.abs(Math.cos(s.headingRad)) < 0.5;
+    }
+    expect(free).toBe(true);
   });
 });

@@ -21,23 +21,23 @@ function world(ships: ShipState[]): World {
 
 describe('hullOverlap', () => {
   it('two sloops side by side: touch when their sides overlap, not when there is water between', () => {
-    // Both head east; the second lies to the south. Beam 10 m: sides touch at 10 m between the centres.
-    expect(hullOverlap(ship(1, 0, 0), sloop, ship(2, 0, 12), sloop)).toBeNull();
-    const hit = hullOverlap(ship(1, 0, 0), sloop, ship(2, 0, 8), sloop)!;
+    // Both head east; the second lies to the south. Beam 15 m: sides touch at 15 m between the centres.
+    expect(hullOverlap(ship(1, 0, 0), sloop, ship(2, 0, 17), sloop)).toBeNull();
+    const hit = hullOverlap(ship(1, 0, 0), sloop, ship(2, 0, 13), sloop)!;
     expect(hit.depth).toBeCloseTo(2, 6);
     expect(hit.nx).toBeCloseTo(0, 6);
     expect(hit.ny).toBeCloseTo(1, 6); // push the second ship south
   });
 
   it('bow into the side (a T): touches when the bow reaches the other hull', () => {
-    const rammer = ship(1, 0, 0, Math.PI / 2); // heads south; its bow is at y = 15
-    expect(hullOverlap(rammer, sloop, ship(2, 0, 21), sloop)).toBeNull(); // the other's side is at y = 16
-    expect(hullOverlap(rammer, sloop, ship(2, 0, 19), sloop)!.depth).toBeCloseTo(1, 6);
+    const rammer = ship(1, 0, 0, Math.PI / 2); // heads south; its bow is at y = 22.5
+    expect(hullOverlap(rammer, sloop, ship(2, 0, 31), sloop)).toBeNull(); // the other's side is at y = 23.5
+    expect(hullOverlap(rammer, sloop, ship(2, 0, 29), sloop)!.depth).toBeCloseTo(1, 6);
   });
 
   it('turned ships: corners that only pass each other do not count', () => {
-    // Two sloops at 45 degrees, centres 24 m apart along x: their boxes' corners are apart.
-    expect(hullOverlap(ship(1, 0, 0, Math.PI / 4), sloop, ship(2, 24, 0, Math.PI / 4), sloop)).toBeNull();
+    // Two sloops at 45 degrees, centres 36 m apart along x: their boxes' corners are apart.
+    expect(hullOverlap(ship(1, 0, 0, Math.PI / 4), sloop, ship(2, 36, 0, Math.PI / 4), sloop)).toBeNull();
   });
 });
 

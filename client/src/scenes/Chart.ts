@@ -1,3 +1,4 @@
+import { PORTS } from '../sim/port';
 import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { ISLANDS, WORLD } from '../sim/data';
@@ -120,6 +121,17 @@ export class Chart {
         name.setPosition(Math.round(c.x), Math.round(c.y) + 6).setVisible(true);
       }
     });
+
+    // The port (every captain knows where it is): an anchor-red square in a white ring.
+    for (const port of PORTS) {
+      const c = at(port);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(Math.round(c.x), Math.round(c.y), 4);
+      g.lineStyle(1, INK, 1);
+      g.strokeCircle(Math.round(c.x), Math.round(c.y), 4);
+      g.fillStyle(0xc0392b, 1);
+      g.fillRect(Math.round(c.x) - 2, Math.round(c.y) - 2, 4, 4);
+    }
 
     // The other ships, where you saw them last.
     state.sightings.forEach((s, i) => {

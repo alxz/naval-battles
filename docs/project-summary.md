@@ -12,6 +12,7 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 
 ## Tech (confirmed)
 - Client: **Phaser 4.2.1 pinned** (D32), TypeScript strict (plain interfaces, no `any`, no enums), Vite, Vitest, lil-gui. Backend later: Python 3.13 via uv, FastAPI, SQLModel, SQLite (after the web alpha). iOS: web app, then Capacitor.
+- Linux server (Ubuntu): `bash scripts/setup-linux.sh` once, then `bash scripts/run-linux.sh dev | preview | test | update`.
 - Tools in Python (`uv run --with numpy --with pillow tools/...`): `render_ship.py` (ships, 32 directions, D33), `make_islands.py` (islands), `make_sounds.py` (sounds), `range_table.py`, `hit_table.py`.
 - Art, sounds and fonts are made by code or are OFL fonts (Press Start 2P, Silkscreen). No downloaded art.
 
@@ -24,12 +25,14 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 6. A unit test for every formula in `sim/`.
 
 ## Scale and display
-1 px per game metre at zoom ×1 (ships ~2× real: sloop 30 m); zoom ×1/×2 with auto combat zoom; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
+1 px per game metre at zoom ×1 (ships ~3× real: sloop 45 m, D39); zoom ×1/×2 with auto combat zoom; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
 
 ## Status (16 Nov 2026)
 - M0, M1 done. **M2 done → R1 "First Duel"**: guns with ballistics and height, hit boxes, damage, sinking, accuracy (σ gun 1.8°, salvo 0.6°), bot (chase / engage / break-off, personality, tacks, avoids land), HUD panels, banner, sounds and effects, 4 ship classes.
-- **Now: M2b "Open Sea"** (D37). Packages A and B done: 6 × 4 km sea with a reef border, 18 generated islands, chart (C / ESC) and minimap; ship collisions (damage by weight and speed), bots flee at 30% hull, repair at sea to 75% (sails ≤ 25%, no enemy within 500 m), three bots at random places; touch HUD without a guns panel (fire buttons show the reload). Next: **C** neutral port on the village island (repair 90%, no fighting nearby), fog, shoal water. Open: ship size on screen, game speed (developer tries the tuning sliders first).
-- Later: M3 damage/ammo/bot tiers/class balance and ship variety; M4 boarding; M5 world, ports, trade; M6 captain and saves.
+- **M2b "Open Sea" done** (D37): 6 × 4 km sea with a reef border, 18 generated islands + 2 hand-made (volcano, village), chart (C / ESC), minimap; ship collisions; bots flee at 30% hull; repair at sea to 75%; three bots; a neutral port on the village island (safe water 300 m, repair to 90%, bots use it); fog banks (picture only).
+- **D38:** ships 1.75× faster, wind 0.8 (0.6–1.0). **D39:** bigger ships in the world with new sprites, at the start of M3.
+- **Now: M3** — step 1 done: ships × 1.5 (D39: sloop 45 m, hull points × 1.5, `render_ship.py` SIZE 1.5); next step 2: port law (D40, shore guns punish firing in port); then damage/ammo/bot tiers and class balance.
+- Later: M4 boarding; M5 world, ports, trade; M6 captain and saves.
 - Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`.
 
 ## Phaser 4 notes
@@ -41,7 +44,7 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 
 ## How to help
 - Work on the current milestone only; say so if a request conflicts with a confirmed decision.
-- Zips never contain `client/src/data/islands.json` (the developer's copy differs); island pictures come from running `make_islands.py`.
+- Zips never contain `client/src/data/islands.json` (the developer's copy differs); island pictures and the port's anchorage come from running `make_islands.py` (before `npm test`).
 - Deliver larger changes as a zip unpacked into the repo root; the developer runs `npm test`, `npm run dev`, then commits.
 - Test every change before delivery: Vitest, build, headless browser (computer and iPhone).
 - Every instruction lists `mkdir -p` for new folders; remind to run `pwd` and `git rev-parse --show-toplevel` before `git add` with explicit paths.

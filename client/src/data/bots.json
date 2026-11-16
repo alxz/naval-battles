@@ -6,7 +6,7 @@
   "preferredRangeSpread": 25,
   "rangeBand": 30,
   "rangeBendDeg": 35,
-  "fightSpeed": 4.5,
+  "fightSpeed": 7.5,
   "minSails": 0.25,
   "tackMarginDeg": 10,
   "closeHauledMarginDeg": 15,
@@ -25,6 +25,7 @@
   "giveUpGainM": 50,
   "breakOffSeconds": 90,
   "fleeHullShare": 0.3,
-  "shipAvoidM": 90,
-  "shipAvoidTurnDeg": 70
+  "shipAvoidM": 130,
+  "shipAvoidTurnDeg": 70,
+  "portSeekRange": 2500
 }

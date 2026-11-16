@@ -45,17 +45,17 @@ describe('toShipLocal', () => {
 });
 
 describe('ballHit (hit zones)', () => {
-  const target = ship(2, 0, 0); // heading east: hull from x -15..15, y -5..5
+  const target = ship(2, 0, 0); // heading east: hull from x -22.5..22.5, y -7.5..7.5 (hull 7.5 m high, masts 33 m)
   const across = (z: number) => ballHit(target, sloop, { x: 0, y: -20, z }, { x: 0, y: 20, z });
 
   it('low ball hits the hull, high ball the rigging, very high ball nothing', () => {
     expect(across(2)?.zone).toBe('hull');
     expect(across(10)?.zone).toBe('rigging');
-    expect(across(30)).toBeNull();
+    expect(across(45)).toBeNull();
   });
 
   it('a ball passing ahead of the bow misses', () => {
-    expect(ballHit(target, sloop, { x: 20, y: -20, z: 2 }, { x: 20, y: 20, z: 2 })).toBeNull();
+    expect(ballHit(target, sloop, { x: 30, y: -20, z: 2 }, { x: 30, y: 20, z: 2 })).toBeNull();
   });
 });
 
