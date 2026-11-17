@@ -1,11 +1,11 @@
 {
-  "frame": 96,
-  "size": 1.5,
+  "frame": 80,
+  "size": 1.2,
   "frames": {
-    "sloop": 96,
-    "brigantine": 120,
-    "merchantman": 144,
-    "frigate": 168
+    "sloop": 80,
+    "brigantine": 96,
+    "merchantman": 120,
+    "frigate": 136
   },
   "anchorX": 0.5,
   "anchorY": 0.6,

@@ -18,6 +18,7 @@ const ARROW = 0xffe066;
  *   icon-sound-off the speaker with a red cross                       (sound is off)
  *   icon-chart     a folded sea chart with an island and a red cross  (open the chart)
  *   icon-spyglass  a brass spyglass                                   (look far: the view zooms out for a while)
+ *   icon-autozoom-on / -off  a magnifying glass with an "A" (the combat zoom is on) or crossed out (off)
  */
 export function makeHudIcons(scene: Phaser.Scene): void {
   drawGun(scene, 'icon-gun-up', -35);
@@ -26,6 +27,33 @@ export function makeHudIcons(scene: Phaser.Scene): void {
   drawSpeaker(scene, 'icon-sound-off', false);
   drawChart(scene, 'icon-chart');
   drawSpyglass(scene, 'icon-spyglass');
+  drawAutoZoom(scene, 'icon-autozoom-on', true);
+  drawAutoZoom(scene, 'icon-autozoom-off', false);
+}
+
+/** A magnifying glass; "A" in the lens when the automatic combat zoom is on, a red slash when it is off. */
+function drawAutoZoom(scene: Phaser.Scene, key: string, on: boolean): void {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics(new Phaser.Math.Vector2(0, 0), false);
+  g.fillStyle(DARK, 1);
+  g.fillCircle(6.5, 6.5, 6.5);
+  for (let t = 0; t < 5; t++) g.fillRect(10 + t, 10 + t, 3, 3); // the handle, dark outline
+  g.fillStyle(0xbfe3ff, 1);
+  g.fillCircle(6.5, 6.5, 4.5);
+  g.fillStyle(WOOD, 1);
+  for (let t = 0; t < 4; t++) g.fillRect(11 + t, 11 + t, 2, 2);
+  if (on) {
+    g.fillStyle(DARK, 1); // a small "A"
+    g.fillRect(6, 3, 2, 1);
+    g.fillRect(5, 4, 1, 6);
+    g.fillRect(8, 4, 1, 6);
+    g.fillRect(5, 7, 4, 1);
+  } else {
+    g.fillStyle(0xe0533d, 1);
+    for (let i = 0; i < 9; i++) g.fillRect(2 + i, 10 - i, 2, 2);
+  }
+  g.generateTexture(key, ICON_SIZE, ICON_SIZE);
+  g.destroy();
 }
 
 /** A spyglass lying from bottom left to top right: three brass sections, a dark eyepiece, a lit lens. */

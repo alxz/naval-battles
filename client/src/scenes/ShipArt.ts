@@ -104,7 +104,7 @@ export function showShip(
     image.setOrigin(0.5, 0.5).setRotation(headingRad).setScale(s).setPosition(x * s, y * s);
     return;
   }
-  const detail = detailAtZoom && s >= 2 && artJson.details.includes(2) ? 2 : 1;
+  const detail = detailAtZoom && s >= 1.5 && artJson.details.includes(2) ? 2 : 1;
   const key = sheetKey(shipClass, owner, art, detail);
   const frame = directionFrame(headingRad, art);
   if (image.texture.key !== key || image.frame.name !== String(frame)) image.setTexture(key, frame);

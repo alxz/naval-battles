@@ -3,17 +3,18 @@ import { thinkBots, newBot } from './bot';
 import { applyCommand } from './commands';
 import { DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
 import { damageHull } from './damage';
-import { PORTS, inSafeWater, isDocked, nearestPort, portsOf, stepPortRepair } from './port';
+import { PORTS, inSafeWater, isDocked, nearestPort, portWaypoint, portsOf, stepPortRepair } from './port';
 import type { Port } from './port';
-import { stepWorld } from './step';
+import { STEP_SECONDS, stepWorld } from './step';
 import { createWorld } from './world';
 
 const port: Port = { name: 'Test port', x: 1000, y: 1000 };
 const ports = [port];
 
 describe('ports', () => {
-  it('the sea has one port, in open water', () => {
-    expect(PORTS).toHaveLength(1);
+  it('the sea has two ports: the village and the harbour up the inlet', () => {
+    expect(PORTS).toHaveLength(2);
+    expect(PORTS.filter((p) => p.path)).toHaveLength(1);
     expect(portsOf(ISLANDS)[0]).toEqual(PORTS[0]);
   });
 
@@ -119,5 +120,38 @@ describe('ports', () => {
     }
     expect(fired).toBe(false);
     expect(world.bots[0]!.mode).toBe('idle');
+  });
+
+  it('portWaypoint: open-water port = the anchorage; inlet port = along the way in, never straight across the land', () => {
+    expect(portWaypoint(0, 0, port)).toEqual({ x: port.x, y: port.y, inside: false });
+    const inlet = PORTS.find((p) => p.path)!;
+    const path = inlet.path!;
+    const mid = path[Math.floor(path.length / 2)]!;
+    const way = portWaypoint(mid.x, mid.y, inlet);
+    expect(way.inside).toBe(true);
+    expect(path.some((p) => p.x === way.x && p.y === way.y)).toBe(true);
+  });
+
+  it('scenario: a badly hurt bot off the inlet sails up it into the harbour and is repaired there', () => {
+    const world = createWorld(11);
+    const [me, botShip] = world.ships;
+    const inlet = PORTS.find((p) => p.path)!;
+    const path = inlet.path!;
+    const a = path[0]!;
+    const b = path[1]!;
+    const out = Math.atan2(a.y - b.y, a.x - b.x); // from the mouth out to the sea
+    // The wind blows from the sea into the inlet, and stays so.
+    world.wind = { fromRad: out, strength: 0.8, baseFromRad: out };
+    const full = SHIP_CLASSES[botShip!.shipClass]!.hullPoints;
+    Object.assign(botShip!, { x: a.x + Math.cos(out) * 250, y: a.y + Math.sin(out) * 250, headingRad: out + Math.PI, hull: full * 0.2 });
+    Object.assign(me!, { x: a.x + Math.cos(out) * 1200, y: a.y + Math.sin(out) * 1200 + 400, sailLevel: 0, speed: 0 });
+    world.bots = [newBot(botShip!.id, me!.id, world)];
+    let docked = false;
+    for (let i = 0; i < 30 * 300 && !docked; i++) {
+      for (const c of thinkBots(world, ISLANDS)) applyCommand(world, c);
+      stepWorld(world, STEP_SECONDS, { speedScale: 1, windDrift: false });
+      docked = isDocked(botShip!) && Math.hypot(botShip!.x - inlet.x, botShip!.y - inlet.y) < 100;
+    }
+    expect(docked).toBe(true);
   });
 });

@@ -37,9 +37,10 @@ PREVIEW = ROOT / "docs" / "art" / "world-preview.png"
 SEED = 1650
 RIM = 14  # metres of pale shallow water drawn round the sand (picture only)
 INLET_ISLAND = "Isla Verde"  # this big island gets a river mouth that ships can sail into
-INLET_WIDTH = 110  # metres at the mouth (a little narrower inside)
-INLET_LENGTH = 320  # metres from the shore to the head
-INLET_BEND = 70  # metres the inlet swings to the side and back
+INLET_WIDTH = 150  # metres at the mouth (a little narrower inside)
+INLET_LENGTH = 240  # metres from the shore to the harbour
+INLET_BEND = 40  # metres the inlet swings to the side and back
+HARBOUR_RADIUS = 85  # metres: the round harbour at the end of the inlet, with the second port
 INLET_TURN = 0.45  # radians: the inlet faces a little south of the middle of the sea (away from the big bay)
 SHOAL = 56  # metres from the sand where the water is still a little paler, with small breaking waves (picture only)
 SHOAL_WATER = (70, 140, 190)
@@ -165,13 +166,20 @@ def carve_inlet(
         return cx + ux * s_ - uy * q, cy + uy * s_ + ux * q
 
     wall = [at(k / steps, middle(k / steps) + a_side * half(k / steps, 0)) for k in range(steps + 1)]
-    end_half = half(1.0, 0)
-    for k in range(1, 6):  # the round end
-        u = math.pi * k / 6
-        wall.append(at(1 + math.sin(u) * end_half / length, middle(1.0) + a_side * end_half * math.cos(u)))
+    # The end: a round harbour (HARBOUR_RADIUS) that the two banks run into.
+    end_a = half(1.0, 0)
+    end_b = half(1.0, 1)
+    r = HARBOUR_RADIUS
+    depth = math.sqrt(max(1.0, r * r - max(end_a, end_b) ** 2))  # the banks meet the circle
+    centre_t = 1 + depth / length
+    first = math.atan2(a_side * end_a, -depth)  # angle 0 = deeper into the island
+    last = math.atan2(-a_side * end_b, -depth)
+    for k in range(1, 24):
+        u = first + (last - first) * k / 24
+        wall.append(at(centre_t + r * math.cos(u) / length, middle(1.0) + r * math.sin(u)))
     wall += [at(k / steps, middle(k / steps) - a_side * half(k / steps, 1)) for k in range(steps, -1, -1)]
     new = np.round(np.concatenate([np.array(wall), points[m:]]))
-    path = [at(k / steps, middle(k / steps)) for k in range(steps + 1)]
+    path = [at(k / steps, middle(k / steps)) for k in range(steps + 1)] + [at(centre_t, middle(1.0))]
     return new, path
 
 
@@ -214,7 +222,9 @@ def soft_noise(rng, shape: tuple[int, int], cell: int) -> np.ndarray:
     return np.asarray(image, dtype=np.float32) / 255
 
 
-def paint(rng, points: np.ndarray, kind: str, theme: str = "", river_from: tuple[float, float] | None = None) -> tuple[Image.Image, float, float]:
+def paint(
+    rng, points: np.ndarray, kind: str, theme: str = "", river_from: tuple[float, float] | None = None, harbour: tuple[float, float, float] | None = None
+) -> tuple[Image.Image, float, float]:
     """The island's picture and the world position of its top left corner.
     theme: "" (plain), "volcano" (a dark cone with a glowing crater) or "village" (huts, a path and a pier)."""
     min_x = math.floor(points[:, 0].min()) - SHOAL
@@ -388,6 +398,34 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "", river_from: tuple
             pen.ellipse((x - size, y - size, x + size, y + size), fill=(*TREE, 255))
             pen.ellipse((x - size + 1, y - size + 1, x, y), fill=(*TREE_LIGHT, 255))
 
+    if harbour:
+        # A small river port round the far side of the harbour: a quay on the shore (on land, so
+        # ships cannot run onto it), warehouses, houses, and the same invented flag.
+        hx, hy, direction = harbour[0] - min_x, harbour[1] - min_y, harbour[2]
+        r = HARBOUR_RADIUS
+        for k in range(-40, 41):
+            a = direction + math.pi + math.radians(k * 2)  # round the inland side
+            for d in range(r + 1, r + 7):
+                x, y = int(hx + math.cos(a) * d), int(hy + math.sin(a) * d)
+                if 0 <= y < h and 0 <= x < w and land[y, x]:
+                    rgba[y, x] = (*PLANK, 255) if d < r + 6 else (96, 66, 40, 255)
+        for k, (a_deg, d) in enumerate(((-50, 18), (-25, 16), (0, 18), (25, 16), (50, 18), (-38, 32), (-12, 34), (12, 34), (38, 32), (0, 48))):
+            a = direction + math.pi + math.radians(a_deg)
+            x0, y0 = int(hx + math.cos(a) * (r + d)), int(hy + math.sin(a) * (r + d))
+            size = 10 if k < 5 else 6
+            pen.rectangle((x0 + 1, y0 + 1, x0 + size + 1, y0 + 6), fill=(150, 130, 92, 255))
+            pen.rectangle((x0, y0, x0 + size, y0 + 4), fill=(*ROOF, 255))
+            pen.rectangle((x0 + size // 2, y0, x0 + size, y0 + 4), fill=(*ROOF_SHADE, 255))
+            pen.line((x0, y0 + 5, x0 + size, y0 + 5), fill=(*WALL, 255))
+        a = direction + math.pi
+        fx, fy = int(hx + math.cos(a) * (r + 10)), int(hy + math.sin(a) * (r + 10))
+        pen.line((fx, fy - 16, fx, fy), fill=(60, 42, 28, 255))
+        pen.rectangle((fx + 1, fy - 16, fx + 10, fy - 13), fill=(42, 157, 143, 255))
+        pen.rectangle((fx + 1, fy - 12, fx + 10, fy - 10), fill=(233, 196, 106, 255))
+        pen.rectangle((fx + 1, fy - 16, fx + 3, fy - 10), fill=(192, 57, 43, 255))
+        for py in (fy - 14, fy - 13, fy - 12):
+            pen.point((fx + 2, py), fill=(255, 255, 255, 255))
+
     if village:
         vy, vx = village
         dark_plank = (96, 66, 40, 255)
@@ -441,6 +479,10 @@ def paint(rng, points: np.ndarray, kind: str, theme: str = "", river_from: tuple
                 pen.point((px_ + 3, py), fill=post)
             piers.append((px_, end))
             solid("pier", [(px_ - 2.5, y), (px_ + 3, y), (px_ + 3, end + 1), (px_ - 2.5, end + 1)])
+        # An invisible wall over the water between the outer piers, so no ship squeezes in
+        # between the piers and the moored boats and gets stuck there.
+        far_end = max(end for _, end in piers)
+        solid("berths", [(vx - 38, quay_top), (vx + 48, quay_top), (vx + 48, far_end + 2), (vx - 38, far_end + 2)])
         main_x, main_end = piers[1]
         LAST_PIER.update(x=float(min_x + main_x), y=float(min_y + main_end))
         # Five boats: two sloops and a ketch along the piers, two rowing boats at the quay.
@@ -536,7 +578,7 @@ def main() -> None:
             else:
                 raise SystemExit("the inlet breaks the shore of " + name)
             points = carved
-            mouth, tip = path[0], path[-1]
+            mouth, tip = path[0], path[-2]  # the last point is the middle of the harbour
             inlet = {
                 "x": round(mouth[0]),
                 "y": round(mouth[1]),
@@ -544,8 +586,11 @@ def main() -> None:
                 "headY": round(tip[1]),
                 "path": [{"x": round(x), "y": round(y)} for x, y in path],
             }
-            river_from = (tip[0] - math.cos(direction) * 160, tip[1] - math.sin(direction) * 160)
-        picture, px, py = paint(np.random.default_rng([SEED, zlib.crc32(name.encode())]), points, kind, river_from=river_from)
+            harbour = path[-1]
+            inlet["harbour"] = {"x": round(harbour[0]), "y": round(harbour[1]), "r": HARBOUR_RADIUS}
+            river_from = (harbour[0] - math.cos(direction) * 240, harbour[1] - math.sin(direction) * 240)
+        harbour_town = (inlet["harbour"]["x"], inlet["harbour"]["y"], direction) if inlet else None
+        picture, px, py = paint(np.random.default_rng([SEED, zlib.crc32(name.encode())]), points, kind, river_from=river_from, harbour=harbour_town)
         file = f"{slug(name)}.png"
         picture.save(PICTURES / file)
         islands.append(
@@ -554,7 +599,7 @@ def main() -> None:
                 "kind": kind,
                 "points": [{"x": float(x), "y": float(y)} for x, y in points],
                 "picture": {"file": file, "x": px, "y": py},
-                **({"inlet": inlet} if inlet else {}),
+                **({"inlet": inlet, "port": {"x": inlet["harbour"]["x"], "y": inlet["harbour"]["y"]}} if inlet else {}),
             }
         )
         if inlet:

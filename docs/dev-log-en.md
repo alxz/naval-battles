@@ -4,6 +4,32 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 16 Nov 2026 (evening, 2) — M3 step 1b (fixes) and step 2: the auto-bot arena
+
+### Your test of step 1
+
+Ships × 1.5: the frigate is too big; stop at × 1.2 for now. The inlet: hard to get out against the wind, big ships and bots got stuck (screenshot); idea: a port at its end. The solid port works, but a ship can wedge itself between the piers (screenshot). Hull points × 1.5: fine. The combat zoom is now too close: smaller, a button to cancel it on every screen, the spyglass on the computer too, the mouse wheel for zoom and spyglass. New: a damaged ship (< 50%) sails slower, the wind should change now and then, and an auto-bot test mode. Your choices: auto-bot = M3 step 2 (port law → step 3), 6 bots with respawn, time x1–x8, a second port at the end of the inlet.
+
+### Step 1b
+
+- Ships × 1.2 (sprites re-rendered), hull points × 1.2.
+- Zoom: combat zoom at most × 1.5 (detail sprites from × 1.5); auto-zoom button (magnifier with "A", crossed when off) on computer and touch; spyglass icon on the computer; wheel = zoom steps 1 / 1.5 / 2 / 3 and auto zoom off; wheel click = spyglass.
+- Port: an invisible wall ("berths") over the water between the outer piers.
+- Inlet: 150 m wide, bend 40 m, ends in a round harbour (r 85 m) with a quay, houses and the flag; that harbour is the second neutral port. Bots sailing to it follow the inlet's middle line (`portWaypoint`); a test sends a badly hurt bot from outside into the harbour.
+- Damage slows: below 50% hull the target speed falls in a line to 60% at hull 0; up to 3 m/s never cut.
+- Wind shifts: every 150–300 s the base direction turns 30–90° to a random side; the wind follows at most 6° per drift.
+
+### Step 2: the auto-bot arena
+
+- `sim/arena.ts` (rules) and `view/arenaLog.ts` (the log); screen: `scenes/ArenaHud.ts` and the arena part of `SeaScene`.
+- A first 30-minute headless run: 3 wins only. The bots flee at 30% hull and repair in port, so few fights end in a sinking; the frigate won all three. 500 wins will take many hours even at x8 — the log will show where the bots lose their time (chases, ports).
+
+241 tests; build clean; headless computer and iPhone: arena runs at x8, NEXT / drag / log download work, no errors.
+
+**Next:** step 3 — port law (D40).
+
+---
+
 ## 16 Nov 2026 (night) — Package C4 and M3 step 1: ships × 1.5
 
 ### Your test of C3

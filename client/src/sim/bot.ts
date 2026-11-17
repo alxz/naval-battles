@@ -10,7 +10,8 @@
 // only through commands, like the player. Its shots get the same random errors as the player's.
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
-import { inSafeWater, nearestPort, portsOf } from './port';
+import { inSafeWater, nearestPort, portWaypoint, portsOf } from './port';
+import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
 import { predictLanding, reloadLeft, sideAngleRad } from './guns';
@@ -274,8 +275,11 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const id = ship.id;
   const enemy = world.ships.find((s) => s.id === bot.enemyId);
 
-  // --- No enemy (gone or sunk): lie still. ---
+  // --- No enemy (gone or sunk; or peace in the arena): a hurt ship sails to a port, else it lies still. ---
   if (!enemy || enemy.sunk) {
+    const full = params.hullPoints;
+    const port = nearestPort(ship.x, ship.y, portsOf(islands));
+    if (port && ship.hull < full * DAMAGE.port.maxShare - 1e-6 && world.arena) return sailToPort(world, bot, ship, params, islands, port, p);
     bot.mode = 'idle';
     if (ship.sailLevel !== 0) commands.push({ type: 'setSails', shipId: id, value: 0 });
     if (ship.rudder !== 0) commands.push({ type: 'setRudder', shipId: id, value: 0 });
@@ -311,8 +315,10 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   if (bot.mode === 'port' && port) {
     // Sail to the anchorage, slow down near it, stop on it.
     bot.side = null;
-    goal = Math.atan2(port.port.y - ship.y, port.port.x - ship.x);
-    nearPort = port.distance < 2 * DAMAGE.port.dockRange;
+    const way = portWaypoint(ship.x, ship.y, port.port);
+    goal = Math.atan2(way.y - ship.y, way.x - ship.x);
+    // Close to the anchorage, or on the way up an inlet: the way itself keeps clear of the land.
+    nearPort = port.distance < 2 * DAMAGE.port.dockRange || way.inside;
     sails = port.distance < DAMAGE.port.dockRange * 0.5 ? 0 : port.distance < 3 * DAMAGE.port.dockRange ? p.minSails : 1;
   } else if (bot.mode === 'idle') {
     // The enemy is in safe water: keep clear of the port and wait almost stopped.
@@ -392,6 +398,33 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }
   }
+  return commands;
+}
+
+/** A bot with nothing to fight (peace in the arena) sails a hurt ship to the nearest port and stops there. */
+function sailToPort(
+  world: World,
+  bot: BotState,
+  ship: ShipState,
+  params: ShipParams,
+  islands: readonly Island[],
+  port: { port: Port; distance: number },
+  p: BotParams,
+): Command[] {
+  bot.mode = 'port';
+  bot.side = null;
+  const way = portWaypoint(ship.x, ship.y, port.port);
+  let steer = steerWithTacks(Math.atan2(way.y - ship.y, way.x - ship.x), params, world.wind, bot, p);
+  const clear = avoidShips(ship, params, world.ships, steer, p);
+  if (clear !== null) steer = clear;
+  const near = port.distance < 2 * DAMAGE.port.dockRange || way.inside;
+  const away = near ? null : avoidLand(ship, params, islands, steer, p);
+  if (away !== null) steer = away;
+  const sails = port.distance < DAMAGE.port.dockRange * 0.5 ? 0 : port.distance < 3 * DAMAGE.port.dockRange ? p.minSails : 1;
+  const commands: Command[] = [];
+  const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
+  if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;
 }
 

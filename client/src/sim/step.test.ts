@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SHIP_CLASSES } from './data';
-import { STEP_SECONDS, sailingInfo, stepShip, stepWorld, targetSpeed, windFactor } from './step';
+import { DAMAGE, SHIP_CLASSES } from './data';
+import { STEP_SECONDS, damagedSpeed, sailingInfo, stepShip, stepWorld, targetSpeed, windFactor } from './step';
 import type { ShipState, WindNow } from './types';
 import { createWorld } from './world';
 
@@ -145,8 +145,8 @@ describe('ship data (game metres)', () => {
     }
   });
 
-  it('the sloop is 45 game metres long (30 m in plan section 4.0, x 1.5 by D39)', () => {
-    expect(sloop.length).toBe(45);
+  it('the sloop is 36 game metres long (30 m in plan section 4.0, x 1.2 by D39)', () => {
+    expect(sloop.length).toBe(36);
   });
 });
 
@@ -175,5 +175,25 @@ describe('getting off the land', () => {
     stepShip(afloat, sloop, northWind, 1, { speedScale: 1, windDrift: false });
     expect(aground.headingRad).toBeCloseTo(sloop.turnRate, 1);
     expect(afloat.headingRad).toBeLessThan(aground.headingRad * 0.5);
+  });
+});
+
+describe('damagedSpeed (M3 step 1b)', () => {
+  it('no change above half of the hull', () => {
+    expect(damagedSpeed(10, 1)).toBe(10);
+    expect(damagedSpeed(10, DAMAGE.slowdown.startShare)).toBe(10);
+  });
+  it('falls in a straight line to minFactor at hull 0', () => {
+    expect(damagedSpeed(10, 0)).toBeCloseTo(10 * DAMAGE.slowdown.minFactor);
+    expect(damagedSpeed(10, 0.25)).toBeCloseTo(10 * (DAMAGE.slowdown.minFactor + 1) / 2);
+  });
+  it('never cuts slow speeds (up to freeSpeed): a wreck can still crawl', () => {
+    expect(damagedSpeed(2.5, 0)).toBe(2.5);
+    expect(damagedSpeed(4, 0)).toBe(DAMAGE.slowdown.freeSpeed);
+  });
+  it('a badly hit sloop sails slower than a whole one', () => {
+    const whole = { ...newShip(), sailLevel: 1 };
+    const hurt = { ...whole, hull: sloop.hullPoints * 0.2 };
+    expect(targetSpeed(hurt, sloop, northWind)).toBeLessThan(targetSpeed(whole, sloop, northWind) * 0.8);
   });
 });

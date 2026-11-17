@@ -19,5 +19,10 @@
     "maxDockSpeed": 2,
     "maxShare": 0.9,
     "sharePerSecond": 0.02
+  },
+  "slowdown": {
+    "startShare": 0.5,
+    "minFactor": 0.6,
+    "freeSpeed": 3
   }
 }

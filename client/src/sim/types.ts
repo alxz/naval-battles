@@ -68,7 +68,11 @@ export type SimEvent =
   | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number }
   | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number }
   // Two ships ran into each other at (x, y); how many hull points each lost.
-  | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number };
+  | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number }
+  // The auto-bot arena (sim/arena.ts):
+  | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
+  | { type: 'respawn'; shipId: number; x: number; y: number }
+  | { type: 'peace'; totalWins: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -113,6 +117,7 @@ export interface WindNow {
 /** One wind for the whole sea (plan 4.2). */
 export interface Wind extends WindNow {
   baseFromRad: number; // the drift wanders around this direction
+  shiftInSeconds?: number; // the base direction swings to a new one in this many seconds (set at the first drift)
 }
 
 /**
@@ -131,7 +136,15 @@ export interface Island {
   /** A neutral port on this island: the anchorage, a point in open water off the pier (written by make_islands.py). */
   port?: { x: number; y: number };
   /** A river mouth a ship can sail into: the middle of its mouth and its head (written by make_islands.py). */
-  inlet?: { x: number; y: number; headX: number; headY: number; path?: { x: number; y: number }[] };
+  inlet?: {
+    x: number;
+    y: number;
+    headX: number;
+    headY: number;
+    /** The middle line from the mouth to the head, then the middle of the harbour. */
+    path?: { x: number; y: number }[];
+    harbour?: { x: number; y: number; r: number };
+  };
   /** Solid things on the water that belong to this island: quay, piers, moored boats (written by make_islands.py). */
   solids?: { name: string; points: { x: number; y: number }[] }[];
 }
@@ -155,6 +168,28 @@ export interface World {
   nextBallId: number;
   events: SimEvent[]; // cleared at the start of every step
   bots: BotState[]; // ships steered by the computer (sim/bot.ts)
+  /** The auto-bot arena: every ship is a bot, each fights for itself (sim/arena.ts). Absent in a normal game. */
+  arena?: ArenaState;
+}
+
+/** One bot of the arena and its score. */
+export interface Pilot {
+  shipId: number;
+  number: number; // shown as "#3"
+  name: string;
+  wins: number; // ships it sank
+  losses: number; // times it was sunk
+  broadsides: number;
+  hullHits: number; // balls of its own that hit an enemy hull
+  sinceSeconds: number; // how long its present ship has been afloat
+}
+
+export interface ArenaState {
+  pilots: Pilot[];
+  totalWins: number;
+  peace: boolean; // after winsToPeace wins nobody attacks any more
+  respawns: { shipId: number; seconds: number }[]; // sunk ships come back after this many seconds
+  retargetSeconds: number; // until the next choice of targets
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
@@ -254,6 +289,12 @@ export interface DamageParams {
     maxSails: number; // only with the sails at or below this (almost stopped)
     safeRange: number; // only with no enemy afloat within this many metres
     sharePerSecond: number; // share of the full hull mended per second
+  };
+  /** A badly damaged ship sails slower (M3 step 1b). */
+  slowdown: {
+    startShare: number; // below this share of the hull the ship slows down
+    minFactor: number; // at hull 0 the target speed is this share of what it would be
+    freeSpeed: number; // m/s: speeds up to this are never cut (a wreck can still crawl into port)
   };
   /** A neutral port ("Open Sea" package C). */
   port: {

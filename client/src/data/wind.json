@@ -6,5 +6,10 @@
   "driftMaxOffsetDeg": 25,
   "driftMaxStrengthStep": 0.03,
   "minStrength": 0.6,
-  "maxStrength": 1.0
+  "maxStrength": 1.0,
+  "shiftMinSeconds": 150,
+  "shiftMaxSeconds": 300,
+  "shiftMinDeg": 30,
+  "shiftMaxDeg": 90,
+  "shiftTurnDegPerDrift": 6
 }

@@ -40,6 +40,8 @@ export interface HudData {
   debug: boolean; // show the debug text
   debugLines: string[];
   soundOn: boolean;
+  autoZoomOn: boolean; // the automatic combat zoom (its button shows on / off)
+  spyglassOn: boolean; // looking through the spyglass (its icon is lit)
   minimapOn: boolean; // on touch screens the minimap sits where the chart button is
   repairSeaShare: number; // repair at sea mends up to this share of the hull (a tick on the bar)
   repairPortShare: number; // a port mends up to this share (a second tick); 0 = the sea has no port
@@ -86,11 +88,20 @@ export class Hud {
   private readonly gunIcons: Phaser.GameObjects.Image[] = [];
   private readonly soundIcon: Phaser.GameObjects.Image;
   private readonly chartIcon: Phaser.GameObjects.Image;
+  private readonly spyglassIcon: Phaser.GameObjects.Image;
+  private readonly autoZoomIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
   private l: HudLayout = hudLayout(640, 360, false);
 
-  constructor(scene: Phaser.Scene, touch: boolean, onToggleSound: () => void, onToggleChart: () => void) {
+  constructor(
+    scene: Phaser.Scene,
+    touch: boolean,
+    onToggleSound: () => void,
+    onToggleChart: () => void,
+    onToggleSpyglass: () => void,
+    onToggleAutoZoom: () => void,
+  ) {
     this.touch = touch;
     // Order matters (see the note about Text after Graphics in RangeRings.ts): the plates
     // and bars first, then the compass, then all text and icons on top.
@@ -127,6 +138,11 @@ export class Hud {
     // Depth 126: above the open chart (120-122), so the same button closes it.
     this.chartIcon = scene.add.image(0, 0, 'icon-chart').setScrollFactor(0).setDepth(126).setInteractive();
     this.chartIcon.on('pointerdown', () => onToggleChart());
+    // The spyglass: an icon on a computer (touch screens have their own button for it).
+    this.spyglassIcon = scene.add.image(0, 0, 'icon-spyglass').setScrollFactor(0).setDepth(104).setInteractive().setVisible(!touch);
+    this.spyglassIcon.on('pointerdown', () => onToggleSpyglass());
+    this.autoZoomIcon = scene.add.image(0, 0, 'icon-autozoom-on').setScrollFactor(0).setDepth(104).setInteractive();
+    this.autoZoomIcon.on('pointerdown', () => onToggleAutoZoom());
   }
 
   /** The screen got a new logical size: move the panels. */
@@ -165,7 +181,12 @@ export class Hud {
     this.debugText.setPosition(l.debugX, l.debugY);
     const ch = l.chart;
     this.chartIcon.setPosition(ch.x + ch.w / 2, ch.y + ch.h / 2).setScale(Math.max(1, Math.floor((ch.w * 0.8) / ICON_SIZE)));
-    this.hint.setPosition(ch.x + ch.w + 6, ch.y + 4);
+    const place = (icon: Phaser.GameObjects.Image, r: { x: number; y: number; w: number; h: number }): void => {
+      icon.setPosition(r.x + r.w / 2, r.y + r.h / 2).setScale(Math.max(1, Math.floor((r.w * 0.8) / ICON_SIZE)));
+    };
+    place(this.spyglassIcon, l.spyglass);
+    place(this.autoZoomIcon, l.autoZoom);
+    this.hint.setPosition(l.autoZoom.x + l.autoZoom.w + 6, ch.y + 4);
   }
 
   update(d: HudData): void {
@@ -261,10 +282,12 @@ export class Hud {
 
     // --- Sound button: a plate on touch screens (like the other buttons), the icon shows on / off. ---
     this.soundIcon.setTexture(d.soundOn ? 'icon-sound-on' : 'icon-sound-off');
+    this.autoZoomIcon.setTexture(d.autoZoomOn ? 'icon-autozoom-on' : 'icon-autozoom-off');
+    this.spyglassIcon.setAlpha(d.spyglassOn ? 1 : 0.85).setTint(d.spyglassOn ? 0xffe066 : 0xffffff);
     const mapOnButton = this.touch && d.minimapOn; // the minimap takes the chart button's place
     this.chartIcon.setVisible(!mapOnButton);
     if (this.touch) {
-      for (const b of mapOnButton ? [l.sound] : [l.sound, l.chart]) {
+      for (const b of mapOnButton ? [l.sound, l.autoZoom] : [l.sound, l.autoZoom, l.chart]) {
         // (the chart button is in the minimap's place, bottom right)
         this.gfx.sound.fillStyle(0xffffff, 0.22);
         this.gfx.sound.fillRect(b.x, b.y, b.w, b.h);
@@ -275,7 +298,7 @@ export class Hud {
 
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
-    this.hint.setVisible(!d.debug && !this.touch).setText('C  chart    V  spyglass    H  help & debug');
+    this.hint.setVisible(!d.debug && !this.touch).setText('C chart   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
       this.gfx.debug.fillStyle(0x000000, plate);

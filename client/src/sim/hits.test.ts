@@ -45,7 +45,7 @@ describe('toShipLocal', () => {
 });
 
 describe('ballHit (hit zones)', () => {
-  const target = ship(2, 0, 0); // heading east: hull from x -22.5..22.5, y -7.5..7.5 (hull 7.5 m high, masts 33 m)
+  const target = ship(2, 0, 0); // heading east: hull from x -18..18, y -6..6 (hull 6 m high, masts 26.4 m)
   const across = (z: number) => ballHit(target, sloop, { x: 0, y: -20, z }, { x: 0, y: 20, z });
 
   it('low ball hits the hull, high ball the rigging, very high ball nothing', () => {

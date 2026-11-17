@@ -63,7 +63,7 @@ describe('the sea (data/world.json, islands)', () => {
 });
 
 describe('the inlet (a river mouth ships can sail into)', () => {
-  it('one big island has a winding inlet; a sloop, even half again as long, fits all along its middle line', () => {
+  it('one big island has a winding inlet; a sloop, even half again as long as now, fits all along its middle line', () => {
     const withInlet = ISLANDS.filter((i) => i.inlet);
     expect(withInlet).toHaveLength(1);
     const path = withInlet[0]!.inlet!.path!;

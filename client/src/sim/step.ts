@@ -1,12 +1,12 @@
 import { collideShips } from './collide';
 import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
-import { ISLANDS, POLARS, SHIP_CLASSES, WIND } from './data';
+import { DAMAGE, ISLANDS, POLARS, SHIP_CLASSES, WIND } from './data';
 import { stepGunsAndBalls } from './guns';
 import { touchesLand } from './land';
 import { clamp } from './math';
 import { polarShare } from './polar';
-import type { Island, ShipParams, ShipState, Tuning, WindNow, World } from './types';
+import type { DamageParams, Island, ShipParams, ShipState, Tuning, WindNow, World } from './types';
 import { DEFAULT_TUNING } from './types';
 import { stepPortRepair } from './port';
 import { driftWind } from './wind';
@@ -39,7 +39,20 @@ export function windFactor(strength: number): number {
  */
 export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, tuning: Tuning = DEFAULT_TUNING): number {
   const { share } = sailingInfo(ship, params, wind);
-  return params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength);
+  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength);
+  return damagedSpeed(speed, ship.hull / params.hullPoints);
+}
+
+/**
+ * A badly damaged ship sails slower (M3 step 1b): below half of the hull the target speed falls
+ * in a straight line to minFactor at hull 0. Speeds up to freeSpeed are never cut, so a wreck
+ * can still crawl to a port.
+ */
+export function damagedSpeed(speed: number, hullShare: number, d: DamageParams = DAMAGE): number {
+  const s = d.slowdown;
+  if (hullShare >= s.startShare) return speed;
+  const factor = s.minFactor + (1 - s.minFactor) * Math.max(0, hullShare) / s.startShare;
+  return Math.max(Math.min(speed, s.freeSpeed), speed * factor);
 }
 
 /** How much of the turn rate the rudder gives at this speed: minSteerShare at a standstill, 1 from half of top speed. */

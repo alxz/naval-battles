@@ -13,11 +13,47 @@ export interface Port {
   name: string; // the island's name
   x: number; // the anchorage, metres
   y: number;
+  /** A port up an inlet: the way in, from the mouth to the anchorage (bots follow it). */
+  path?: { x: number; y: number }[];
 }
 
 /** The ports of these islands. */
 export function portsOf(islands: readonly Island[]): Port[] {
-  return islands.flatMap((island) => (island.port ? [{ name: island.name, x: island.port.x, y: island.port.y }] : []));
+  return islands.flatMap((island) => {
+    if (!island.port) return [];
+    const path = island.inlet?.path;
+    return [{ name: island.name, x: island.port.x, y: island.port.y, ...(path ? { path } : {}) }];
+  });
+}
+
+/**
+ * Where a ship sailing to this port should head now. A port in open water: the anchorage.
+ * A port up an inlet: first the mouth, then a point two steps further along the way in,
+ * so the ship follows the bends instead of cutting across the land.
+ */
+export function portWaypoint(x: number, y: number, port: Port): { x: number; y: number; inside: boolean } {
+  const path = port.path;
+  if (!path || path.length === 0) return { x: port.x, y: port.y, inside: false };
+  let best = 0;
+  let bestD = Infinity;
+  path.forEach((p, i) => {
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  const inside = bestD < 90;
+  if (!inside) {
+    // Not on the way in yet: sail to a point off the mouth, then in.
+    const a = path[0]!;
+    const b = path[1] ?? a;
+    const len = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const off = { x: a.x + ((a.x - b.x) / len) * 120, y: a.y + ((a.y - b.y) / len) * 120 };
+    return Math.hypot(off.x - x, off.y - y) < 60 || best > 0 ? { ...path[Math.min(path.length - 1, best + 1)]!, inside } : { ...off, inside };
+  }
+  const next = path[Math.min(path.length - 1, best + 2)]!;
+  return { x: next.x, y: next.y, inside };
 }
 
 /** The ports of the game's sea. */

@@ -25,13 +25,13 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 6. A unit test for every formula in `sim/`.
 
 ## Scale and display
-1 px per game metre at zoom ×1 (ships ~3× real: sloop 45 m, D39); zoom ×1/×2 with auto combat zoom; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
+1 px per game metre at zoom ×1 (ships ~2.4× real: sloop 36 m, D39 × 1.2); zoom 1 / 1.5 / 2 / 3 (keys, wheel), auto combat zoom up to × 1.5 (button to switch off), spyglass × 0.5; integer pixel scaling (logical height 400 computer/tablet, 240 phone). Text: pixel fonts at 8/16/24 px, resolution 1, `roundPixels`.
 
 ## Status (16 Nov 2026)
 - M0, M1 done. **M2 done → R1 "First Duel"**: guns with ballistics and height, hit boxes, damage, sinking, accuracy (σ gun 1.8°, salvo 0.6°), bot (chase / engage / break-off, personality, tacks, avoids land), HUD panels, banner, sounds and effects, 4 ship classes.
 - **M2b "Open Sea" done** (D37): 6 × 4 km sea with a reef border, 18 generated islands + 2 hand-made (volcano, village), chart (C / ESC), minimap; ship collisions; bots flee at 30% hull; repair at sea to 75%; three bots; a neutral port on the village island (safe water 300 m, repair to 90%, bots use it); fog banks (picture only).
 - **D38:** ships 1.75× faster, wind 0.8 (0.6–1.0). **D39:** bigger ships in the world with new sprites, at the start of M3.
-- **Now: M3** — step 1 done: ships × 1.5 (D39: sloop 45 m, hull points × 1.5, `render_ship.py` SIZE 1.5); next step 2: port law (D40, shore guns punish firing in port); then damage/ammo/bot tiers and class balance.
+- **Now: M3** — done: step 1/1b ships × 1.2 (D39), damage slows ships (< 50% hull), wind shifts every 2.5–5 min, second port in the Isla Verde inlet; step 2 auto-bot arena (Tuning → Auto-bot: 6 bots fight each other, log download). Next step 3: port law (D40, shore guns); then damage/ammo/bot tiers and class balance (use the arena log).
 - Later: M4 boarding; M5 world, ports, trade; M6 captain and saves.
 - Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`.
 

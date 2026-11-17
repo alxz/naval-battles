@@ -30,6 +30,10 @@ export interface HudLayout {
   minimap: Rect;
   /** Size of a touch button (0 on a computer). */
   buttonSize: number;
+  /** The spyglass icon (computer; on touch screens the spyglass is a TouchControls button: same rect). */
+  spyglass: Rect;
+  /** The automatic combat zoom on / off: an icon on a computer, a small button on touch screens. */
+  autoZoom: Rect;
   /** A phone: my ship panel is drawn smaller (see Hud.ts). */
   compact: boolean;
 }
@@ -67,7 +71,8 @@ export function isCompact(height: number): boolean {
 
 /** The zoom button (touch) sits to the right of my ship panel; its left edge. */
 export function zoomButtonX(width: number, height: number): number {
-  return Math.round(width / 2 - smallButtonSize(height) - HUD_MARGIN / 2);
+  // Three small buttons in the middle of the top edge: spyglass, sound, auto zoom.
+  return Math.round(width / 2 - smallButtonSize(height) * 1.5 - HUD_MARGIN);
 }
 
 /** The small buttons at the top on touch screens (zoom, sound) are this big. */
@@ -96,6 +101,8 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
     ? { x: width - m - buttonSize, y: GEAR_H + 2, w: buttonSize, h: mapH }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
   const chart: Rect = touch ? minimap : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
+  const spyglass: Rect = touch ? { x: zoomButtonX(width, height), y: m, w: z, h: z } : { x: chart.x + chart.w + 6, y: chart.y, w: chart.w, h: chart.h };
+  const autoZoom: Rect = touch ? { x: sound.x + sound.w + m, y: m, w: z, h: z } : { x: spyglass.x + spyglass.w + 6, y: chart.y, w: chart.w, h: chart.h };
   // Computer: the target card in the top middle. Touch: at the left edge, under my ship.
   const target: Rect = touch
     ? { x: m, y: ship.y + ship.h + 4, w: TARGET_W_TOUCH, h: TARGET_H_TOUCH }
@@ -112,6 +119,8 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
     sound,
     chart,
     minimap,
+    spyglass,
+    autoZoom,
     buttonSize,
     compact,
   };
@@ -123,7 +132,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /** Room around a ship's centre that counts as "the ship" when we check what a panel covers (logical px). */
-export const SHIP_CLEARANCE_PX = 26; // ships are 1.5x bigger since M3 step 1 (D39)
+export const SHIP_CLEARANCE_PX = 22; // ships are 1.2x bigger since M3 step 1 (D39)
 
 /**
  * Is any of these points (ship centres on the screen, logical px) under this panel?

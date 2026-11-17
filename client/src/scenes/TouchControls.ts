@@ -48,6 +48,20 @@ export class TouchControls {
     this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);
   }
 
+  /** Show or hide the ship buttons (the auto-bot arena has no ship of yours; the spyglass stays). */
+  setShipButtonsVisible(on: boolean): void {
+    for (const b of this.buttons) {
+      if (b === this.spyglass) continue;
+      b.box.setVisible(on);
+      b.label.setVisible(on);
+      if (on) b.box.setInteractive();
+      else b.box.disableInteractive();
+    }
+    if (!on) {
+      this.left = this.right = this.raise = this.lower = false;
+    }
+  }
+
   /** Put the buttons in place for a screen of this logical size. */
   layout(width: number, height: number): void {
     const rects = touchButtonRects(width, height);

@@ -30,6 +30,7 @@ export interface TuningValues {
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
   screenShake: boolean; // shake the view when your ship is hit or fires
+  arenaSpeed: number; // the auto-bot arena runs this many times faster than real time
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -59,6 +60,11 @@ export interface TuningCallbacks {
   onPlaceUpwind: (distance: number) => void;
   /** Start counting your hits again. */
   onResetHits: () => void;
+  /** The auto-bot arena (M3 step 2). */
+  onArena: () => void;
+  onLeaveArena: () => void;
+  onArenaSpeed: (x: number) => void;
+  onDownloadLog: () => void;
 }
 
 /**
@@ -72,6 +78,7 @@ export class TuningPanel {
   private readonly zoomController;
   private readonly debugController;
   private readonly soundController;
+  private readonly arenaSpeedController;
 
   constructor(start: TuningValues, callbacks: TuningCallbacks, startClosed: boolean) {
     this.values = { ...start };
@@ -95,7 +102,7 @@ export class TuningPanel {
 
     const view = this.gui.addFolder('View');
     view.add(v, 'pixelsPerMetre', 0.5, 3, 0.5).name('pixels / metre');
-    this.zoomController = view.add(v, 'zoom', 1, 4, 1).name('zoom (sailing)');
+    this.zoomController = view.add(v, 'zoom', 1, 3, 0.5).name('zoom (sailing)');
     view
       .add(v, 'logicalHeight', 160, 480, 20)
       .name('logical height')
@@ -107,6 +114,14 @@ export class TuningPanel {
     this.debugController = view.add(v, 'debugText').name('debug text (H)');
     view.add(v, 'minimap').name('minimap');
     view.add(v, 'fog').name('fog');
+
+    // The auto-bot arena (M3 step 2): bots fight each other, you watch; a test tool.
+    const arena = this.gui.addFolder('Auto-bot (test)');
+    arena.add({ start: () => callbacks.onArena() }, 'start').name('start auto-bot');
+    arena.add({ leave: () => callbacks.onLeaveArena() }, 'leave').name('leave auto-bot');
+    this.arenaSpeedController = arena.add(v, 'arenaSpeed', [1, 2, 4, 8]).name('time speed').onChange((x: number) => callbacks.onArenaSpeed(Number(x)));
+    arena.add({ log: () => callbacks.onDownloadLog() }, 'log').name('download log');
+    arena.close();
 
     const fx = this.gui.addFolder('Sound & effects');
     this.soundController = fx.add(v, 'sound').name('sound (M)');
@@ -197,6 +212,18 @@ export class TuningPanel {
   toggleDebugText(): void {
     this.values.debugText = !this.values.debugText;
     this.debugController.updateDisplay();
+  }
+
+  /** The arena's speed changed by the key T or the button; keep the list in step. */
+  setArenaSpeed(x: number): void {
+    this.values.arenaSpeed = x;
+    this.arenaSpeedController.updateDisplay();
+  }
+
+  /** The auto-zoom button and the mouse wheel switch the combat zoom; keep the check box in step. */
+  setAutoZoom(on: boolean): void {
+    this.values.autoZoom = on;
+    this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
   }
 
   /** The keys and the zoom button change the zoom too; keep the slider in step. */

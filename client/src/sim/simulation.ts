@@ -1,3 +1,4 @@
+import { stepArena } from './arena';
 import { thinkBots } from './bot';
 import { applyCommand } from './commands';
 import { ISLANDS } from './data';
@@ -6,7 +7,7 @@ import { STEP_SECONDS, stepWorld } from './step';
 import type { Command, SimEvent, Tuning, World } from './types';
 
 /** Never run more than this many steps in one frame (protects after a long pause). */
-export const MAX_STEPS_PER_UPDATE = 10;
+export const MAX_STEPS_PER_UPDATE = 16; // x8 time in the arena needs up to 8 steps a frame at 30 fps
 
 /** Where to draw a ship: a blend between the last two simulation steps. */
 export interface Pose {
@@ -50,6 +51,7 @@ export class Simulation {
       // The bots think after the player's commands and act through commands too.
       for (const command of thinkBots(this.world, ISLANDS)) applyCommand(this.world, command);
       stepWorld(this.world, STEP_SECONDS, this.tuning);
+      stepArena(this.world, STEP_SECONDS); // the auto-bot arena only (it reads this step's events)
       this.events.push(...this.world.events);
       this.accumulator -= STEP_SECONDS;
       steps += 1;

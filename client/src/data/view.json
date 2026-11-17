@@ -2,7 +2,7 @@
   "pixelsPerMetre": 1,
   "zoomSteps": [
     1,
-    2
+    1.5
   ],
   "logicalHeightComputer": 400,
   "logicalHeightPhone": 240,
@@ -25,5 +25,11 @@
   "fireArcPreviewDeg": 25,
   "landingEllipseSigmas": 1,
   "spyglassZoom": 0.5,
-  "spyglassSeconds": 12
+  "spyglassSeconds": 12,
+  "manualZoomSteps": [
+    1,
+    1.5,
+    2,
+    3
+  ]
 }

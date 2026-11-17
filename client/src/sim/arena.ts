@@ -1,0 +1,200 @@
+// The auto-bot arena (M3 step 2): a test mode with no player. Every ship is a bot and fights
+// for itself; it picks its own target, sunk ships come back after a while, every win is counted.
+// After winsToPeace wins it turns to peace: nobody attacks, hurt bots sail to a port.
+// Pure rules, no Phaser: the screen (SeaScene, view/arenaLog.ts) only shows and logs it.
+
+import arenaJson from '../data/arena.json';
+import { newBot } from './bot';
+import { ISLANDS, SHIP_CLASSES } from './data';
+import { inSafeWater } from './port';
+import { nextRandom } from './random';
+import { openWaterSpot } from './spawn';
+import { START_BATTLE_SKILL } from './world';
+import { WIND } from './data';
+import { bearingDegToHeadingRad } from './angles';
+import type { Island, Pilot, ShipState, World } from './types';
+
+export type ArenaParams = typeof arenaJson;
+export const ARENA: ArenaParams = arenaJson;
+
+/** A random open-water spot anywhere in the sea, away from the other ships. */
+function anywhere(world: World, islands: readonly Island[], shipClass: string, others: readonly ShipState[]): { x: number; y: number } | null {
+  const params = SHIP_CLASSES[shipClass];
+  if (!params) return null;
+  for (let i = 0; i < ARENA.spawnTries; i++) {
+    const near = { x: -2600 + 5200 * nextRandom(world), y: -1600 + 3200 * nextRandom(world) };
+    const spot = openWaterSpot(world, islands, near, 0, 200, params, others);
+    if (spot && others.every((o) => o.sunk || Math.hypot(o.x - spot.x, o.y - spot.y) > 400)) return spot;
+  }
+  return null;
+}
+
+/** A new arena: `count` bots of mixed classes at random places, each on its own side. */
+export function createArenaWorld(seed: number, count: number = ARENA.bots, islands: readonly Island[] = ISLANDS): World {
+  const wind = bearingDegToHeadingRad(WIND.startFromBearingDeg);
+  const world: World = {
+    tick: 0,
+    rngState: seed,
+    wind: { fromRad: wind, strength: WIND.startStrength, baseFromRad: wind },
+    ships: [],
+    balls: [],
+    pendingShots: [],
+    nextBallId: 1,
+    events: [],
+    bots: [],
+    arena: { pilots: [], totalWins: 0, peace: false, respawns: [], retargetSeconds: 0 },
+  };
+  for (let i = 0; i < count; i++) {
+    const id = i + 1;
+    const shipClass = ARENA.classes[i % ARENA.classes.length] ?? 'sloop';
+    const spot = anywhere(world, islands, shipClass, world.ships) ?? { x: -2000 + i * 700, y: 0 };
+    world.ships.push({
+      id,
+      shipClass,
+      x: spot.x,
+      y: spot.y,
+      headingRad: 2 * Math.PI * nextRandom(world),
+      speed: 0,
+      rudder: 0,
+      sailLevel: 0,
+      aground: false,
+      elevationDeg: 5,
+      reloadPort: 0,
+      reloadStarboard: 0,
+      hull: SHIP_CLASSES[shipClass]?.hullPoints ?? 1,
+      sunk: false,
+      battleSkill: START_BATTLE_SKILL,
+      team: id, // everybody for himself
+      repairing: false,
+    });
+    world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, broadsides: 0, hullHits: 0, sinceSeconds: 0 });
+    world.bots.push(newBot(id, -1, world)); // no target yet: the first choice comes at once
+  }
+  return world;
+}
+
+/**
+ * How good a target `other` is for `ship` (lower = better), in metres:
+ * its distance, minus a bonus if it is badly hurt (easy to finish off), plus a penalty for
+ * every other bot already after it (do not all pile on one ship).
+ */
+export function targetScore(ship: ShipState, other: ShipState, chasers: number, p: ArenaParams = ARENA): number {
+  const full = SHIP_CLASSES[other.shipClass]?.hullPoints ?? 1;
+  const hurt = 1 - other.hull / full;
+  return Math.hypot(other.x - ship.x, other.y - ship.y) - p.woundedBonusM * hurt + p.crowdPenaltyM * chasers;
+}
+
+/** Every bot looks round and keeps its target, or takes a clearly better one. */
+export function chooseTargets(world: World, p: ArenaParams = ARENA): void {
+  for (const bot of world.bots) {
+    const ship = world.ships.find((s) => s.id === bot.shipId);
+    if (!ship || ship.sunk) continue;
+    const candidates = world.ships.filter((o) => o.id !== ship.id && !o.sunk && !inSafeWater(o.x, o.y));
+    const chasers = (o: ShipState): number => world.bots.filter((b) => b !== bot && b.enemyId === o.id).length;
+    let best: ShipState | undefined;
+    let bestScore = Infinity;
+    for (const o of candidates) {
+      const score = targetScore(ship, o, chasers(o), p);
+      if (score < bestScore) {
+        bestScore = score;
+        best = o;
+      }
+    }
+    const current = candidates.find((o) => o.id === bot.enemyId);
+    const keep = current && targetScore(ship, current, chasers(current), p) <= bestScore + p.switchMarginM;
+    if (keep || !best || best.id === bot.enemyId) continue;
+    bot.enemyId = best.id;
+    bot.mode = 'chase';
+    bot.chaseSeconds = 0;
+    bot.chaseStartDistance = Math.hypot(best.x - ship.x, best.y - ship.y);
+    world.events.push({ type: 'targetChosen', shipId: ship.id, targetId: best.id, distance: bot.chaseStartDistance });
+  }
+}
+
+function pilotOf(world: World, shipId: number): Pilot | undefined {
+  return world.arena?.pilots.find((p) => p.shipId === shipId);
+}
+
+/**
+ * One arena step, after stepWorld (it reads that step's events):
+ * counts broadsides, hits and wins; sinks bring a respawn after respawnSeconds; at winsToPeace
+ * the arena turns to peace; every retargetSeconds the bots choose their targets.
+ */
+export function stepArena(world: World, dt: number, islands: readonly Island[] = ISLANDS, p: ArenaParams = ARENA): void {
+  const arena = world.arena;
+  if (!arena) return;
+  const fired = new Set<string>();
+  for (const e of [...world.events]) {
+    if (e.type === 'gunFired') {
+      const key = `${e.shipId}:${e.side}`; // one broadside = several guns in the same step
+      if (!fired.has(key)) {
+        fired.add(key);
+        const pilot = pilotOf(world, e.shipId);
+        if (pilot) pilot.broadsides++;
+      }
+    } else if (e.type === 'hit' && e.zone === 'hull') {
+      const pilot = pilotOf(world, e.byShipId);
+      if (pilot && e.byShipId !== e.shipId) pilot.hullHits++;
+    } else if (e.type === 'sunk') {
+      const loser = pilotOf(world, e.shipId);
+      if (loser) loser.losses++;
+      const winner = pilotOf(world, e.byShipId);
+      if (winner && e.byShipId !== e.shipId && !arena.peace) {
+        winner.wins++;
+        arena.totalWins++;
+        if (arena.totalWins >= p.winsToPeace) {
+          arena.peace = true;
+          world.events.push({ type: 'peace', totalWins: arena.totalWins });
+        }
+      }
+      arena.respawns.push({ shipId: e.shipId, seconds: p.respawnSeconds });
+      arena.retargetSeconds = 0; // whoever was after it looks for another target now
+    }
+  }
+  for (const pilot of arena.pilots) pilot.sinceSeconds += dt;
+
+  // Sunk ships come back: a fresh ship of the same class at a random place.
+  for (const r of arena.respawns) r.seconds -= dt;
+  for (const r of arena.respawns.filter((x) => x.seconds <= 0)) {
+    const ship = world.ships.find((s) => s.id === r.shipId);
+    if (!ship) continue;
+    const spot = anywhere(world, islands, ship.shipClass, world.ships);
+    if (!spot) {
+      r.seconds = 1; // no room now: try again in a second
+      continue;
+    }
+    Object.assign(ship, {
+      x: spot.x,
+      y: spot.y,
+      headingRad: 2 * Math.PI * nextRandom(world),
+      speed: 0,
+      rudder: 0,
+      sailLevel: 0,
+      aground: false,
+      reloadPort: 0,
+      reloadStarboard: 0,
+      hull: SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 1,
+      sunk: false,
+      repairing: false,
+    });
+    const i = world.bots.findIndex((b) => b.shipId === ship.id);
+    const fresh = newBot(ship.id, -1, world);
+    if (i >= 0) world.bots[i] = fresh;
+    else world.bots.push(fresh);
+    const pilot = pilotOf(world, ship.id);
+    if (pilot) pilot.sinceSeconds = 0;
+    world.events.push({ type: 'respawn', shipId: ship.id, x: spot.x, y: spot.y });
+  }
+  arena.respawns = arena.respawns.filter((x) => x.seconds > 0);
+
+  // Targets: in peace nobody has one; in war look round every retargetSeconds.
+  if (arena.peace) {
+    for (const bot of world.bots) bot.enemyId = -1;
+    return;
+  }
+  arena.retargetSeconds -= dt;
+  if (arena.retargetSeconds <= 0) {
+    chooseTargets(world, p);
+    arena.retargetSeconds = p.retargetSeconds;
+  }
+}
