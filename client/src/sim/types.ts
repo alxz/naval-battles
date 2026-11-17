@@ -50,6 +50,8 @@ export interface Ball {
   vy: number;
   vz: number; // up is positive
   ageSeconds: number;
+  /** Hull points this ball takes off, if not the usual `GunParams.damage` (a shore gun's heavier ball). */
+  damage?: number;
 }
 
 /** A gun that will fire a little later (ripple fire). */
@@ -69,6 +71,10 @@ export type SimEvent =
   | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number }
   // Two ships ran into each other at (x, y); how many hull points each lost.
   | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number }
+  // Port law (sim/law.ts, sim/shore.ts). `port` = index into the list of ports.
+  | { type: 'offender'; shipId: number; port: number; reason: 'fired' | 'hit' }
+  | { type: 'pardoned'; shipId: number; port: number }
+  | { type: 'shoreFired'; port: number; x: number; y: number }
   // The auto-bot arena (sim/arena.ts):
   | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
   | { type: 'respawn'; shipId: number; x: number; y: number }
@@ -106,6 +112,12 @@ export interface ShipState {
   battleSkill: number; // the captain's Battle skill 0..10 (plan 4.4 and 4.7); 4 for everyone until captains come (M6)
   team: number; // ships of different teams are enemies (0 = you, 1 = the bots, for now)
   repairing: boolean; // the crew is mending the hull this step (sim/repair.ts); set by the simulation
+  /**
+   * Port law (D40): set when this ship broke the peace of a port. `port` = index into the list of ports.
+   * `forgiveLeft` = seconds it must still stay away (it only runs down beyond the port's law range).
+   * Absent = a law-abiding ship.
+   */
+  offender?: { port: number; forgiveLeft: number };
 }
 
 /** The wind as a ship feels it right now. */
@@ -133,8 +145,11 @@ export interface Island {
   kind?: string;
   /** A ready picture at 1 pixel per metre: file in assets/islands/, and where its top left corner goes. */
   picture?: { file: string; x: number; y: number };
-  /** A neutral port on this island: the anchorage, a point in open water off the pier (written by make_islands.py). */
-  port?: { x: number; y: number };
+  /**
+   * A neutral port on this island: the anchorage, a point in open water off the pier, and the
+   * places of its shore guns (both written by make_islands.py).
+   */
+  port?: { x: number; y: number; guns?: { x: number; y: number }[] };
   /** A river mouth a ship can sail into: the middle of its mouth and its head (written by make_islands.py). */
   inlet?: {
     x: number;
@@ -168,8 +183,32 @@ export interface World {
   nextBallId: number;
   events: SimEvent[]; // cleared at the start of every step
   bots: BotState[]; // ships steered by the computer (sim/bot.ts)
+  /** The shore batteries' timers, one entry per port (sim/shore.ts). Made at the first step if absent. */
+  shore?: ShoreBattery[];
   /** The auto-bot arena: every ship is a bot, each fights for itself (sim/arena.ts). Absent in a normal game. */
   arena?: ArenaState;
+}
+
+/** The changing state of one port's shore battery (plain data, like everything in the world). */
+export interface ShoreBattery {
+  port: number; // index into the list of ports
+  reloads: number[]; // seconds until each gun is loaded again
+  gapLeft: number; // seconds until the battery may fire its next gun (the guns fire one after another)
+  aimErrorDeg: number; // the gunners' misjudgement of the elevation for the next shot
+}
+
+/** The guns of a port (data/shore.json). They obey the same ballistics and random errors as ship guns. */
+export interface ShoreParams {
+  muzzleSpeed: number; // m/s: heavier guns than a ship's
+  gunHeight: number; // metres above the water: they stand on the shore
+  minElevationDeg: number; // they can point a little down at a ship close by
+  maxElevationDeg: number;
+  reloadSeconds: number; // per gun
+  damage: number; // hull points per hit
+  gunSigmaDeg: number; // base spread of one gun (firm ground: steadier than a ship's deck)
+  aimErrorSigmaDeg: number; // how well the gunners judge the elevation
+  battleSkill: number; // the gunners' skill 0..10, used in the same sigma formula as ships
+  thinkEveryTicks: number; // the battery looks for a target every N steps
 }
 
 /** One bot of the arena and its score. */
@@ -179,7 +218,7 @@ export interface Pilot {
   name: string;
   wins: number; // ships it sank
   losses: number; // times it was sunk
-  broadsides: number;
+  balls: number; // balls it fired
   hullHits: number; // balls of its own that hit an enemy hull
   sinceSeconds: number; // how long its present ship has been afloat
 }
@@ -193,7 +232,7 @@ export interface ArenaState {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'idle';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
@@ -303,5 +342,12 @@ export interface DamageParams {
     maxDockSpeed: number; // ... if it moves no faster than this, m/s
     maxShare: number; // the port mends the hull up to this share of the full hull
     sharePerSecond: number; // share of the full hull mended per second in port
+    /** Port law (D40): firing in safe water is allowed but punished. */
+    law: {
+      shooterHullShare: number; // a broadside fired unlawfully in safe water costs the shooter this share of its full hull
+      damageFactor: number; // a ball that hits a law-abiding ship in safe water does only this share of its damage
+      leaveFactor: number; // the shore guns fire at an offender within safeRange x this of the anchorage
+      forgiveSeconds: number; // an offender must stay beyond that range this long to be pardoned
+    };
   };
 }

@@ -6,7 +6,7 @@
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { ISLANDS, SHIP_CLASSES } from './data';
-import { inSafeWater } from './port';
+import { protectedByPort } from './law';
 import { nextRandom } from './random';
 import { openWaterSpot } from './spawn';
 import { START_BATTLE_SKILL } from './world';
@@ -67,7 +67,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
       team: id, // everybody for himself
       repairing: false,
     });
-    world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, broadsides: 0, hullHits: 0, sinceSeconds: 0 });
+    world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, balls: 0, hullHits: 0, sinceSeconds: 0 });
     world.bots.push(newBot(id, -1, world)); // no target yet: the first choice comes at once
   }
   return world;
@@ -89,7 +89,7 @@ export function chooseTargets(world: World, p: ArenaParams = ARENA): void {
   for (const bot of world.bots) {
     const ship = world.ships.find((s) => s.id === bot.shipId);
     if (!ship || ship.sunk) continue;
-    const candidates = world.ships.filter((o) => o.id !== ship.id && !o.sunk && !inSafeWater(o.x, o.y));
+    const candidates = world.ships.filter((o) => o.id !== ship.id && !o.sunk && !protectedByPort(o));
     const chasers = (o: ShipState): number => world.bots.filter((b) => b !== bot && b.enemyId === o.id).length;
     let best: ShipState | undefined;
     let bestScore = Infinity;
@@ -104,6 +104,9 @@ export function chooseTargets(world: World, p: ArenaParams = ARENA): void {
     const keep = current && targetScore(ship, current, chasers(current), p) <= bestScore + p.switchMarginM;
     if (keep || !best || best.id === bot.enemyId) continue;
     bot.enemyId = best.id;
+    // A bot that is running, mending or in port only notes its new enemy: it finishes what it
+    // is doing first. (Before, a new target sent a half-mended bot straight back into the fight.)
+    if (bot.mode === 'flee' || bot.mode === 'repair' || bot.mode === 'port' || bot.mode === 'outlaw') continue;
     bot.mode = 'chase';
     bot.chaseSeconds = 0;
     bot.chaseStartDistance = Math.hypot(best.x - ship.x, best.y - ship.y);
@@ -117,21 +120,16 @@ function pilotOf(world: World, shipId: number): Pilot | undefined {
 
 /**
  * One arena step, after stepWorld (it reads that step's events):
- * counts broadsides, hits and wins; sinks bring a respawn after respawnSeconds; at winsToPeace
+ * counts balls fired, hits and wins; sinks bring a respawn after respawnSeconds; at winsToPeace
  * the arena turns to peace; every retargetSeconds the bots choose their targets.
  */
 export function stepArena(world: World, dt: number, islands: readonly Island[] = ISLANDS, p: ArenaParams = ARENA): void {
   const arena = world.arena;
   if (!arena) return;
-  const fired = new Set<string>();
   for (const e of [...world.events]) {
     if (e.type === 'gunFired') {
-      const key = `${e.shipId}:${e.side}`; // one broadside = several guns in the same step
-      if (!fired.has(key)) {
-        fired.add(key);
-        const pilot = pilotOf(world, e.shipId);
-        if (pilot) pilot.broadsides++;
-      }
+      const pilot = pilotOf(world, e.shipId); // one event per gun (ripple fire)
+      if (pilot) pilot.balls++;
     } else if (e.type === 'hit' && e.zone === 'hull') {
       const pilot = pilotOf(world, e.byShipId);
       if (pilot && e.byShipId !== e.shipId) pilot.hullHits++;
@@ -176,6 +174,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
       hull: SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 1,
       sunk: false,
       repairing: false,
+      offender: undefined,
     });
     const i = world.bots.findIndex((b) => b.shipId === ship.id);
     const fresh = newBot(ship.id, -1, world);

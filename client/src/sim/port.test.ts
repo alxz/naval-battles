@@ -29,7 +29,7 @@ describe('ports', () => {
     expect(inSafeWater(1000, 1000, [])).toBe(false);
   });
 
-  it('a ship in safe water takes no damage; outside it does', () => {
+  it('a ship in safe water takes no ramming damage; outside it does', () => {
     const world = createWorld(1);
     const ship = world.ships[0]!;
     ship.x = port.x + 50;
@@ -42,17 +42,25 @@ describe('ports', () => {
     expect(ship.hull).toBe(before - 30);
   });
 
-  it('a ship in the safe water of the real port cannot fire', () => {
+  it('a ship in the safe water of the real port can fire, but pays for it and becomes an offender (port law)', () => {
     const world = createWorld(1);
     const ship = world.ships[0]!;
     ship.x = PORTS[0]!.x;
     ship.y = PORTS[0]!.y;
-    applyCommand(world, { type: 'fire', shipId: ship.id, side: 'port' });
-    expect(ship.reloadPort).toBe(0);
-    ship.x = 160;
-    ship.y = 90;
+    const before = ship.hull;
     applyCommand(world, { type: 'fire', shipId: ship.id, side: 'port' });
     expect(ship.reloadPort).toBeGreaterThan(0);
+    expect(ship.hull).toBeCloseTo(before * (1 - DAMAGE.port.law.shooterHullShare), 6);
+    expect(ship.offender?.port).toBe(0);
+    // In open water a broadside is free.
+    const other = world.ships[1]!;
+    other.x = 160;
+    other.y = 90;
+    const otherBefore = other.hull;
+    applyCommand(world, { type: 'fire', shipId: other.id, side: 'port' });
+    expect(other.reloadPort).toBeGreaterThan(0);
+    expect(other.hull).toBe(otherBefore);
+    expect(other.offender).toBeUndefined();
   });
 
   it('docked = at the anchorage and almost still', () => {

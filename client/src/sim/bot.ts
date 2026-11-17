@@ -10,7 +10,8 @@
 // only through commands, like the player. Its shots get the same random errors as the player's.
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
-import { inSafeWater, nearestPort, portWaypoint, portsOf } from './port';
+import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
+import { nearestPort, portWaypoint, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
@@ -275,6 +276,15 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const id = ship.id;
   const enemy = world.ships.find((s) => s.id === bot.enemyId);
 
+  // --- Port law: a bot that broke a port's peace (a stray ball is enough) runs out of the reach
+  // of its shore guns and stays away until it is pardoned. Its own guns stay silent meanwhile. ---
+  if (ship.offender) {
+    const lawPort = portsOf(islands)[ship.offender.port];
+    if (lawPort) return leavePort(world, bot, ship, params, islands, lawPort, p);
+  } else if (bot.mode === 'outlaw') {
+    bot.mode = 'idle'; // pardoned: back to the usual life
+  }
+
   // --- No enemy (gone or sunk; or peace in the arena): a hurt ship sails to a port, else it lies still. ---
   if (!enemy || enemy.sunk) {
     const full = params.hullPoints;
@@ -303,8 +313,9 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     if (bot.mode === 'flee' && port && port.distance <= p.portSeekRange) bot.mode = 'port';
   }
   const mine: BotParams = { ...p, preferredRange: bot.personality.preferredRange };
-  // No fighting near a port: an enemy in safe water cannot be attacked. The bot waits outside.
-  const enemySafe = inSafeWater(enemy.x, enemy.y, ports);
+  // Port law: an enemy the port protects is left alone; the bot waits outside.
+  // (An offender has lost that protection: the bot goes for him even in safe water.)
+  const enemySafe = protectedByPort(enemy, ports);
   const waiting = enemySafe && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff');
   if (waiting) bot.mode = 'idle';
 
@@ -374,10 +385,18 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: id, value: sails });
 
   // --- Guns: aim with the side that faces the enemy, fire when it is in the arc. ---
-  if (enemySafe || inSafeWater(ship.x, ship.y, ports)) return commands; // no fighting near a port
+  // Bots keep the port law: no fire at a protected ship, and no fire from inside safe water
+  // unless an offender is there to be shot at.
+  if (enemySafe) return commands;
+  const myPort = safePortIndex(ship.x, ship.y, ports);
+  if (myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
   const side: Side = Math.abs(normalizeAngle(bearing - sideAngleRad(ship.headingRad, 'port'))) < Math.PI / 2 ? 'port' : 'starboard';
   const flight = predictLanding(ship, params, side, STEP_SECONDS).seconds;
   const target = aimPoint(ship, enemy, flight);
+  // The enemy will be in safe water when the balls come down (it is just slipping into port):
+  // hold the fire, or the port would call this bot an offender.
+  const landsIn = safePortIndex(target.x, target.y, ports, DAMAGE, PORT_EDGE_MARGIN_M);
+  if (landsIn >= 0 && !isOffenderOf(enemy, landsIn)) return commands;
   const aimDistance = Math.hypot(target.x - ship.x, target.y - ship.y);
   const maxDeg = GUNS.maxElevationDeg;
   const longest = predictLanding({ ...ship, speed: 0, elevationDeg: maxDeg }, params, side, STEP_SECONDS);
@@ -398,6 +417,25 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }
   }
+  return commands;
+}
+
+/** Bots hold their fire when the aim point is this close to a port's safe water (balls scatter). */
+const PORT_EDGE_MARGIN_M = 30;
+
+/** An offender bot sails straight away from the port whose peace it broke, under full sail, until it is pardoned. */
+function leavePort(world: World, bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], port: Port, p: BotParams): Command[] {
+  bot.mode = 'outlaw';
+  bot.side = null;
+  let steer = steerWithTacks(Math.atan2(ship.y - port.y, ship.x - port.x), params, world.wind, bot, p);
+  const clear = avoidShips(ship, params, world.ships, steer, p);
+  if (clear !== null) steer = clear;
+  const away = avoidLand(ship, params, islands, steer, p);
+  if (away !== null) steer = away;
+  const commands: Command[] = [];
+  const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
+  if (ship.sailLevel < 0.99) commands.push({ type: 'setSails', shipId: ship.id, value: 1 });
   return commands;
 }
 

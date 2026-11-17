@@ -2,6 +2,7 @@
 // Pure: no Phaser and no browser here; the scene stores it and offers it as a download.
 
 import { SHIP_CLASSES } from '../sim/data';
+import { PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Keep at most this many lines (about 300 KB); the oldest go first. */
@@ -18,8 +19,14 @@ export function clock(seconds: number): string {
   return h > 0 ? `${h}:${two(m)}:${two(s % 60)}` : `${two(m)}:${two(s % 60)}`;
 }
 
-/** "#3 Black Gull (brigantine)" */
+/** "the port of Isla Verde" for a port index. */
+export function portName(port: number): string {
+  return `the port of ${PORTS[port]?.name ?? '?'}`;
+}
+
+/** "#3 Black Gull (brigantine)"; a ball owner below 0 is a shore battery: "the shore guns of ...". */
 export function who(world: World, shipId: number): string {
+  if (shipId < 0) return `the shore guns of ${PORTS[-shipId - 1]?.name ?? 'a port'}`;
   const pilot = world.arena?.pilots.find((p) => p.shipId === shipId);
   const ship = world.ships.find((s) => s.id === shipId);
   return pilot ? `#${pilot.number} ${pilot.name} (${ship?.shipClass ?? '?'})` : `ship ${shipId}`;
@@ -29,8 +36,8 @@ export function who(world: World, shipId: number): string {
 export function standings(arena: ArenaState, world: World): string[] {
   const rows = [...arena.pilots].sort((a, b) => b.wins - a.wins || a.losses - b.losses);
   return rows.map((p) => {
-    const hitRate = p.broadsides > 0 ? (p.hullHits / p.broadsides).toFixed(2) : '-';
-    return `   ${who(world, p.shipId).padEnd(32)} wins ${String(p.wins).padStart(3)}  losses ${String(p.losses).padStart(3)}  broadsides ${String(p.broadsides).padStart(4)}  hull hits ${String(p.hullHits).padStart(4)}  hits/broadside ${hitRate}`;
+    const hitRate = p.balls > 0 ? (p.hullHits / p.balls).toFixed(2) : '-';
+    return `   ${who(world, p.shipId).padEnd(32)} wins ${String(p.wins).padStart(3)}  losses ${String(p.losses).padStart(3)}  balls ${String(p.balls).padStart(4)}  hull hits ${String(p.hullHits).padStart(4)}  hits/ball ${hitRate}`;
   });
 }
 
@@ -70,8 +77,13 @@ export class ArenaLog {
         const by = world.ships.find((s) => s.id === e.byShipId);
         const full = by ? hullOf(world, by.id) : 0;
         const left = by && full > 0 ? ` with ${Math.round((100 * by.hull) / full)}% of its hull left` : '';
-        this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}. Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`);
+        const wins = e.byShipId < 0 ? `Nobody's win, ${arena.totalWins} in all` : `Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`;
+        this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}. ${wins}`);
       } else if (e.type === 'respawn') this.add(now, `${who(world, e.shipId)} is back at sea at (${Math.round(e.x)}, ${Math.round(e.y)})`);
+      else if (e.type === 'offender') {
+        const how = e.reason === 'fired' ? 'fired in its safe water' : 'hit a ship in its safe water';
+        this.add(now, `PORT LAW: ${who(world, e.shipId)} ${how}: an offender of ${portName(e.port)}, the shore guns open fire`);
+      } else if (e.type === 'pardoned') this.add(now, `PORT LAW: ${who(world, e.shipId)} is pardoned by ${portName(e.port)}`);
       else if (e.type === 'peace') this.add(now, `PEACE after ${e.totalWins} wins: nobody attacks any more; hurt ships sail to port`);
       else if (e.type === 'collision' && (e.damageA > 0 || e.damageB > 0)) {
         this.add(now, `collision: ${who(world, e.shipA)} (-${Math.round(e.damageA)}) and ${who(world, e.shipB)} (-${Math.round(e.damageB)})`);
@@ -89,6 +101,7 @@ export class ArenaLog {
     const now = world.tick * (1 / 30);
     if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs`);
+    else if (mode === 'outlaw') this.add(now, `${who(world, shipId)} runs from the shore guns`);
   }
 
   /** The whole log as one text file: a header, the lines, and the scores now. */

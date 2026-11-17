@@ -81,6 +81,20 @@ export class Cannonballs {
           );
         }
       }
+      if (e.type === 'shoreFired') {
+        // A shore gun: a bigger flash and smoke that the wind takes.
+        this.addFading('flash', e.x, e.y, s, FLASH_SECONDS * 1.5, 2);
+        for (let i = 0; i < 3; i++) {
+          const jitter = (Math.random() - 0.5) * 0.8;
+          const speed = drift * (0.7 + Math.random() * 0.6);
+          this.addFading('smoke', e.x + (Math.random() - 0.5) * 4, e.y - 3 + (Math.random() - 0.5) * 4, s, SMOKE_SECONDS * (0.9 + Math.random() * 0.5), 2.5, {
+            vx: Math.cos(downwind + jitter) * speed,
+            vy: Math.sin(downwind + jitter) * speed - 0.6,
+            alpha: 0.5,
+            delay: i * 0.06,
+          });
+        }
+      }
       if (e.type === 'hit') this.addFading(e.zone === 'hull' ? 'splinters' : 'canvas', e.x, e.y - e.z * HEIGHT_SCALE, s, 0.6, 2);
       if (e.type === 'sunk') {
         this.addFading('splash', e.x, e.y, s, 2.5, 8);

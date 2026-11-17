@@ -1,16 +1,18 @@
 // Hull damage from any cause (a ball, a collision) goes through here, so a ship sinks in one way only.
 
-import { PORTS, inSafeWater } from './port';
+import { protectedByPort } from './law';
+import { PORTS } from './port';
 import type { Port } from './port';
 import type { ShipState, World } from './types';
 
 /**
  * Take hull points off a ship. At 0 it sinks: it stops, and a 'sunk' event tells the screen.
- * A ship in the safe water of a port takes no damage at all.
+ * A law-abiding ship in the safe water of a port takes no damage here (ramming); balls are
+ * judged by the port law first (sim/law.ts `ballDamage`) and then come with `decided` = true.
  */
-export function damageHull(world: World, ship: ShipState, amount: number, byShipId: number, ports: readonly Port[] = PORTS): void {
+export function damageHull(world: World, ship: ShipState, amount: number, byShipId: number, ports: readonly Port[] = PORTS, decided = false): void {
   if (ship.sunk || amount <= 0) return;
-  if (inSafeWater(ship.x, ship.y, ports)) return;
+  if (!decided && protectedByPort(ship, ports)) return;
   ship.hull = Math.max(0, ship.hull - amount);
   if (ship.hull === 0) {
     ship.sunk = true;

@@ -46,6 +46,9 @@ export interface HudData {
   repairSeaShare: number; // repair at sea mends up to this share of the hull (a tick on the bar)
   repairPortShare: number; // a port mends up to this share (a second tick); 0 = the sea has no port
   safeWater: boolean; // my ship is in the safe water of a port
+  /** Port law: 'inside' = I am an offender within reach of the shore guns; 'outside' = out of reach, waiting for the pardon. */
+  offender: 'no' | 'inside' | 'outside';
+  pardonSeconds: number; // seconds until the pardon (when 'outside')
   ships: { x: number; y: number }[]; // ship centres on the screen (logical px): panels over them fade
   seconds: number; // since the last frame
 }
@@ -255,8 +258,10 @@ export class Hud {
     gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
     if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
-    const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
-    this.status.setText(status).setColor(status === 'REPAIRING' || status === 'SAFE WATER' ? '#7be07a' : '#ff8070');
+    const law = d.offender === 'inside' ? 'OFFENDER!' : d.offender === 'outside' ? `PARDON ${Math.ceil(d.pardonSeconds)}s` : '';
+    const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : law !== '' ? law : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
+    const colour = status === 'REPAIRING' || status === 'SAFE WATER' ? '#7be07a' : d.offender === 'outside' && status === law ? '#ffd24a' : '#ff8070';
+    this.status.setText(status).setColor(colour);
 
     // --- Target ---
     this.targetText.setVisible(target !== null);

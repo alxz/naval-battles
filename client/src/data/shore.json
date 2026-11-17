@@ -1,0 +1,12 @@
+{
+  "muzzleSpeed": 105,
+  "gunHeight": 8,
+  "minElevationDeg": -8,
+  "maxElevationDeg": 18,
+  "reloadSeconds": 10,
+  "damage": 40,
+  "gunSigmaDeg": 1.0,
+  "aimErrorSigmaDeg": 0.6,
+  "battleSkill": 4,
+  "thinkEveryTicks": 3
+}

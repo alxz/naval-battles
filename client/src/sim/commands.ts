@@ -1,4 +1,4 @@
-import { inSafeWater } from './port';
+import { onBroadsideFired } from './law';
 import { normalizeAngle } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
 import { newBot } from './bot';
@@ -46,14 +46,14 @@ export function applyCommand(world: World, command: Command): void {
       // A placed ship starts fresh: full hull, afloat (the test target comes back this way).
       ship.hull = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? ship.hull;
       ship.sunk = false;
+      ship.offender = undefined;
       break;
     case 'setElevation':
       ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);
       break;
     case 'fire':
-      // No fighting near a port: the guns of a ship in safe water stay silent.
-      if (inSafeWater(ship.x, ship.y)) break;
-      orderBroadside(world, ship, command.side, STEP_SECONDS);
+      // Port law (D40): firing in a port's safe water is allowed, but it has its price (sim/law.ts).
+      if (orderBroadside(world, ship, command.side, STEP_SECONDS)) onBroadsideFired(world, ship);
       break;
   }
 }

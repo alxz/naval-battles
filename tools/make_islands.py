@@ -77,6 +77,7 @@ PATH = (206, 184, 132)
 # Looks for the islands you drew by hand (islands.json), in their order. An island may also carry its own "theme".
 ANCHORAGE = 70  # metres from the end of the pier to the port's anchorage (where ships stop to repair)
 LAST_PIER: dict[str, float] = {}
+SHORE_GUNS: list[dict] = []  # set by paint() for a port: where its shore guns stand, in world metres (port law, D40)
 SOLIDS: list[dict] = []  # set by paint() for a village: quay, piers and boats as polygons in world metres
 MOUTHS: list[tuple[float, float]] = []  # set by paint(): river mouths in world metres, printed for testing  # set by paint() for a village: the world position of the end of its pier
 HANDMADE_THEMES = ["volcano", "village"]
@@ -220,6 +221,36 @@ def soft_noise(rng, shape: tuple[int, int], cell: int) -> np.ndarray:
     coarse = rng.uniform(0, 1, (shape[0] // cell + 2, shape[1] // cell + 2)).astype(np.float32)
     image = Image.fromarray((coarse * 255).astype(np.uint8)).resize((shape[1], shape[0]), Image.BICUBIC)
     return np.asarray(image, dtype=np.float32) / 255
+
+
+def shore_gun(pen, land: np.ndarray, x: float, y: float, toward: tuple[float, float], min_x: float, min_y: float) -> None:
+    """One shore gun: a small stone platform with a dark barrel that points at the water (toward).
+    Drawn without random numbers, so the islands' shapes stay as they are. Its place goes to SHORE_GUNS."""
+    h, w = land.shape
+    x, y = int(round(x)), int(round(y))
+    if not (5 <= x < w - 5 and 5 <= y < h - 5):
+        print(f"  shore gun at ({x}, {y}) is off the picture: left out")
+        return
+    if not land[y, x]:
+        # Not on land: walk away from the water until we are (at most 30 px).
+        dx, dy = x - toward[0], y - toward[1]
+        n = math.hypot(dx, dy) or 1.0
+        for k in range(1, 31):
+            nx, ny = int(round(x + dx / n * k)), int(round(y + dy / n * k))
+            if 5 <= nx < w - 5 and 5 <= ny < h - 5 and land[ny, nx]:
+                x, y = nx, ny
+                break
+        else:
+            print(f"  shore gun at ({x}, {y}) is not on land: left out")
+            return
+    pen.rectangle((x - 4, y - 3, x + 5, y + 4), fill=(96, 92, 88, 255))  # shadow
+    pen.rectangle((x - 5, y - 4, x + 4, y + 3), fill=(168, 164, 154, 255))  # stone platform
+    pen.rectangle((x - 4, y - 3, x + 3, y + 2), fill=(196, 192, 180, 255))
+    dx, dy = toward[0] - x, toward[1] - y
+    n = math.hypot(dx, dy) or 1.0
+    pen.line((x, y, x + dx / n * 6, y + dy / n * 6), fill=(34, 34, 40, 255), width=2)  # the barrel
+    pen.rectangle((x - 1, y - 1, x + 1, y + 1), fill=(92, 62, 40, 255))  # the carriage
+    SHORE_GUNS.append({"x": float(min_x + x), "y": float(min_y + y)})
 
 
 def paint(
@@ -425,6 +456,10 @@ def paint(
         pen.rectangle((fx + 1, fy - 16, fx + 3, fy - 10), fill=(192, 57, 43, 255))
         for py in (fy - 14, fy - 13, fy - 12):
             pen.point((fx + 2, py), fill=(255, 255, 255, 255))
+        # Three shore guns round the harbour (port law): one each side of the town, one behind it.
+        for a_deg, d in ((-72, 12), (72, 12), (-20, 58)):
+            a = direction + math.pi + math.radians(a_deg)
+            shore_gun(pen, land, hx + math.cos(a) * (r + d), hy + math.sin(a) * (r + d), (hx, hy), min_x, min_y)
 
     if village:
         vy, vx = village
@@ -508,6 +543,9 @@ def paint(
         pen.point((fx + 2, fy - 14), fill=(255, 255, 255, 255))
         pen.point((fx + 2, fy - 12), fill=(255, 255, 255, 255))
         pen.point((fx + 2, fy - 13), fill=(255, 255, 255, 255))
+        # Three shore guns (port law): one at each end of the quay, one on the rise behind the town.
+        for gx, gy in ((vx - 60, shore_y(vx - 60) - 8), (vx + 62, shore_y(vx + 62) - 8), (vx, vy - 36)):
+            shore_gun(pen, land, gx, gy, (gx if gy != vy - 36 else vx, h), min_x, min_y)
         # Houses of the town behind the warehouses.
         for hx, hy in ((-40, -12), (-30, -22), (-18, -27), (-6, -29), (6, -28), (18, -25), (30, -20), (40, -12),
                        (-34, -8), (-22, -15), (-9, -18), (4, -17), (16, -14), (28, -9), (-14, -6), (10, -5)):
@@ -599,9 +637,10 @@ def main() -> None:
                 "kind": kind,
                 "points": [{"x": float(x), "y": float(y)} for x, y in points],
                 "picture": {"file": file, "x": px, "y": py},
-                **({"inlet": inlet, "port": {"x": inlet["harbour"]["x"], "y": inlet["harbour"]["y"]}} if inlet else {}),
+                **({"inlet": inlet, "port": {"x": inlet["harbour"]["x"], "y": inlet["harbour"]["y"], "guns": list(SHORE_GUNS)}} if inlet else {}),
             }
         )
+        SHORE_GUNS.clear()
         if inlet:
             print(f"{name:20} inlet: mouth ({inlet['x']}, {inlet['y']}), head ({inlet['headX']}, {inlet['headY']})")
         mouths = ", ".join(f"({x:.0f}, {y:.0f})" for x, y in MOUTHS)
@@ -624,7 +663,8 @@ def main() -> None:
             SOLIDS.clear()
         if theme == "village":
             # The village is the neutral port: its anchorage lies in open water, south of the pier.
-            island["port"] = {"x": LAST_PIER["x"], "y": LAST_PIER["y"] + ANCHORAGE}
+            island["port"] = {"x": LAST_PIER["x"], "y": LAST_PIER["y"] + ANCHORAGE, "guns": list(SHORE_GUNS)}
+        SHORE_GUNS.clear()
         print(f"{island['name']:20} hand-made, {theme or 'plain'}  {picture.width} x {picture.height} px")
     (DATA / "islands.json").write_text(json.dumps({"islands": handmade}, indent=2) + "\n", encoding="utf-8")
     print("written islands.json (pictures added)")

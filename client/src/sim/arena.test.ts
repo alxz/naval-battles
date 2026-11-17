@@ -45,7 +45,7 @@ describe('choosing targets', () => {
 });
 
 describe('stepArena', () => {
-  it('counts one broadside per side per step, hull hits, wins; a sunk ship comes back after respawnSeconds', () => {
+  it('counts every ball fired, hull hits, wins; a sunk ship comes back after respawnSeconds', () => {
     const w = createArenaWorld(5);
     w.events = [
       { type: 'gunFired', shipId: 1, side: 'port', x: 0, y: 0 },
@@ -55,7 +55,7 @@ describe('stepArena', () => {
     ];
     stepArena(w, STEP_SECONDS);
     const p1 = w.arena!.pilots[0]!;
-    expect(p1.broadsides).toBe(1);
+    expect(p1.balls).toBe(2);
     expect(p1.hullHits).toBe(1);
     w.ships[1]!.sunk = true;
     w.ships[1]!.hull = 0;
@@ -98,7 +98,7 @@ describe('arena scenario (headless)', () => {
       respawns += sim.takeEvents().filter((e) => e.type === 'respawn').length;
     }
     const arena = sim.world.arena!;
-    expect(arena.pilots.reduce((n, p) => n + p.broadsides, 0)).toBeGreaterThan(30);
+    expect(arena.pilots.reduce((n, p) => n + p.balls, 0)).toBeGreaterThan(100);
     expect(arena.totalWins).toBeGreaterThanOrEqual(1);
     expect(respawns).toBeGreaterThanOrEqual(1);
   }, 60000);

@@ -4,6 +4,44 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 16 Nov 2026 (night, 3) — M3 step 3: port law (D40) and the shore guns
+
+### Before the code
+
+New chat, code taken from GitHub (`2fc0db4`): 242 tests (241 + your angle test), build clean. Your arena log (79 game minutes) read: 42 wins; 37 of the 42 sunk ships had turned for a port less than 2 minutes before; frigate 19 wins, merchantman 1 win / 9 losses; ramming in chains. The "broadsides" column really counted balls. Your answers: a shot from outside at a ship in port = half damage and the shooter is an offender; pardon after a wait beyond 450 m (45 s chosen); the log label and the mode reset go into this step.
+
+### Two new ideas in the code
+
+- **The offender flag** (`ShipState.offender = { port, forgiveLeft }`): a ship that broke a port's peace. It is plain data on the ship, so saves and tests repeat exactly.
+- **A gun owner that is not a ship** (`sim/shore.ts`): a port's battery has its own timers in the world (`world.shore`); its balls go into the same `world.balls` list with an owner id below 0 (port 0 = −1), so flight, hits, splashes and pictures need no second copy.
+
+### The rules (`sim/law.ts`)
+
+- Fire rule: a broadside fired in safe water costs the shooter 2% of its full hull (never the last point) and makes it an offender. It is free when an offender of that port is within 450 m (you are helping the port).
+- Hit rule: a ball on a law-abiding ship in safe water does half damage and makes the shooter an offender, wherever he fired from. Ramming still does nothing to a law-abiding ship there.
+- An offender: full damage in port, no repair (port or sea), a legal target for everybody, fired at by the shore guns within 450 m of the anchorage. Pardon after 45 s beyond 450 m; coming back starts the clock again.
+- Shore guns (`data/shore.json`): 3 per port, 105 m/s, −8…18°, reach about 660 m (every place inside the 450 m ring of both ports; a test checks it), reload 10 s, one gun about every 3.3 s, damage 40, spread 1.0° with the same sigma formula as ships, plus the gunners' misjudgement (0.6°). They lead a moving ship. Their balls hurt offenders only.
+- Bots: no fire from safe water or at a protected ship; no fire when the balls would come down in safe water (an enemy just slipping into port); an offender is attacked even in port; an offender bot sails straight out (mode `outlaw`) until pardoned.
+
+### Also
+
+- Arena log: "balls" and "hits/ball"; lines "PORT LAW: … an offender …", "… is pardoned …", "sunk by the shore guns of …" (nobody's win).
+- Mode reset: `chooseTargets` set every bot with a new target to `chase`. A bot in `port` or `repair` with 30–90% hull then left its repair and went back to fight. Now such a bot only notes the new enemy. Three headless hours: 13–20 wins an hour before and after, so the pace did not drop.
+- `maxBallSeconds` 6 → 8: a shore ball at 18° flies 6.7 s.
+- `make_islands.py`: three gun platforms per port, drawn without random numbers (island shapes unchanged; checked).
+
+### Measured
+
+Sloop, 8 seeds: lying in port after one broadside = sunk in 43–101 s (7 hits); sailing straight out under full sail = 8 shots, 0–4 hits, pardon 70 s after the broadside. Frigate: sunk in about 1.5–2 min if it stays (18 hits); 2–5 hits if it leaves.
+
+273 tests (31 new: `law.test.ts`, `shore.test.ts`); build clean; headless computer and iPhone 13 landscape: broadside in port → "OFFENDER!", shore guns fire and hit, sailing out → "PARDON 44s" → pardoned; no errors (only the old missing favicon).
+
+**Not checked:** your own `islands.json` (the gun places are computed from your village island; if a place falls in the water the tool moves it inland or leaves it out and says so). An offender bot inside the inlet harbour steers "away from the port", not along the inlet; bots become offenders only by a stray ball, so this waits.
+
+**Next:** sail and crew damage, 3 ammunition types.
+
+---
+
 ## 16 Nov 2026 (evening, 2) — M3 step 1b (fixes) and step 2: the auto-bot arena
 
 ### Your test of step 1

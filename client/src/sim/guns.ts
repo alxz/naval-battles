@@ -2,6 +2,7 @@ import { accuracyInputs, gunSigmaDeg, salvoSigmaDeg } from './accuracy';
 import { degToRad } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
 import { damageHull } from './damage';
+import { ballDamage, isOffenderOf } from './law';
 import { nextGaussian } from './random';
 import { ballHit } from './hits';
 import type { HitZone } from './hits';
@@ -85,10 +86,11 @@ export function reloadLeft(ship: ShipState, side: Side): number {
 /**
  * The `fire` command: if the battery is loaded, plan the shots of all its guns
  * (ripple fire: one after another over `rippleSeconds`) and start reloading.
+ * Returns true if the broadside was really ordered.
  */
-export function orderBroadside(world: World, ship: ShipState, side: Side, stepSeconds: number, g: GunParams = GUNS): void {
+export function orderBroadside(world: World, ship: ShipState, side: Side, stepSeconds: number, g: GunParams = GUNS): boolean {
   const params = SHIP_CLASSES[ship.shipClass];
-  if (!params || ship.sunk || reloadLeft(ship, side) > 0) return;
+  if (!params || ship.sunk || reloadLeft(ship, side) > 0) return false;
   const n = params.gunsPerSide;
   // The roll of the ship: one random error for the whole broadside (plan 4.4).
   const salvoErrorDeg = nextGaussian(world) * salvoSigmaDeg(accuracyInputs(ship, world.wind.strength), g);
@@ -98,6 +100,7 @@ export function orderBroadside(world: World, ship: ShipState, side: Side, stepSe
   }
   if (side === 'port') ship.reloadPort = params.reloadSeconds;
   else ship.reloadStarboard = params.reloadSeconds;
+  return true;
 }
 
 /** Fire the guns whose time has come, move every ball, and make splashes. */
@@ -151,6 +154,8 @@ function firstHit(world: World, ball: Ball, from: { x: number; y: number; z: num
   let best: { ship: ShipState; zone: HitZone; t: number } | null = null;
   for (const ship of world.ships) {
     if (ship.id === ball.shipId || ship.sunk) continue;
+    // A shore gun's ball (owner id below 0) is meant for the offenders of its port only.
+    if (ball.shipId < 0 && !isOffenderOf(ship, -ball.shipId - 1)) continue;
     const params = SHIP_CLASSES[ship.shipClass];
     if (!params) continue;
     const hit = ballHit(ship, params, from, to);
@@ -166,7 +171,9 @@ function firstHit(world: World, ball: Ball, from: { x: number; y: number; z: num
 function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, point: { x: number; y: number; z: number }, g: GunParams): void {
   world.events.push({ type: 'hit', shipId: ship.id, byShipId: ball.shipId, zone, ...point });
   if (zone !== 'hull') return;
-  damageHull(world, ship, g.damage, ball.shipId);
+  // The port law may halve the damage and mark the shooter (sim/law.ts).
+  const shooter = world.ships.find((s) => s.id === ball.shipId);
+  damageHull(world, ship, ballDamage(world, ship, shooter, ball.damage ?? g.damage), ball.shipId, undefined, true);
 }
 
 /**

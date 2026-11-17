@@ -3,6 +3,8 @@ import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
 import { DAMAGE, ISLANDS, POLARS, SHIP_CLASSES, WIND } from './data';
 import { stepGunsAndBalls } from './guns';
+import { stepLaw } from './law';
+import { stepShore } from './shore';
 import { touchesLand } from './land';
 import { clamp } from './math';
 import { polarShare } from './polar';
@@ -150,6 +152,8 @@ export function stepWorld(
   collideShips(world, islands); // ships cannot sail through each other
   stepRepair(world, dt); // crews mend the hull when it is safe
   stepPortRepair(world, dt); // a port does it faster and better
+  stepLaw(world, dt); // port law: offenders that stayed away long enough are pardoned
+  stepShore(world, dt); // the shore guns fire at offenders
   stepGunsAndBalls(world, dt);
   world.tick += 1;
 }

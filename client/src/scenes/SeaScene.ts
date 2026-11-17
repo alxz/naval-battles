@@ -332,7 +332,8 @@ export class SeaScene extends Phaser.Scene {
     });
 
     this.islands.update(s);
-    this.portMarks.update(s, this.time.now / 1000);
+    const watched = this.sim.world.ships[this.focusIndex];
+    this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);
     this.fog.update(seconds, this.sim.world.wind, s, v.fog);
     const events = this.sim.takeEvents();
     if (this.arena) this.recordArena(events, seconds);
@@ -433,6 +434,8 @@ export class SeaScene extends Phaser.Scene {
       repairSeaShare: DAMAGE.repair.seaMaxShare,
       repairPortShare: PORTS.length > 0 ? DAMAGE.port.maxShare : 0,
       safeWater: inSafeWater(myShip.x, myShip.y),
+      offender: !myShip.offender ? 'no' : myShip.offender.forgiveLeft < DAMAGE.port.law.forgiveSeconds ? 'outside' : 'inside',
+      pardonSeconds: myShip.offender?.forgiveLeft ?? 0,
       ships: shipsOnScreen,
       seconds,
       ship: myShip,
@@ -477,7 +480,7 @@ export class SeaScene extends Phaser.Scene {
       return;
     }
     const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
-    if (myShip.sunk) this.banner.request('lose', `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
+    if (myShip.sunk) this.banner.request('lose', this.sunkBy < 0 ? 'Sunk by the shore guns' : `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
     else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk)) {
       this.banner.request('win', foes.length === 1 ? `Enemy ${foes[0]?.shipClass ?? 'ship'} sunk` : `All ${foes.length} enemies sunk`, this.duelStats());
     }
@@ -633,6 +636,9 @@ export class SeaScene extends Phaser.Scene {
         case 'gunFired':
           this.sounds.play('cannon', e.x, e.y, ear, halfWidthM, 0.8, 150);
           if (e.shipId === myId) shake(SHAKE_MY_GUN);
+          break;
+        case 'shoreFired':
+          this.sounds.play('cannon', e.x, e.y, ear, halfWidthM, 1, 60);
           break;
         case 'splash':
           this.sounds.play('splash', e.x, e.y, ear, halfWidthM, 0.35, 250);

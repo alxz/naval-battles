@@ -1,6 +1,7 @@
 // A neutral port ("Open Sea" package C). Simple first:
-//  - round the anchorage there is safe water: a ship inside cannot fire and takes no damage
-//    (no ball, no ramming), whoever it is;
+//  - round the anchorage there is safe water, kept by the port law (sim/law.ts): a law-abiding
+//    ship inside takes no ramming damage and only part of a ball's damage, and whoever fires
+//    there, or at it, becomes an offender whom the shore guns fire at (sim/shore.ts);
 //  - a ship that lies almost still at the anchorage is repaired up to 90% of a full hull,
 //    faster than at sea, even with an enemy near;
 //  - bots know the same rules: a badly hurt bot runs for the port, and no bot attacks a ship in safe water.
@@ -15,6 +16,8 @@ export interface Port {
   y: number;
   /** A port up an inlet: the way in, from the mouth to the anchorage (bots follow it). */
   path?: { x: number; y: number }[];
+  /** The places of its shore guns, metres (port law, sim/shore.ts). */
+  guns?: { x: number; y: number }[];
 }
 
 /** The ports of these islands. */
@@ -22,7 +25,8 @@ export function portsOf(islands: readonly Island[]): Port[] {
   return islands.flatMap((island) => {
     if (!island.port) return [];
     const path = island.inlet?.path;
-    return [{ name: island.name, x: island.port.x, y: island.port.y, ...(path ? { path } : {}) }];
+    const guns = island.port.guns;
+    return [{ name: island.name, x: island.port.x, y: island.port.y, ...(path ? { path } : {}), ...(guns ? { guns } : {}) }];
   });
 }
 
@@ -75,9 +79,13 @@ export function inSafeWater(x: number, y: number, ports: readonly Port[] = PORTS
   return near !== null && near.distance <= d.port.safeRange;
 }
 
-/** Does this ship lie at the anchorage, slow enough for the port's carpenters to work? */
+/**
+ * Does this ship lie at the anchorage, slow enough for the port's carpenters to work?
+ * A port does not serve a ship that broke its peace (port law, sim/law.ts).
+ */
 export function isDocked(ship: ShipState, ports: readonly Port[] = PORTS, d: DamageParams = DAMAGE): boolean {
   const near = nearestPort(ship.x, ship.y, ports);
+  if (near !== null && ship.offender !== undefined && ports[ship.offender.port] === near.port) return false;
   return !ship.sunk && near !== null && near.distance <= d.port.dockRange && Math.abs(ship.speed) <= d.port.maxDockSpeed;
 }
 

@@ -18,7 +18,13 @@
     "dockRange": 90,
     "maxDockSpeed": 2,
     "maxShare": 0.9,
-    "sharePerSecond": 0.02
+    "sharePerSecond": 0.02,
+    "law": {
+      "shooterHullShare": 0.02,
+      "damageFactor": 0.5,
+      "leaveFactor": 1.5,
+      "forgiveSeconds": 45
+    }
   },
   "slowdown": {
     "startShare": 0.5,
