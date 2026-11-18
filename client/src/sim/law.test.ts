@@ -11,8 +11,8 @@ import type { Port } from './port';
 import { STEP_SECONDS, stepWorld } from './step';
 import { createWorld } from './world';
 
-const port: Port = { name: 'Test port', x: 1000, y: 1000 };
-const far: Port = { name: 'Far port', x: 5000, y: 1000 };
+const port: Port = { name: 'Test port', x: 1000, y: 1000, berths: 3 };
+const far: Port = { name: 'Far port', x: 5000, y: 1000, berths: 3 };
 const ports = [port, far];
 const law = DAMAGE.port.law;
 const SAFE = DAMAGE.port.safeRange;

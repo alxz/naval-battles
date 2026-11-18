@@ -4,12 +4,14 @@ import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { GUNS } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
 import type { ShipState, Side, Wind } from '../sim/types';
-import { TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
+import { HUD_MARGIN, TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
 import type { HudLayout, Rect } from '../view/hudLayout';
 import { Compass } from './Compass';
 import { ICON_SIZE } from './icons';
 import { BAR_ICONS, barIconHeight, barIconPixels, barIconWidth } from '../view/barIcons';
 import type { BarIconName } from '../view/barIcons';
+import { ammoIconPixels, ammoIconSize } from '../view/ammoIcons';
+import type { AmmoSlot } from '../view/ammoIcons';
 import { textStyle } from './text';
 import type { TextKind } from './text';
 
@@ -42,7 +44,8 @@ export interface HudData {
   hullMax: number;
   sailShare: number; // my sails 0..1 (M3 step 4)
   crewShare: number; // my crew 0..1
-  ammoLabel: string; // the loaded kind of shot (computer: above the guns panel)
+  ammoSlots: AmmoSlot[]; // computer: the three kinds of shot as icons with counts above the guns panel (M3 step 4c)
+  coveredRightPx: number; // computer: the open tuning panel covers this much of the right edge (the target card moves left)
   sailing: SailingInfo;
   wind: Wind;
   rangeM: number; // where the guns land now (lying still), metres from the ship
@@ -105,8 +108,11 @@ export class Hud {
   private readonly autoZoomIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
-  private readonly ammoText: Phaser.GameObjects.Text;
-  private l: HudLayout = hudLayout(640, 360, false);
+  private readonly ammoCounts: Phaser.GameObjects.Text[] = [];
+  private readonly ammoKeys: Phaser.GameObjects.Text[] = [];
+  private base: HudLayout = hudLayout(640, 360, false);
+  private l: HudLayout = this.base;
+  private covered = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -132,7 +138,12 @@ export class Hud {
     this.range = text('main', '#cfe6f7');
     this.sideText = { port: text('main', '#1b1b1b').setOrigin(0.5), starboard: text('main', '#1b1b1b').setOrigin(0.5) };
     this.debugText = text('small');
-    this.ammoText = text('small', '#ffe9a8').setOrigin(0.5, 1);
+    if (!touch) {
+      for (let i = 0; i < 3; i++) {
+        this.ammoCounts.push(text('small', '#ffe9a8').setOrigin(0.5, 0));
+        this.ammoKeys.push(text('small', '#cfe6f7').setOrigin(1, 0).setAlpha(0.8));
+      }
+    }
     this.hint = text('small', '#cfe6f7').setAlpha(0.75);
 
     if (!touch) {
@@ -163,7 +174,9 @@ export class Hud {
   /** The screen got a new logical size: move the panels. */
   layout(width: number, height: number): void {
     const l = hudLayout(width, height, this.touch);
+    this.base = l;
     this.l = l;
+    this.covered = 0;
     const s = l.ship;
     if (l.compact) {
       // Phone: a small compass and the speed in the 8 px font.
@@ -175,7 +188,7 @@ export class Hud {
     }
     const t = l.target;
     // Status: just outside the panels (above my ship on a computer, below the target card on touch).
-    this.status.setPosition(s.x + 2, this.touch ? t.y + t.h + 5 : s.y - 14);
+    this.status.setPosition(l.status.x, l.status.y);
     if (this.touch) this.targetText.setStyle(textStyle('small')).setPosition(t.x + 6, t.y + 3);
     else this.targetText.setPosition(t.x + 8, t.y + 6);
     const gn = l.guns;
@@ -191,7 +204,6 @@ export class Hud {
     }
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
     // Computer: the loaded shot just above the guns panel (touch screens have a button for it).
-    this.ammoText.setPosition(gn.x + gn.w / 2, gn.y - 3).setVisible(!this.touch);
     this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
     const so = l.sound;
     this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
@@ -208,6 +220,13 @@ export class Hud {
 
   update(d: HudData): void {
     const { ship, sailing } = d;
+    // Computer: the open tuning panel covers the right edge; the target card steps left of it.
+    if (!this.touch && Math.round(d.coveredRightPx) !== this.covered) {
+      this.covered = Math.round(d.coveredRightPx);
+      const bt = this.base.target;
+      this.l = { ...this.base, target: { ...bt, x: Math.max(HUD_MARGIN, bt.x - this.covered) } };
+      this.targetText.setPosition(this.l.target.x + 8, this.l.target.y + 6);
+    }
     const l = this.l;
     // Touch: far enemies get no card (the red arrows at the screen edge tell the distance).
     const target = d.target && this.touch && !d.target.sunk && d.target.distance > TARGET_CARD_RANGE_TOUCH ? null : d.target;
@@ -304,7 +323,7 @@ export class Hud {
       this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
     }
     this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
-    this.ammoText.setText(`${d.ammoLabel}   1 2 3`).setAlpha(this.fade.guns);
+    if (!this.touch) this.ammoRow(gg, gn, d.ammoSlots);
     this.range.setText(`${Math.round(d.rangeM)} m`);
 
     // --- Sound button: a plate on touch screens (like the other buttons), the icon shows on / off. ---
@@ -325,7 +344,7 @@ export class Hud {
 
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
-    this.hint.setVisible(!d.debug && !this.touch).setText('C chart   V spyglass   H help');
+    this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
       this.gfx.debug.fillStyle(0x000000, plate);
@@ -347,6 +366,36 @@ export class Hud {
       g.fillStyle(f > 0.25 ? colour : 0xe0533d, 1);
       g.fillRect(b.x, b.y, Math.round(b.w * f), b.h);
     }
+  }
+
+  /**
+   * Computer (M3 step 4c): the three kinds of shot as small pixel icons above the guns panel,
+   * how many broadsides are left above each (round shot is not counted yet), the key in front,
+   * a yellow frame round the kind the guns load now; a kind that ran out is dimmed.
+   */
+  private ammoRow(g: Phaser.GameObjects.Graphics, gn: Rect, slots: readonly AmmoSlot[]): void {
+    const SCALE = 2;
+    const SLOT_W = 30;
+    const x0 = Math.round(gn.x + gn.w / 2 - (slots.length * SLOT_W) / 2);
+    const iconBottom = gn.y - 4;
+    slots.forEach((slot, i) => {
+      const cx = x0 + i * SLOT_W + SLOT_W / 2 + 4;
+      const size = ammoIconSize(slot.type);
+      const left = Math.round(cx - (size.w * SCALE) / 2);
+      const top = iconBottom - size.h * SCALE;
+      g.fillStyle(0x000000, 0.35);
+      g.fillRect(left - 3, iconBottom - 13, size.w * SCALE + 6, 12);
+      for (const p of ammoIconPixels(slot.type)) {
+        g.fillStyle(p.colour, slot.empty ? 0.35 : 1);
+        g.fillRect(left + p.x * SCALE, top + p.y * SCALE, SCALE, SCALE);
+      }
+      if (slot.loaded) {
+        g.lineStyle(1, READY, 1);
+        g.strokeRect(left - 3 + 0.5, iconBottom - 13 + 0.5, size.w * SCALE + 5, 11);
+      }
+      this.ammoCounts[i]?.setText(slot.count).setColor(slot.empty ? '#ff8070' : '#ffe9a8').setPosition(cx, iconBottom - 23).setAlpha(this.fade.guns);
+      this.ammoKeys[i]?.setText(slot.key).setPosition(left - 5, iconBottom - 11).setAlpha(this.fade.guns * 0.8);
+    });
   }
 
   /**

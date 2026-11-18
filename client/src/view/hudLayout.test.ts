@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barColour, hudLayout, overlaps, panelCovers, touchButtonRects } from './hudLayout';
+import { AMMO_ROW_H, barColour, hudLayout, overlaps, panelCovers, touchButtonRects } from './hudLayout';
 import type { Rect } from './hudLayout';
 
 // Logical screen sizes we use: computer, iPad, iPhone (landscape).
@@ -8,6 +8,8 @@ const screens = {
   ipad: { w: 590, h: 410, touch: true },
   iphone: { w: 520, h: 240, touch: true },
   iphoneWide: { w: 633, h: 292, touch: true },
+  computerTall: { w: 320, h: 427, touch: false }, // a browser window taller than wide (M3 step 4c)
+  computerTall2: { w: 480, h: 640, touch: false },
 };
 
 function inside(r: Rect, w: number, h: number): boolean {
@@ -29,8 +31,23 @@ describe('hudLayout', () => {
       expect(overlaps(l.ship, l.target)).toBe(false);
       expect(overlaps(l.ship, l.guns)).toBe(false);
       expect(overlaps(l.target, l.guns)).toBe(false);
+      if (!sc.touch) {
+        // The ammunition row above the guns panel is free too (M3 step 4c).
+        const ammoRow = { x: l.guns.x, y: l.guns.y - AMMO_ROW_H, w: l.guns.w, h: AMMO_ROW_H };
+        for (const r of [l.ship, l.target, l.minimap]) expect(overlaps(ammoRow, r)).toBe(false);
+        expect(l.status.y).toBeLessThan(sc.touch ? sc.h : Math.min(l.ship.y, ammoRow.y));
+      }
     });
   }
+
+  it('computer: the target card at the top right; a tall window stacks the guns above my ship', () => {
+    const wide = hudLayout(683, 384, false);
+    expect(wide.target.x + wide.target.w).toBe(683 - 8);
+    expect(wide.narrow).toBe(false);
+    const tall = hudLayout(320, 427, false);
+    expect(tall.narrow).toBe(true);
+    expect(tall.guns.y + tall.guns.h).toBeLessThanOrEqual(tall.ship.y);
+  });
 
   for (const name of ['ipad', 'iphone', 'iphoneWide'] as const) {
     it(`${name}: no panel under a touch button, buttons do not overlap`, () => {

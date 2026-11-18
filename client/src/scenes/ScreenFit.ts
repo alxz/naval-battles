@@ -42,6 +42,6 @@ export class ScreenFit {
   }
 
   private measure(): PixelLayout {
-    return pixelLayout(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1, this.targetHeight);
+    return pixelLayout(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1, this.targetHeight, this.isPhone ? 0 : viewJson.minLogicalWidth);
   }
 }

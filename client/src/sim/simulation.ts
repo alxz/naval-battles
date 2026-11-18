@@ -49,8 +49,11 @@ export class Simulation {
       for (const command of this.queue) applyCommand(this.world, command);
       this.queue = [];
       // The bots think after the player's commands and act through commands too.
+      this.world.events = []; // (already copied below last step) so the bots' own events are kept apart
       for (const command of thinkBots(this.world, ISLANDS)) applyCommand(this.world, command);
+      const botEvents = this.world.events; // a bot works free, decides on a finishing attack, waits for a berth (log only)
       stepWorld(this.world, STEP_SECONDS, this.tuning);
+      this.world.events.unshift(...botEvents);
       stepArena(this.world, STEP_SECONDS); // the auto-bot arena only (it reads this step's events)
       this.events.push(...this.world.events);
       this.accumulator -= STEP_SECONDS;

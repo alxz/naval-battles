@@ -6,7 +6,7 @@
 import { refitShip } from './condition';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
-import { ISLANDS, SHIP_CLASSES } from './data';
+import { BOTS, ISLANDS, SHIP_CLASSES } from './data';
 import { protectedByPort } from './law';
 import { nextRandom } from './random';
 import { gridSpot, openWaterSpot } from './spawn';
@@ -93,6 +93,15 @@ export function chooseTargets(world: World, p: ArenaParams = ARENA): void {
   for (const bot of world.bots) {
     const ship = world.ships.find((s) => s.id === bot.shipId);
     if (!ship || ship.sunk) continue;
+    // M3 step 5: a bot in a finishing attack keeps its enemy; and an enemy that has just slipped into
+    // safe water close by is kept until the bot has weighed a finishing attack (bot.ts finishPlan).
+    if ((bot.finishLeft ?? 0) > 0) continue;
+    const old = world.ships.find((o) => o.id === bot.enemyId);
+    if (
+      old && !old.sunk && protectedByPort(old) && bot.finishMemory?.enemyId !== old.id && !old.offender &&
+      (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'idle') &&
+      Math.hypot(old.x - ship.x, old.y - ship.y) <= BOTS.engageRange
+    ) continue;
     const candidates = world.ships.filter((o) => o.id !== ship.id && !o.sunk && !protectedByPort(o));
     const chasers = (o: ShipState): number => world.bots.filter((b) => b !== bot && b.enemyId === o.id).length;
     let best: ShipState | undefined;

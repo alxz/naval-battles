@@ -8,7 +8,7 @@ import { launchShoreBall, shoreAim, shoreElevation, shoreFlight, shoreOwnerId, s
 import { STEP_SECONDS, stepWorld } from './step';
 import { createWorld } from './world';
 
-const port: Port = { name: 'Test port', x: 1000, y: 1000, guns: [{ x: 1000, y: 900 }, { x: 950, y: 900 }, { x: 1050, y: 900 }] };
+const port: Port = { name: 'Test port', x: 1000, y: 1000, berths: 3, guns: [{ x: 1000, y: 900 }, { x: 950, y: 900 }, { x: 1050, y: 900 }] };
 const ports = [port];
 
 describe('shore guns: ballistics', () => {

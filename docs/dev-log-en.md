@@ -4,6 +4,31 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 — M3 step 4c (your test of 4b) and step 5: bots finish in safe water, berths
+
+### Your test and logs (18 Nov, 6 h and 9 h of arena)
+
+Steps 4b: all checks passed (controls lock, slower damaged ships, icons, ball colours, minimap acceptable). Logs: 20.8–21.6 wins an hour; frigate and brigantines win, the merchantman almost never (4 wins, 47 losses); 2 "stuck aground" warnings, and one brigantine ran aground 311 times, half of them on the West reef, bumping the same spot every few seconds (the watchdog reset each time it floated free for a moment). Your screenshots: a fresh brigantine could not catch a wreck (it kept its usual fighting speed of 7.5 m/s at 173 m); the target card covered the key hints; a tall PC window piled the panels up; an upright iPhone was unplayable.
+
+### Step 4c (fixes)
+
+- Arena: after the watched ship sinks the view goes back to the best bot (it went to the next number); a wobbling tap no longer unhooks the view (8 px before a drag counts); the table fades over ships, lighter on touch screens; LEAVE opens the results: places I / II / III with ship pictures, the rest below, EXIT / BACK (also once at peace).
+- Computer: target card top right (left of an open tuning panel); ammunition as three icons with counts and a yellow frame; a tall window keeps at least 300 logical px across and stacks the guns panel above the ship panel.
+- Touch screens held upright: "TURN YOUR DEVICE SIDEWAYS", the game waits.
+- Bots: a runner (or a nearly sunk enemy) sets the pace: sails for its speed + 1.5 m/s, straight at a nearly sunk one beyond the preferred range. Working free: less than 15 m of way in 20 s while wanting to move → 8 s on the fastest open heading. The first try (net distance 30 m in 15 s) fired 100+ times an hour, because a ship circling in a fight ends near where it began; now the way made through the water counts.
+- New concept: **bot events**. The bots' own events (works free, finishing decision, berth wait) are made while they think, before the world step that clears the event list; `Simulation` now keeps them and adds them to the step's events (log only).
+
+### Step 5 (plan)
+
+- Finishing attack in safe water: a calculation (`finishPlan`) and a roll (70% when it can sink the enemy, 8% when it cannot), at most 25 s, it becomes an offender and leaves afterwards. The arena keeps the enemy as target until the bot has decided (before, it dropped any ship in safe water at once, so the bot never had the chance).
+- Berths: 3 per port, 2 in the inlet harbour; a bot waits 200 m off (or off the inlet's mouth) while they are full.
+
+### Checks
+
+342 tests (31 new: ammo icons, results, tall windows, portrait, layout, finishPlan, finishing scenarios, berths, working free, chasing a runner, log lines); `tsc`; build. Headless arena 4 × 60 min: 25 wins an hour (step 4b: 22.8); worked free about 12 times an hour per ship; 8 finishing attacks in 29 chances, 2 sank their enemy, then ran from the shore guns and were pardoned. Headless browser: computer wide and tall (961 × 1280), iPhone 13 landscape and upright; the view follows the best bot after a sinking; no errors.
+
+---
+
 ## 18 Nov 2026 — M3 step 4b: fixes after your test of step 4
 
 ### What the logs showed (two step-3 logs, one step-4 log of 3 h 53 min)

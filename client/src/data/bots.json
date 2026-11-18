@@ -32,5 +32,24 @@
   "grapeLeaveM": 90,
   "chainSpeedGap": 1.0,
   "chainMinEnemySails": 0.5,
-  "chainRangeShare": 0.9
+  "chainRangeShare": 0.9,
+  "runnerOpeningMps": 0.3,
+  "chaseSpeedMargin": 1.5,
+  "weakHullShare": 0.35,
+  "stuckCheckSeconds": 20,
+  "stuckMoveM": 15,
+  "unstickSeconds": 8,
+  "finishHitChance": [
+    [50, 0.8],
+    [100, 0.45],
+    [150, 0.3],
+    [200, 0.22],
+    [250, 0.1]
+  ],
+  "finishMargin": 1.0,
+  "finishChance": 0.7,
+  "finishRecklessChance": 0.08,
+  "finishSeconds": 25,
+  "finishMemorySeconds": 30,
+  "berthWaitM": 200
 }

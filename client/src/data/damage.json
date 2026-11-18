@@ -28,7 +28,9 @@
       "forgiveSeconds": 45
     },
     "sailsPerSecond": 0.04,
-    "crewPerSecond": 1.0
+    "crewPerSecond": 1.0,
+    "berths": 3,
+    "berthsInlet": 2
   },
   "slowdown": {
     "startShare": 0.5,

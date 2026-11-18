@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { thinkBots, newBot } from './bot';
 import { applyCommand } from './commands';
-import { DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
+import { BOTS, DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
 import { damageHull } from './damage';
 import { PORTS, inSafeWater, isDocked, nearestPort, portWaypoint, portsOf, stepPortRepair } from './port';
 import type { Port } from './port';
 import { STEP_SECONDS, stepWorld } from './step';
 import { createWorld } from './world';
 
-const port: Port = { name: 'Test port', x: 1000, y: 1000 };
+const port: Port = { name: 'Test port', x: 1000, y: 1000, berths: 3 };
 const ports = [port];
 
 describe('ports', () => {
@@ -111,7 +111,7 @@ describe('ports', () => {
     expect(world.bots[0]!.mode).toBe('chase');
   });
 
-  it('a bot does not fire at an enemy in safe water', () => {
+  it('a sensible bot does not fire at a sound enemy in safe water (no reckless finishing attack)', () => {
     const world = createWorld(3);
     const [me, botShip] = world.ships;
     const p = PORTS[0]!;
@@ -119,8 +119,9 @@ describe('ports', () => {
     Object.assign(botShip!, { x: p.x, y: p.y + 20 + 140, headingRad: 0 });
     world.bots = [newBot(botShip!.id, me!.id, world)];
     let fired = false;
+    const sensible = { ...BOTS, finishRecklessChance: 0 };
     for (let i = 0; i < 30 * 60; i++) {
-      for (const c of thinkBots(world, ISLANDS)) {
+      for (const c of thinkBots(world, ISLANDS, sensible)) {
         if (c.type === 'fire') fired = true;
         applyCommand(world, c);
       }

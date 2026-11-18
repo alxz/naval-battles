@@ -10,7 +10,8 @@
 import { refillAmmo } from './ammo';
 import { crewOf, sailsOf } from './condition';
 import { DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
-import type { DamageParams, Island, ShipState, World } from './types';
+import { nearestOpenWater } from './spawn';
+import type { DamageParams, Island, ShipParams, ShipState, World } from './types';
 
 export interface Port {
   name: string; // the island's name
@@ -20,16 +21,49 @@ export interface Port {
   path?: { x: number; y: number }[];
   /** The places of its shore guns, metres (port law, sim/shore.ts). */
   guns?: { x: number; y: number }[];
+  /** How many ships can lie at the anchorage at once (M3 step 5): a small harbour up an inlet has fewer. */
+  berths: number;
 }
 
 /** The ports of these islands. */
-export function portsOf(islands: readonly Island[]): Port[] {
+export function portsOf(islands: readonly Island[], d: DamageParams = DAMAGE): Port[] {
   return islands.flatMap((island) => {
     if (!island.port) return [];
     const path = island.inlet?.path;
     const guns = island.port.guns;
-    return [{ name: island.name, x: island.port.x, y: island.port.y, ...(path ? { path } : {}), ...(guns ? { guns } : {}) }];
+    const berths = path ? d.port.berthsInlet : d.port.berths;
+    return [{ name: island.name, x: island.port.x, y: island.port.y, berths, ...(path ? { path } : {}), ...(guns ? { guns } : {}) }];
   });
+}
+
+/**
+ * How many berths of this port are taken (M3 step 5): ships afloat at the anchorage
+ * (within the dock range), not counting `exceptId` (the one that asks).
+ */
+export function berthsTaken(ships: readonly ShipState[], port: Port, exceptId: number, d: DamageParams = DAMAGE): number {
+  return ships.filter((s) => s.id !== exceptId && !s.sunk && Math.hypot(s.x - port.x, s.y - port.y) < d.port.dockRange).length;
+}
+
+/**
+ * Where a ship waits while the port's berths are full (M3 step 5): `distanceM` off the anchorage
+ * on its own side; a harbour up an inlet: off the inlet's mouth. Moved to the nearest open water
+ * if that spot is on land (or too close to it).
+ */
+export function berthWaitSpot(port: Port, ship: ShipState, params: ShipParams, islands: readonly Island[], distanceM: number): { x: number; y: number } {
+  let spot: { x: number; y: number };
+  const path = port.path;
+  if (path && path.length > 0) {
+    const a = path[0]!;
+    const b = path[1] ?? a;
+    const len = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    spot = { x: a.x + ((a.x - b.x) / len) * 150, y: a.y + ((a.y - b.y) / len) * 150 };
+  } else {
+    const dx = ship.x - port.x;
+    const dy = ship.y - port.y;
+    const len = Math.hypot(dx, dy) || 1;
+    spot = { x: port.x + (dx / len) * distanceM, y: port.y + (dy / len) * distanceM };
+  }
+  return nearestOpenWater(spot.x, spot.y, params, islands) ?? spot;
 }
 
 /**

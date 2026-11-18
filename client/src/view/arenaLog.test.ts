@@ -122,4 +122,24 @@ describe('arena log v2', () => {
     log.record(w, []);
     expect(log.text(w, 'today').match(/wind now from/g)).toHaveLength(2);
   });
+
+  it('M3 step 4c / 5: lines for working free, finishing attacks and full berths, and their counts in the summary', () => {
+    const w = createArenaWorld(1);
+    const log = new ArenaLog();
+    const [a, b] = w.ships;
+    log.record(w, [
+      { type: 'botUnstick', shipId: a!.id, x: 0, y: 0, headingRad: 0 },
+      { type: 'finishDecision', shipId: a!.id, enemyId: b!.id, go: true, canFinish: true, expected: 60, enemyHull: 40 },
+      { type: 'finishDecision', shipId: b!.id, enemyId: a!.id, go: false, canFinish: false, expected: 20, enemyHull: 300 },
+      { type: 'berthWait', shipId: b!.id, port: 'Empty Barrel Land', occupied: 3, berths: 3 },
+    ]);
+    const text = log.text(w, 'now');
+    expect(text).toMatch(/works free heading 90/);
+    expect(text).toMatch(/FINISH\? .* can sink it .* GOES IN/);
+    expect(text).toMatch(/cannot sink it .* waits outside/);
+    expect(text).toMatch(/berths of Empty Barrel Land full \(3\/3\)/);
+    expect(text).toMatch(/finishing attacks in safe water: 1 of 2 chances, 0 sank their enemy; waits for a berth: 1/);
+    expect(text).toMatch(/worked free 1x/);
+  });
 });
+

@@ -102,7 +102,11 @@ export type SimEvent =
   // The auto-bot arena (sim/arena.ts):
   | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
   | { type: 'respawn'; shipId: number; x: number; y: number }
-  | { type: 'peace'; totalWins: number };
+  | { type: 'peace'; totalWins: number }
+  // Bots (M3 step 4c / 5): for the arena log.
+  | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
+  | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
+  | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -262,7 +266,7 @@ export interface ArenaState {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
@@ -287,6 +291,13 @@ export interface BotState {
   chaseSeconds: number; // time in the current patience window of a chase
   chaseStartDistance: number; // distance at the start of that window
   breakOffLeft: number; // seconds left of sailing away after giving up
+  // --- M3 step 4c / 5 (optional: absent = nothing going on) ---
+  progress?: { x: number; y: number; seconds: number; travelledM?: number }; // the last "am I moving?" check: where it began, how long ago, the way made since
+  unstickLeft?: number; // seconds left of working free on a chosen heading (it was stuck)
+  unstickHeadingRad?: number;
+  finishLeft?: number; // seconds left of a finishing attack in a port's safe water (mode 'finish')
+  finishMemory?: { enemyId: number; seconds: number }; // it already decided about this enemy in safe water; ask again after this
+  waitingBerth?: boolean; // sailing to a port whose berths are full: waiting off the anchorage
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -325,6 +336,21 @@ export interface BotParams {
   shipAvoidM: number; // it turns away from another ship this close ahead (plus half of both lengths)
   shipAvoidTurnDeg: number; // by this much
   portSeekRange: number; // a badly hurt bot runs for a port if one is within this many metres
+  // M3 step 4c: chasing a runner, and getting unstuck
+  runnerOpeningMps: number; // the enemy pulls away at least this fast (m/s): it is running
+  chaseSpeedMargin: number; // then the bot sets its sails for the runner's speed plus this (m/s)
+  weakHullShare: number; // an enemy with less hull than this is pressed hard (straight at it beyond the preferred range)
+  stuckCheckSeconds: number; // every this long it checks that it moved...
+  stuckMoveM: number; // ...at least this far while it wanted to move; if not, it works free:
+  unstickSeconds: number; // on the best open, fast heading for this long
+  // M3 step 5: a finishing attack in a port's safe water
+  finishHitChance: number[][]; // [metres, share of balls that hit the hull] (from tools/hit_table.py)
+  finishMargin: number; // it can finish if expected damage x this >= the enemy's hull left
+  finishChance: number; // ...and then goes in with this chance (a personal roll)
+  finishRecklessChance: number; // when it cannot, it still goes in with this chance (bots are not always wise)
+  finishSeconds: number; // the attack lasts at most this long, then it leaves (it is an offender by then)
+  finishMemorySeconds: number; // a "no" stands this long before it may think again about the same enemy
+  berthWaitM: number; // a full port: it waits this far off the anchorage
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -388,6 +414,8 @@ export interface DamageParams {
     sharePerSecond: number; // share of the full hull mended per second in port
     sailsPerSecond: number; // share of the full sails mended per second in port (up to all of them)
     crewPerSecond: number; // sailors who join per second in port (until the tavern comes in M5)
+    berths: number; // ships that can lie at the anchorage at once (M3 step 5)...
+    berthsInlet: number; // ...fewer in a small harbour up an inlet
     /** Port law (D40): firing in safe water is allowed but punished. */
     law: {
       shooterHullShare: number; // a broadside fired unlawfully in safe water costs the shooter this share of its full hull

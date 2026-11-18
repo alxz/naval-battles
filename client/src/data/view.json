@@ -6,6 +6,7 @@
   ],
   "logicalHeightComputer": 400,
   "logicalHeightPhone": 240,
+  "minLogicalWidth": 300,
   "phoneMaxShortSide": 500,
   "combatCameraRange": 400,
   "combatCameraKeepInside": 0.8,

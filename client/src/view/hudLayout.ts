@@ -1,6 +1,7 @@
 // Where the HUD panels go (M2 step 5, the new HUD). Plain numbers, no Phaser, so it can be tested.
 //
-//   computer:  sound and chart buttons top left; target card top centre; my ship bottom left; guns bottom centre;
+//   computer:  sound and chart buttons top left; target card top right; my ship bottom left; guns bottom centre
+//              (a narrow, tall window: guns above my ship);
 //              debug text top left under the sound button (hidden until H).
 //   touch:     my ship top left (smaller on a phone); the zoom and sound buttons in the middle of the top
 //              edge; under my ship, only in a fight, a short target card. The minimap (it is also the chart
@@ -36,6 +37,10 @@ export interface HudLayout {
   autoZoom: Rect;
   /** A phone: my ship panel is drawn smaller (see Hud.ts). */
   compact: boolean;
+  /** A narrow computer window (portrait): the guns panel stands above my ship panel (M3 step 4c). */
+  narrow: boolean;
+  /** Where the status line (IN IRONS!, AGROUND) starts: just above the lowest panel on the left. */
+  status: { x: number; y: number };
 }
 
 export const HUD_MARGIN = 8;
@@ -60,6 +65,12 @@ const GUNS_W_COMPUTER = 210; // room for the small +/- gun icons
 const GUNS_TOUCH_H = 26; // touch: two short lines, the angle and the range
 const GUNS_TOUCH_EXTRA = 6; // "10.0°" needs a little more than a button's width
 const GEAR_H = 32; // touch: the tuning gear in the top right corner is about this high
+/** Computer: the row of ammunition icons with their counts above the guns panel (M3 step 4c). */
+export const AMMO_ROW_H = 24;
+/** Computer: a window narrower than this (a tall browser window) stacks the guns panel above my ship. */
+export const NARROW_WIDTH = 520;
+/** Computer: the target card sits at the top right, under the tuning panel's title bar. */
+const TARGET_TOP_COMPUTER = 26;
 
 /** Touch button size: a bit under a fifth of the screen height, at most 48 logical pixels. */
 export function touchButtonSize(height: number): number {
@@ -90,6 +101,7 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   const buttonSize = touch ? touchButtonSize(height) : 0;
   const gunsW = GUNS_W_COMPUTER;
   const compact = touch && isCompact(height);
+  const narrow = !touch && width < NARROW_WIDTH;
   const ship: Rect = touch
     ? { x: m, y: m, w: compact ? SHIP_W_COMPACT : SHIP_W, h: compact ? SHIP_H_COMPACT : SHIP_H }
     : { x: m, y: height - m - SHIP_H, w: SHIP_W, h: SHIP_H };
@@ -110,13 +122,19 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   const minimap: Rect = touch
     ? { x: mapRight - mapW, y: m, w: mapW, h: Math.round((mapW * 2) / 3) }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
-  // Computer: the target card in the top middle. Touch: at the left edge, under my ship.
+  // Computer: the target card at the top right (M3 step 4c: in the middle it covered the key hints).
+  // Touch: at the left edge, under my ship.
   const target: Rect = touch
     ? { x: m, y: ship.y + ship.h + 4, w: TARGET_W_TOUCH, h: TARGET_H_TOUCH }
-    : { x: Math.round(width / 2 - TARGET_W / 2), y: m, w: TARGET_W, h: TARGET_H };
+    : { x: width - m - TARGET_W, y: TARGET_TOP_COMPUTER, w: TARGET_W, h: TARGET_H };
+  // Computer: the guns panel in the bottom middle; in a narrow window above my ship panel,
+  // with room for the ammunition row between them.
   const guns: Rect = touch
     ? { x: b.sailsLess.x - GUNS_TOUCH_EXTRA, y: b.gunsUp.y + buttonSize - GUNS_TOUCH_H, w: buttonSize + GUNS_TOUCH_EXTRA, h: GUNS_TOUCH_H }
-    : { x: Math.round(width / 2 - gunsW / 2), y: height - m - GUNS_H, w: gunsW, h: GUNS_H };
+    : narrow
+      ? { x: m, y: ship.y - 6 - AMMO_ROW_H - GUNS_H, w: gunsW, h: GUNS_H }
+      : { x: Math.round(width / 2 - gunsW / 2), y: height - m - GUNS_H, w: gunsW, h: GUNS_H };
+  const status = touch ? { x: ship.x + 2, y: target.y + target.h + 5 } : narrow ? { x: m + 2, y: guns.y - AMMO_ROW_H - 14 } : { x: ship.x + 2, y: ship.y - 14 };
   return {
     ship,
     target,
@@ -130,6 +148,8 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
     autoZoom,
     buttonSize,
     compact,
+    narrow,
+    status,
   };
 }
 

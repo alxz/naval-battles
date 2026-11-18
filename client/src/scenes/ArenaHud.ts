@@ -3,6 +3,22 @@ import { SHIP_CLASSES } from '../sim/data';
 import type { Pose } from '../sim/simulation';
 import type { World } from '../sim/types';
 import { textStyle } from './text';
+import { panelCovers, overlaps } from '../view/hudLayout';
+import type { Rect } from '../view/hudLayout';
+
+/** The table's plate: darker on a computer, lighter on touch screens (M3 step 4c). */
+const PLATE_ALPHA = 0.45;
+const PLATE_ALPHA_TOUCH = 0.25;
+/** With a ship under it the table becomes this see-through; how fast it fades. */
+const COVERED_ALPHA = 0.2;
+const FADE_PER_SECOND = 6;
+
+/** What the arena table needs to know about the screen each frame. */
+export interface ArenaScreen {
+  ships: readonly { x: number; y: number }[]; // ship centres on the screen (logical px)
+  avoid: Rect; // the target card: the table moves below it when they would overlap (a narrow window)
+  seconds: number;
+}
 
 const MAX_SHIPS = 8;
 
@@ -30,6 +46,7 @@ export class ArenaHud {
   private touch: boolean;
 
   private height = 0;
+  private fade = 1;
 
   constructor(scene: Phaser.Scene, touch: boolean, actions: ArenaButtons) {
     this.touch = touch;
@@ -77,7 +94,7 @@ export class ArenaHud {
     return this.shown && this.buttons.some((b) => b.getBounds().contains(x, y));
   }
 
-  update(world: World, poses: readonly Pose[], s: number, focusId: number, following: boolean, timeScale: number, clockText: string): void {
+  update(world: World, poses: readonly Pose[], s: number, focusId: number, following: boolean, timeScale: number, clockText: string, screen: ArenaScreen): void {
     if (!this.shown || !world.arena) return;
     const arena = world.arena;
     // Names over the ships.
@@ -113,12 +130,24 @@ export class ArenaHud {
     this.board.setText(lines.join('\n'));
     // Place: computer under the top-left icons; touch under the ship and target panels.
     const x = 8;
-    const y = this.touch ? 96 : 30;
+    let y = this.touch ? 96 : 30;
     this.board.setPosition(x + 4, y + 3);
-    const b = this.board.getBounds();
+    let b = this.board.getBounds();
+    // A narrow window: the target card at the top right would cover the table, so it goes under the card.
+    if (!this.touch && overlaps({ x, y, w: b.width + 8, h: b.height + 6 }, screen.avoid)) {
+      y = screen.avoid.y + screen.avoid.h + 6;
+      this.board.setPosition(x + 4, y + 3);
+      b = this.board.getBounds();
+    }
+    const plateRect = { x, y, w: b.width + 8, h: b.height + 6 };
+    // See-through while a ship sails under the table (M3 step 4c), like the HUD panels.
+    const goal = panelCovers(plateRect, screen.ships) ? COVERED_ALPHA : 1;
+    this.fade += (goal - this.fade) * Math.min(1, screen.seconds * FADE_PER_SECOND);
     this.plate.clear();
-    this.plate.fillStyle(0x000000, 0.45);
-    this.plate.fillRect(x, y, b.width + 8, b.height + 6);
+    this.plate.fillStyle(0x000000, this.touch ? PLATE_ALPHA_TOUCH : PLATE_ALPHA);
+    this.plate.fillRect(plateRect.x, plateRect.y, plateRect.w, plateRect.h);
+    this.plate.setAlpha(this.fade);
+    this.board.setAlpha(Math.max(0.35, this.fade));
 
     // Buttons: in a row under the table (computer) or along the bottom (touch: the ship buttons are hidden).
     this.speedButton.setText(`x${timeScale}`);
@@ -128,5 +157,9 @@ export class ArenaHud {
       button.setPosition(bx, by);
       bx += button.width + 6;
     }
+    // The buttons fade too when a ship is under them (they still work).
+    const buttonsRect = { x, y: by, w: bx - x, h: this.buttons[0]?.height ?? 16 };
+    const buttonAlpha = panelCovers(buttonsRect, screen.ships) ? 0.45 : 1;
+    for (const button of this.buttons) button.setAlpha(buttonAlpha);
   }
 }

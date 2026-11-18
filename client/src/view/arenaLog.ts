@@ -12,7 +12,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 4b (damage slows more, controls lock when sunk, ammo colours), 18 Nov 2026';
+export const BUILD_LABEL = 'M3 step 5 (bots: work free, chase runners, finishing attack in safe water, berths), 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -104,6 +104,10 @@ export class ArenaLog {
   private classes = new Map<string, ClassTally>();
   private agroundSince = new Map<number, number>();
   private stuckWarned = new Set<number>();
+  private finishDecisions = 0;
+  private finishAttacks = 0;
+  private finishKills = 0;
+  private berthWaits = 0;
   private onLandWarned = new Set<number>();
   private nextWatch = 0;
   private lastWind: { fromRad: number; strength: number } | null = null;
@@ -122,7 +126,7 @@ export class ArenaLog {
   private tally(shipClass: string): ClassTally {
     let t = this.classes.get(shipClass);
     if (!t) {
-      t = { ships: 0, wins: 0, losses: 0, lifeSeconds: 0, shoreDeaths: 0, agroundCount: 0, agroundSeconds: 0, stuck: 0 };
+      t = { ships: 0, wins: 0, losses: 0, lifeSeconds: 0, shoreDeaths: 0, agroundCount: 0, agroundSeconds: 0, stuck: 0, unsticks: 0 };
       this.classes.set(shipClass, t);
     }
     return t;
@@ -165,7 +169,9 @@ export class ArenaLog {
         const full = by ? hullOf(world, by.id) : 0;
         const left = by && full > 0 ? ` with ${Math.round((100 * by.hull) / full)}% of its hull left` : '';
         const wins = e.byShipId < 0 ? `Nobody's win, ${arena.totalWins} in all` : `Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`;
-        this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}. ${wins}`);
+        const finished = world.bots.find((b) => b.shipId === e.byShipId)?.mode === 'finish';
+        if (finished) this.finishKills++;
+        this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}${finished ? ' (a finishing attack in safe water)' : ''}. ${wins}`);
         this.lines.push(`            ${this.sinkDetails(world, e)}`);
         const loser = world.ships.find((x) => x.id === e.shipId);
         const pilot = arena.pilots.find((x) => x.shipId === e.shipId);
@@ -187,6 +193,21 @@ export class ArenaLog {
         this.add(now, `PORT LAW: ${who(world, e.shipId)} ${how}: an offender of ${portName(e.port)}, the shore guns open fire`);
       } else if (e.type === 'pardoned') this.add(now, `PORT LAW: ${who(world, e.shipId)} is pardoned by ${portName(e.port)}`);
       else if (e.type === 'peace') this.add(now, `PEACE after ${e.totalWins} wins: nobody attacks any more; hurt ships sail to port`);
+      // Bots (M3 step 4c / 5).
+      else if (e.type === 'botUnstick') {
+        const ship = world.ships.find((x) => x.id === e.shipId);
+        if (ship) this.tally(ship.shipClass).unsticks++;
+        const mode = world.bots.find((b) => b.shipId === e.shipId)?.mode ?? '?';
+        this.add(now, `${who(world, e.shipId)} made no way for ${BOTS.stuckCheckSeconds} s (mode ${mode}${ship?.aground ? ', aground' : ''}): works free heading ${Math.round(headingRadToBearingDeg(e.headingRad))}\u00b0 at ${placeText(e.x, e.y)}`);
+      } else if (e.type === 'finishDecision') {
+        this.finishDecisions++;
+        if (e.go) this.finishAttacks++;
+        const why = e.canFinish ? `can sink it (expects ${Math.round(e.expected)} damage, it has ${Math.round(e.enemyHull)} hull)` : `cannot sink it (expects ${Math.round(e.expected)}, it has ${Math.round(e.enemyHull)})`;
+        this.add(now, `FINISH? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} in safe water: ${why} -> ${e.go ? (e.canFinish ? 'GOES IN' : 'GOES IN anyway (reckless)') : 'waits outside'}`);
+      } else if (e.type === 'berthWait') {
+        this.berthWaits++;
+        this.add(now, `${who(world, e.shipId)} finds the berths of ${e.port} full (${e.occupied}/${e.berths}): waits off the port`);
+      }
       else if (e.type === 'collision' && (e.damageA > 0 || e.damageB > 0)) {
         this.collisions++;
         this.collisionDamage += e.damageA + e.damageB;
@@ -278,6 +299,7 @@ export class ArenaLog {
     const cond = ship && params ? `, sails ${Math.round(sailShare(ship) * 100)}%, crew ${Math.round(crewShare(ship) * 100)}%, speed left ${Math.round(damageSpeedFactor(ship, params) * 100)}%` : '';
     const state = ship ? ` [hull ${Math.round((100 * ship.hull) / full)}%${cond}, ${placeText(ship.x, ship.y)}]` : '';
     if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees${state}`);
+    else if (mode === 'finish') this.add(now, `${who(world, shipId)} goes into safe water to finish its enemy${state}`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs${state}`);
     else if (mode === 'outlaw') this.add(now, `${who(world, shipId)} runs from the shore guns${state}`);
   }
@@ -300,11 +322,12 @@ export class ArenaLog {
       const t = this.tally(kind);
       const life = t.losses > 0 ? `${Math.round(t.lifeSeconds / t.losses)} s` : '-';
       out.push(
-        `   ${kind.padEnd(12)} ships ${r.ships}  wins ${String(t.wins).padStart(3)}  losses ${String(t.losses).padStart(3)}  mean life ${life.padStart(6)}  balls ${String(r.balls).padStart(4)}  hits/ball ${r.balls > 0 ? (r.hits / r.balls).toFixed(2) : '-'}  shore deaths ${t.shoreDeaths}  aground ${t.agroundCount}x ${Math.round(t.agroundSeconds)} s  stuck ${t.stuck}`,
+        `   ${kind.padEnd(12)} ships ${r.ships}  wins ${String(t.wins).padStart(3)}  losses ${String(t.losses).padStart(3)}  mean life ${life.padStart(6)}  balls ${String(r.balls).padStart(4)}  hits/ball ${r.balls > 0 ? (r.hits / r.balls).toFixed(2) : '-'}  shore deaths ${t.shoreDeaths}  aground ${t.agroundCount}x ${Math.round(t.agroundSeconds)} s  stuck ${t.stuck}  worked free ${t.unsticks}x`,
       );
     }
-    out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${this.menLost}, sail points torn ${Math.round(this.sailsTorn)}`);
+    out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${Math.round(this.menLost)}, sail points torn ${Math.round(this.sailsTorn)}`);
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
+    out.push(`   finishing attacks in safe water: ${this.finishAttacks} of ${this.finishDecisions} chances, ${this.finishKills} sank their enemy; waits for a berth: ${this.berthWaits}`);
     return out;
   }
 
@@ -336,6 +359,7 @@ interface ClassTally {
   agroundCount: number;
   agroundSeconds: number;
   stuck: number;
+  unsticks: number; // times a bot made no way and worked free (M3 step 4c)
 }
 
 function hullOf(world: World, shipId: number): number {

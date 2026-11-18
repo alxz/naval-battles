@@ -10,10 +10,10 @@
 // only through commands, like the player. Its shots get the same random errors as the player's.
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
-import { ammoGuns, ammoLeftOf, ammoOf } from './ammo';
-import { sailShare } from './condition';
+import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
+import { gunsManned, sailShare } from './condition';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
-import { nearestPort, portWaypoint, portsOf } from './port';
+import { berthWaitSpot, berthsTaken, nearestPort, portWaypoint, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
@@ -210,17 +210,76 @@ const ENEMY_BERTH_M = 40;
 export function avoidLand(ship: ShipState, params: ShipParams, islands: readonly Island[], headingRad: number, p: BotParams): number | null {
   if (islands.length === 0) return null;
   const look = Math.max(p.landLookaheadMinM, ship.speed * p.landLookaheadSeconds);
-  const fat: ShipParams = { ...params, length: params.length + 2 * LAND_CLEARANCE_M, beam: params.beam + 2 * LAND_CLEARANCE_M };
-  const blocked = (h: number): boolean =>
-    [0.25, 0.5, 1].some((share) =>
-      touchesLand({ ...ship, headingRad: h, x: ship.x + Math.cos(h) * look * share, y: ship.y + Math.sin(h) * look * share }, fat, islands),
-    );
+  const blocked = (h: number): boolean => landAhead(ship, params, islands, h, look);
   if (!blocked(headingRad)) return null;
   for (const turn of [45, -45, 90, -90, 135, -135]) {
     const h = normalizeAngle(headingRad + degToRad(turn));
     if (!blocked(h)) return h;
   }
   return normalizeAngle(headingRad + Math.PI); // boxed in: turn round
+}
+
+/**
+ * Is there land within `lookM` metres on this heading? Tests a "fat" copy of the ship
+ * (LAND_CLEARANCE_M wider and longer) at a quarter, half and all of the way.
+ */
+export function landAhead(ship: ShipState, params: ShipParams, islands: readonly Island[], headingRad: number, lookM: number): boolean {
+  const fat: ShipParams = { ...params, length: params.length + 2 * LAND_CLEARANCE_M, beam: params.beam + 2 * LAND_CLEARANCE_M };
+  return [0.25, 0.5, 1].some((share) =>
+    touchesLand({ ...ship, headingRad, x: ship.x + Math.cos(headingRad) * lookM * share, y: ship.y + Math.sin(headingRad) * lookM * share }, fat, islands),
+  );
+}
+
+/**
+ * A stuck bot's way out (M3 step 4c): of 16 headings, the fastest one with open water for
+ * 80 m ahead; between two about as fast, the one that turns most away from where it points now
+ * (that way did not work). If every heading is blocked, simply the fastest.
+ */
+export function unstickHeading(ship: ShipState, params: ShipParams, islands: readonly Island[], wind: WindNow): number {
+  let best = normalizeAngle(ship.headingRad + Math.PI);
+  let bestScore = -Infinity;
+  for (let k = 0; k < 16; k++) {
+    const h = normalizeAngle((k / 16) * 2 * Math.PI);
+    const speed = targetSpeed({ ...ship, headingRad: h, sailLevel: 1 }, params, wind);
+    const open = !landAhead(ship, params, islands, h, 80);
+    const turnAway = Math.abs(normalizeAngle(h - ship.headingRad)) / Math.PI; // 0..1
+    const score = (open ? 100 : 0) + speed + turnAway;
+    if (score > bestScore) {
+      bestScore = score;
+      best = h;
+    }
+  }
+  return best;
+}
+
+/**
+ * The expected hull damage of this ship's next broadsides at this distance (M3 step 5): the guns it
+ * can man x the damage of the loaded shot x the share that hits (bots.json finishHitChance) x the
+ * port law's factor (a ball on a law-abiding ship in safe water does less), for each side that is
+ * loaded or nearly so (both sides: two broadsides, one from each).
+ */
+export function finishPlan(ship: ShipState, params: ShipParams, enemy: ShipState, distance: number, p: BotParams = BOTS): { expected: number; canFinish: boolean } {
+  const ammo = loadableAmmo(ship);
+  const perBall = GUNS.damage * ammoParams(ammo).hull;
+  const hit = interpolate(p.finishHitChance, distance);
+  const sides = SIDES.filter((side) => reloadLeft(ship, side) <= 5).length;
+  const expected = gunsManned(ship, params) * perBall * hit * DAMAGE.port.law.damageFactor * sides;
+  return { expected, canFinish: sides > 0 && expected * p.finishMargin >= enemy.hull };
+}
+
+/** Straight lines between [x, y] points (flat beyond the ends). */
+function interpolate(points: readonly number[][], x: number): number {
+  if (points.length === 0) return 0;
+  const first = points[0]!;
+  if (x <= (first[0] ?? 0)) return first[1] ?? 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const ax = a[0] ?? 0;
+    const bx = b[0] ?? 0;
+    if (x <= bx) return (a[1] ?? 0) + (((b[1] ?? 0) - (a[1] ?? 0)) * (x - ax)) / (bx - ax || 1);
+  }
+  return points[points.length - 1]![1] ?? 0;
 }
 
 /**
@@ -278,9 +337,28 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const id = ship.id;
   const enemy = world.ships.find((s) => s.id === bot.enemyId);
 
+  // --- Stuck? (M3 step 4c) A bot that wanted to move but did not get anywhere works free first. ---
+  const working = workFree(world, bot, ship, params, islands, thinkSeconds, p);
+  if (working) return working;
+
+  // --- A finishing attack in a port's safe water (M3 step 5) runs its course, offender or not. ---
+  if (bot.finishMemory) {
+    bot.finishMemory.seconds -= thinkSeconds;
+    if (bot.finishMemory.seconds <= 0 || bot.finishMemory.enemyId !== bot.enemyId) delete bot.finishMemory;
+  }
+  if ((bot.finishLeft ?? 0) > 0) {
+    bot.finishLeft = (bot.finishLeft ?? 0) - thinkSeconds;
+    if (bot.finishLeft <= 0 || !enemy || enemy.sunk) {
+      delete bot.finishLeft;
+      bot.mode = 'chase';
+      bot.finishMemory = { enemyId: bot.enemyId, seconds: p.finishMemorySeconds };
+    }
+  }
+  const finishing = (bot.finishLeft ?? 0) > 0 && !!enemy && !enemy.sunk;
+
   // --- Port law: a bot that broke a port's peace (a stray ball is enough) runs out of the reach
   // of its shore guns and stays away until it is pardoned. Its own guns stay silent meanwhile. ---
-  if (ship.offender) {
+  if (ship.offender && !finishing) {
     const lawPort = portsOf(islands)[ship.offender.port];
     if (lawPort) return leavePort(world, bot, ship, params, islands, lawPort, p);
   } else if (bot.mode === 'outlaw') {
@@ -306,19 +384,37 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const hullShare = ship.hull / params.hullPoints;
   const ports = portsOf(islands);
   const port = nearestPort(ship.x, ship.y, ports);
-  if (bot.mode === 'port') {
+  if (finishing) {
+    bot.mode = 'finish';
+  } else if (bot.mode === 'port') {
     // In port (or on the way): stay until the port has done all it can, then hunt again.
     if (!port || hullShare >= DAMAGE.port.maxShare - 1e-6) startChase(bot, distance);
   } else {
+    if (bot.mode === 'finish') bot.mode = 'chase';
     updateMode(bot, distance, thinkSeconds, p, hullShare);
     // Badly hurt and a port is within reach: run for the port instead of the open sea.
     if (bot.mode === 'flee' && port && port.distance <= p.portSeekRange) bot.mode = 'port';
   }
+  if (bot.mode !== 'port') bot.waitingBerth = false;
   const mine: BotParams = { ...p, preferredRange: bot.personality.preferredRange };
   // Port law: an enemy the port protects is left alone; the bot waits outside.
   // (An offender has lost that protection: the bot goes for him even in safe water.)
   const enemySafe = protectedByPort(enemy, ports);
-  const waiting = enemySafe && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff');
+  // M3 step 5: unless it decides to finish him there. It weighs it once (then again after a while):
+  // can its next broadsides sink him (finishPlan)? Then most bots go in; a few go in even when
+  // they cannot. Going in makes it an offender: the shore guns fire, and it leaves when done.
+  let goIn = finishing;
+  const fighting = bot.mode === 'chase' || bot.mode === 'engage';
+  if (!goIn && enemySafe && fighting && !ship.offender && !bot.finishMemory && distance <= p.engageRange) {
+    const plan = finishPlan(ship, params, enemy, distance, p);
+    goIn = nextRandom(world) < (plan.canFinish ? p.finishChance : p.finishRecklessChance);
+    world.events.push({ type: 'finishDecision', shipId: id, enemyId: enemy.id, go: goIn, canFinish: plan.canFinish, expected: plan.expected, enemyHull: enemy.hull });
+    if (goIn) {
+      bot.finishLeft = p.finishSeconds;
+      bot.mode = 'finish';
+    } else bot.finishMemory = { enemyId: enemy.id, seconds: p.finishMemorySeconds };
+  }
+  const waiting = enemySafe && !goIn && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff');
   if (waiting) bot.mode = 'idle';
 
   // --- Course and sails. ---
@@ -326,13 +422,11 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   let sails: number;
   let nearPort = false; // close to the anchorage: the bot may come close to the shore there
   if (bot.mode === 'port' && port) {
-    // Sail to the anchorage, slow down near it, stop on it.
     bot.side = null;
-    const way = portWaypoint(ship.x, ship.y, port.port);
-    goal = Math.atan2(way.y - ship.y, way.x - ship.x);
-    // Close to the anchorage, or on the way up an inlet: the way itself keeps clear of the land.
-    nearPort = port.distance < 2 * DAMAGE.port.dockRange || way.inside;
-    sails = port.distance < DAMAGE.port.dockRange * 0.5 ? 0 : port.distance < 3 * DAMAGE.port.dockRange ? p.minSails : 1;
+    const course = portCourse(world, bot, ship, params, islands, port, p);
+    goal = course.goal;
+    sails = course.sails;
+    nearPort = course.nearPort;
   } else if (bot.mode === 'idle') {
     // The enemy is in safe water: keep clear of the port and wait almost stopped.
     bot.side = null;
@@ -368,11 +462,20 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.side = other;
     }
     goal = broadsideHeading(bearing, distance, bot.side, mine);
-    sails = sailsForSpeed(ship, params, world.wind, p.fightSpeed, p.minSails);
+    // M3 step 4c (your test: a fresh brigantine could not catch a wreck): an enemy that pulls
+    // away, or is nearly sunk, sets the pace: sails for its speed plus a margin, not the usual
+    // fighting speed; a nearly sunk one beyond the preferred range is chased straight.
+    const rvx = enemy.speed * Math.cos(enemy.headingRad) - ship.speed * Math.cos(ship.headingRad);
+    const rvy = enemy.speed * Math.sin(enemy.headingRad) - ship.speed * Math.sin(ship.headingRad);
+    const opening = distance > 0 ? (rvx * dx + rvy * dy) / distance : 0; // > 0: the range grows
+    const weak = enemy.hull < (SHIP_CLASSES[enemy.shipClass]?.hullPoints ?? Infinity) * p.weakHullShare;
+    const runner = distance > mine.preferredRange && opening > p.runnerOpeningMps;
+    const pace = runner || weak || bot.mode === 'finish' ? Math.max(p.fightSpeed, enemy.speed + p.chaseSpeedMargin) : p.fightSpeed;
+    sails = sailsForSpeed(ship, params, world.wind, pace, p.minSails);
     // Much too far for a good broadside (for example it fell to leeward): close in straight
     // at the enemy under full sail, beating against the wind if needed, instead of sailing
     // beam-on and firing at long range (your test, 15 Nov). It still fires when lined up.
-    if (distance > mine.preferredRange + 2 * p.rangeBand) {
+    if (distance > mine.preferredRange + 2 * p.rangeBand || ((weak || bot.mode === 'finish') && distance > mine.preferredRange + p.rangeBand)) {
       goal = bearing;
       sails = 1;
     }
@@ -393,16 +496,16 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // round shot for everything else. Takes effect from the next think (the aim uses the loaded kind).
   const ammo = chooseAmmo(ship, params, enemy, distance, p);
   if (ammo !== ammoOf(ship)) commands.push({ type: 'setAmmo', shipId: id, ammo });
-  if (enemySafe) return commands;
+  if (enemySafe && !goIn) return commands;
   const myPort = safePortIndex(ship.x, ship.y, ports);
-  if (myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
+  if (!goIn && myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
   const side: Side = Math.abs(normalizeAngle(bearing - sideAngleRad(ship.headingRad, 'port'))) < Math.PI / 2 ? 'port' : 'starboard';
   const flight = predictLanding(ship, params, side, STEP_SECONDS).seconds;
   const target = aimPoint(ship, enemy, flight);
   // The enemy will be in safe water when the balls come down (it is just slipping into port):
   // hold the fire, or the port would call this bot an offender.
   const landsIn = safePortIndex(target.x, target.y, ports, DAMAGE, PORT_EDGE_MARGIN_M);
-  if (landsIn >= 0 && !isOffenderOf(enemy, landsIn)) return commands;
+  if (!goIn && landsIn >= 0 && !isOffenderOf(enemy, landsIn)) return commands;
   const aimDistance = Math.hypot(target.x - ship.x, target.y - ship.y);
   const maxDeg = GUNS.maxElevationDeg;
   const longest = predictLanding({ ...ship, speed: 0, elevationDeg: maxDeg }, params, side, STEP_SECONDS);
@@ -474,16 +577,101 @@ function sailToPort(
 ): Command[] {
   bot.mode = 'port';
   bot.side = null;
-  const way = portWaypoint(ship.x, ship.y, port.port);
-  let steer = steerWithTacks(Math.atan2(way.y - ship.y, way.x - ship.x), params, world.wind, bot, p);
+  const course = portCourse(world, bot, ship, params, islands, port, p);
+  let steer = steerWithTacks(course.goal, params, world.wind, bot, p);
   const clear = avoidShips(ship, params, world.ships, steer, p);
   if (clear !== null) steer = clear;
-  const near = port.distance < 2 * DAMAGE.port.dockRange || way.inside;
-  const away = near ? null : avoidLand(ship, params, islands, steer, p);
+  const away = course.nearPort ? null : avoidLand(ship, params, islands, steer, p);
   if (away !== null) steer = away;
-  const sails = port.distance < DAMAGE.port.dockRange * 0.5 ? 0 : port.distance < 3 * DAMAGE.port.dockRange ? p.minSails : 1;
+  const sails = course.sails;
   const commands: Command[] = [];
   const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
+  if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
+  return commands;
+}
+
+/**
+ * The course to a port (M3 step 5: berths). Sail to the anchorage, slow down near it, stop on it.
+ * If its berths are all taken by other ships, wait off it (berthWaitSpot) until one is free.
+ */
+function portCourse(
+  world: World,
+  bot: BotState,
+  ship: ShipState,
+  params: ShipParams,
+  islands: readonly Island[],
+  port: { port: Port; distance: number },
+  p: BotParams,
+): { goal: number; sails: number; nearPort: boolean } {
+  const dock = DAMAGE.port.dockRange;
+  const taken = berthsTaken(world.ships, port.port, ship.id);
+  if (port.distance >= dock && taken >= port.port.berths) {
+    if (!bot.waitingBerth) {
+      bot.waitingBerth = true;
+      world.events.push({ type: 'berthWait', shipId: ship.id, port: port.port.name, occupied: taken, berths: port.port.berths });
+    }
+    const spot = berthWaitSpot(port.port, ship, params, islands, p.berthWaitM);
+    const away = Math.hypot(spot.x - ship.x, spot.y - ship.y);
+    return { goal: Math.atan2(spot.y - ship.y, spot.x - ship.x), sails: away < 40 ? 0 : away < 150 ? p.minSails : 1, nearPort: false };
+  }
+  bot.waitingBerth = false;
+  const way = portWaypoint(ship.x, ship.y, port.port);
+  return {
+    goal: Math.atan2(way.y - ship.y, way.x - ship.x),
+    // Close to the anchorage, or on the way up an inlet: the way itself keeps clear of the land.
+    nearPort: port.distance < 2 * dock || way.inside,
+    sails: port.distance < dock * 0.5 ? 0 : port.distance < 3 * dock ? p.minSails : 1,
+  };
+}
+
+/** Does the bot mean to get somewhere now? (Lying at anchor, waiting for a berth or mending does not count.) */
+function wantsToMove(bot: BotState, ship: ShipState, islands: readonly Island[]): boolean {
+  if (bot.mode === 'idle' || bot.mode === 'repair') return false;
+  if (bot.mode === 'port') {
+    if (bot.waitingBerth) return false;
+    const port = nearestPort(ship.x, ship.y, portsOf(islands));
+    return !port || port.distance > 2 * DAMAGE.port.dockRange;
+  }
+  return true;
+}
+
+/**
+ * Working free (M3 step 4c): every `stuckCheckSeconds` the bot checks how far it got. A bot that
+ * wanted to move but made less than `stuckMoveM` (in irons, nosing into a reef, pinned against a
+ * shore) turns to the best open heading (unstickHeading) under full sail for `unstickSeconds`.
+ * Returns the commands while it works free, else null.
+ */
+function workFree(world: World, bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], thinkSeconds: number, p: BotParams): Command[] | null {
+  if ((bot.unstickLeft ?? 0) > 0) {
+    bot.unstickLeft = (bot.unstickLeft ?? 0) - thinkSeconds;
+    if (bot.unstickLeft > 0) return steerTo(ship, bot.unstickHeadingRad ?? ship.headingRad, 1, p);
+    delete bot.unstickLeft;
+    delete bot.unstickHeadingRad;
+    bot.progress = { x: ship.x, y: ship.y, seconds: 0, travelledM: 0 };
+    return null;
+  }
+  const pr = bot.progress ?? { x: ship.x, y: ship.y, seconds: 0, travelledM: 0 };
+  pr.seconds += thinkSeconds;
+  // The way it made through the water (a ship circling in a fight ends where it began, but it moved).
+  pr.travelledM = (pr.travelledM ?? 0) + Math.abs(ship.speed) * thinkSeconds;
+  bot.progress = pr;
+  if (pr.seconds < p.stuckCheckSeconds) return null;
+  const moved = Math.max(Math.hypot(ship.x - pr.x, ship.y - pr.y), pr.travelledM ?? 0);
+  bot.progress = { x: ship.x, y: ship.y, seconds: 0, travelledM: 0 };
+  if (moved >= p.stuckMoveM || !wantsToMove(bot, ship, islands)) return null;
+  const heading = unstickHeading(ship, params, islands, world.wind);
+  bot.unstickLeft = p.unstickSeconds;
+  bot.unstickHeadingRad = heading;
+  bot.tack = 0;
+  world.events.push({ type: 'botUnstick', shipId: ship.id, x: ship.x, y: ship.y, headingRad: heading });
+  return steerTo(ship, heading, 1, p);
+}
+
+/** Rudder toward a heading and the sails at a level (only the commands that change something). */
+function steerTo(ship: ShipState, headingRad: number, sails: number, p: BotParams): Command[] {
+  const commands: Command[] = [];
+  const rudder = clamp(p.rudderGain * normalizeAngle(headingRad - ship.headingRad), -1, 1);
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;
