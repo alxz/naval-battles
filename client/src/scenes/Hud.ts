@@ -1,6 +1,7 @@
+import { reloadSecondsOf } from '../sim/guns';
 import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
-import { GUNS, SHIP_CLASSES } from '../sim/data';
+import { GUNS } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
 import type { ShipState, Side, Wind } from '../sim/types';
 import { TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
@@ -18,6 +19,8 @@ const COVERED_ALPHA = 0.25; // a panel with a ship under it becomes this see-thr
 const FADE_PER_SECOND = 6; // how fast it fades in and out
 const GAUGE_SPREAD_DEG = 60; // the gauge draws 0-10 degrees of elevation as 0-60 degrees, so it is easy to see
 const READY = 0xffe066;
+const SAILS_COLOUR = 0xf2e8c9; // canvas
+const CREW_COLOUR = 0x8fd3ff;
 
 /** What the HUD shows about the target (null = no target). */
 export interface TargetInfo {
@@ -27,12 +30,17 @@ export interface TargetInfo {
   hullMax: number;
   sunk: boolean;
   repairing: boolean;
+  sailShare: number; // 0..1 (M3 step 4)
+  crewShare: number; // 0..1
 }
 
 /** Everything the HUD needs in one frame. */
 export interface HudData {
   ship: ShipState;
   hullMax: number;
+  sailShare: number; // my sails 0..1 (M3 step 4)
+  crewShare: number; // my crew 0..1
+  ammoLabel: string; // the loaded kind of shot (computer: above the guns panel)
   sailing: SailingInfo;
   wind: Wind;
   rangeM: number; // where the guns land now (lying still), metres from the ship
@@ -95,6 +103,7 @@ export class Hud {
   private readonly autoZoomIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
+  private readonly ammoText: Phaser.GameObjects.Text;
   private l: HudLayout = hudLayout(640, 360, false);
 
   constructor(
@@ -121,6 +130,7 @@ export class Hud {
     this.range = text('main', '#cfe6f7');
     this.sideText = { port: text('main', '#1b1b1b').setOrigin(0.5), starboard: text('main', '#1b1b1b').setOrigin(0.5) };
     this.debugText = text('small');
+    this.ammoText = text('small', '#ffe9a8').setOrigin(0.5, 1);
     this.hint = text('small', '#cfe6f7').setAlpha(0.75);
 
     if (!touch) {
@@ -178,6 +188,8 @@ export class Hud {
       this.range.setPosition(gn.x + 80, gn.y + 27);
     }
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
+    // Computer: the loaded shot just above the guns panel (touch screens have a button for it).
+    this.ammoText.setPosition(gn.x + gn.w / 2, gn.y - 3).setVisible(!this.touch);
     this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
     const so = l.sound;
     this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
@@ -257,6 +269,8 @@ export class Hud {
     gs.fillStyle(0xffffff, 0.9);
     gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
     if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
+    // Above the hull bar, two short bars side by side: sails (canvas) and crew (blue) (M3 step 4).
+    this.conditionBars(gs, { x: hullBar.x, y: hullBar.y - (c ? 5 : 7), w: hullBar.w, h: c ? 2 : 3 }, d.sailShare, d.crewShare);
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
     const law = d.offender === 'inside' ? 'OFFENDER!' : d.offender === 'outside' ? `PARDON ${Math.ceil(d.pardonSeconds)}s` : '';
     const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : law !== '' ? law : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
@@ -271,7 +285,9 @@ export class Hud {
       // "+" after the distance: its crew is repairing.
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
       const pad = this.touch ? 6 : 8;
-      this.bar(this.gfx.target, { x: t.x + pad, y: t.y + t.h - (this.touch ? 7 : 10), w: t.w - 2 * pad, h: this.touch ? 3 : 5 }, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+      const hb = { x: t.x + pad, y: t.y + t.h - (this.touch ? 7 : 10), w: t.w - 2 * pad, h: this.touch ? 3 : 5 };
+      this.bar(this.gfx.target, hb, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+      if (!tg.sunk) this.conditionBars(this.gfx.target, { x: hb.x, y: hb.y + hb.h + 1, w: hb.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
     }
 
     // --- Guns ---
@@ -283,6 +299,7 @@ export class Hud {
       this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
     }
     this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
+    this.ammoText.setText(`${d.ammoLabel}   1 2 3`).setAlpha(this.fade.guns);
     this.range.setText(`${Math.round(d.rangeM)} m`);
 
     // --- Sound button: a plate on touch screens (like the other buttons), the icon shows on / off. ---
@@ -311,6 +328,21 @@ export class Hud {
     }
   }
 
+  /** Sails (canvas colour) and crew (blue): two half-width bars on one line. */
+  private conditionBars(g: Phaser.GameObjects.Graphics, r: Rect, sails: number, crew: number): void {
+    const half = Math.floor((r.w - 3) / 2);
+    for (const [x, share, colour] of [
+      [r.x, sails, SAILS_COLOUR],
+      [r.x + half + 3, crew, CREW_COLOUR],
+    ] as const) {
+      const f = Math.max(0, Math.min(1, share));
+      g.fillStyle(0xffffff, 0.18);
+      g.fillRect(x, r.y, half, r.h);
+      g.fillStyle(f > 0.25 ? colour : 0xe0533d, 1);
+      g.fillRect(x, r.y, Math.round(half * f), r.h);
+    }
+  }
+
   /** A hull bar: dark track, coloured fill. */
   private bar(g: Phaser.GameObjects.Graphics, r: Rect, share: number): void {
     const f = Math.max(0, Math.min(1, share));
@@ -334,7 +366,7 @@ export class Hud {
       text.setColor('#1b1b1b').setText(key);
       return;
     }
-    const total = SHIP_CLASSES[d.ship.shipClass]?.reloadSeconds ?? left;
+    const total = reloadSecondsOf(d.ship);
     const done = Math.max(0, 1 - left / Math.max(total, left));
     g.fillStyle(0x000000, 0.6);
     g.fillCircle(x, y, r);

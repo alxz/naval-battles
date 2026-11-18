@@ -6,6 +6,8 @@
 //     in elevation and in direction.
 // Both are "sigma" values in degrees: about 68% of the errors are smaller than sigma.
 
+import { ammoParams, loadableAmmo } from './ammo';
+import { crewShortage } from './condition';
 import { GUNS } from './data';
 import type { GunParams, ShipState } from './types';
 
@@ -28,7 +30,7 @@ export function salvoSigmaDeg(a: AccuracyInputs, g: GunParams = GUNS): number {
   return g.salvoSigmaDeg * (1 + a.windStrength) * (1.2 - 0.04 * a.battleSkill);
 }
 
-/** The inputs for this ship now. Crew, wear and ammunition join in M3. */
+/** The inputs for this ship now: its crew and loaded ammunition count (M3 step 4); gun wear joins later. */
 export function accuracyInputs(ship: ShipState, windStrength: number): AccuracyInputs {
-  return { battleSkill: ship.battleSkill, windStrength, crewShortage: 0, gunWear: 0, ammoSpread: 1 };
+  return { battleSkill: ship.battleSkill, windStrength, crewShortage: crewShortage(ship), gunWear: 0, ammoSpread: ammoParams(loadableAmmo(ship)).spread };
 }

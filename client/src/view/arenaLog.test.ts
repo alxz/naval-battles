@@ -106,7 +106,8 @@ describe('arena log v2', () => {
     log.record(w, [{ type: 'sunk', shipId: 2, byShipId: 1, x: 100, y: 100 }]);
     log.record(w, [{ type: 'sunk', shipId: 3, byShipId: -1, x: 100, y: 100 }]);
     const text = log.text(w, 'today');
-    expect(text).toMatch(/loser: .*speed .* m\/s, sails \d+%, wind angle \d+/);
+    expect(text).toMatch(/loser: .*speed .* m\/s, sails set \d+%, sails left \d+%, crew \d+, ammo \w+, wind angle \d+/);
+    expect(text).toMatch(/hits by ammunition: round \d+, chain \d+, grape \d+; men lost \d+/);
     expect(text).toMatch(/killer: .*m away, hull \d+%/);
     expect(text).toContain('mean life');
     expect(text).toMatch(/shore deaths 1/);

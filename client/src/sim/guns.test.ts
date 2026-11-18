@@ -120,3 +120,78 @@ describe('setElevation', () => {
     expect(w.ships[0]!.elevationDeg).toBe(0);
   });
 });
+
+describe('M3 step 4: what each ball does', () => {
+  withPerfectGuns();
+
+  /** Fire one broadside of `ammo` from `me` at a sloop lying `distance` m to starboard, at elevation `deg`. */
+  function broadside(ammo: 'round' | 'chain' | 'grape', distance: number, deg: number, crew?: number): { target: ShipState; events: SimEvent[]; me: ShipState } {
+    const me = ship(deg);
+    me.ammo = ammo;
+    if (crew !== undefined) me.crew = crew;
+    const target: ShipState = { ...ship(0), id: 2, team: 0, x: 0, y: distance, hull: sloop.hullPoints };
+    const w = worldWith(me);
+    w.ships.push(target);
+    applyCommand(w, { type: 'fire', shipId: 1, side: 'starboard' });
+    return { target, events: run(w, 4), me };
+  }
+
+  function aimDeg(ammo: 'round' | 'chain' | 'grape', distance: number, height: number): number {
+    // the elevation whose ball passes `distance` m out at about `height` m (bisection on the flight)
+    let lo = 0;
+    let hi = GUNS.maxElevationDeg;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      const p = predictLanding({ ...ship(mid), ammo }, sloop, 'starboard', STEP_SECONDS);
+      if (p.y < distance + (height > 0 ? 25 : 0)) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  it('round shot in the hull: hull points and a few men', () => {
+    const { target, events } = broadside('round', 100, aimDeg('round', 100, 0));
+    const hits = events.filter((e) => e.type === 'hit' && e.zone === 'hull');
+    expect(hits.length).toBeGreaterThan(0);
+    expect(target.hull).toBeCloseTo(sloop.hullPoints - hits.length * GUNS.damage);
+    expect(target.crew).toBe(sloop.crew - hits.length * GUNS.crewKill);
+  });
+
+  it('chain shot aimed high tears the sails and hardly hurts the hull', () => {
+    let torn = 0;
+    let hullLost = 0;
+    for (const deg of [8, 9, 10]) {
+      const { target } = broadside('chain', 40, deg);
+      torn += sloop.sailPoints - (target.sails ?? sloop.sailPoints);
+      hullLost += sloop.hullPoints - target.hull;
+    }
+    expect(torn).toBeGreaterThan(GUNS.sailDamage * 2);
+    expect(hullLost).toBeLessThan(GUNS.damage * 2);
+  });
+
+  it('grape: 8 balls per gun, no hull damage, many men down at 40 m', () => {
+    const { target, events } = broadside('grape', 40, aimDeg('grape', 40, 0));
+    expect(events.filter((e) => e.type === 'gunFired')).toHaveLength(sloop.gunsPerSide);
+    const hits = events.filter((e) => e.type === 'hit');
+    expect(hits.length).toBeGreaterThan(sloop.gunsPerSide); // more balls than guns
+    expect(target.hull).toBe(sloop.hullPoints);
+    expect(sloop.crew - (target.crew ?? sloop.crew)).toBeGreaterThanOrEqual(5);
+  });
+
+  it('a short crew fires fewer guns and reloads slower', () => {
+    const { events } = broadside('round', 100, 5, 9); // 9 men: 2 guns of 4
+    expect(events.filter((e) => e.type === 'gunFired')).toHaveLength(2);
+    const w = worldWith({ ...ship(5), crew: 30 });
+    applyCommand(w, { type: 'fire', shipId: 1, side: 'starboard' });
+    expect(w.ships[0]!.reloadStarboard).toBeCloseTo(sloop.reloadSeconds * 2);
+  });
+
+  it('no crew, no broadside; chain shot used up falls back to round shot', () => {
+    const w = worldWith({ ...ship(5), crew: 0 });
+    applyCommand(w, { type: 'fire', shipId: 1, side: 'starboard' });
+    expect(w.pendingShots).toHaveLength(0);
+    const w2 = worldWith({ ...ship(5), ammo: 'chain', ammoLeft: { chain: 0, grape: 3 } });
+    applyCommand(w2, { type: 'fire', shipId: 1, side: 'starboard' });
+    expect(w2.pendingShots.every((p) => p.ammo === 'round')).toBe(true);
+  });
+});

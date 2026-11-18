@@ -1,3 +1,6 @@
+import { ammoOf } from '../sim/ammo';
+import { crewShare, sailShare } from '../sim/condition';
+import { ammoLabel, nextAmmo } from '../view/ammoLabel';
 import { PORTS, inSafeWater } from '../sim/port';
 import { Fog } from './Fog';
 import { Spyglass } from './Spyglass';
@@ -6,7 +9,7 @@ import { ShipBars } from './ShipBars';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
-import { DAMAGE, ISLANDS, SHIP_CLASSES } from '../sim/data';
+import { AMMO, DAMAGE, ISLANDS, SHIP_CLASSES } from '../sim/data';
 import { touchesLand } from '../sim/land';
 import { openWaterSpot } from '../sim/spawn';
 import { Simulation } from '../sim/simulation';
@@ -112,6 +115,7 @@ export class SeaScene extends Phaser.Scene {
   private enterKey!: Phaser.Input.Keyboard.Key;
   private raiseKeys: Phaser.Input.Keyboard.Key[] = [];
   private lowerKeys: Phaser.Input.Keyboard.Key[] = [];
+  private ammoKeys: Phaser.Input.Keyboard.Key[] = [];
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: KeyMap;
   private touch: TouchControls | null = null;
@@ -178,6 +182,7 @@ export class SeaScene extends Phaser.Scene {
     this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M,C,V,T,L,SPACE') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
+    this.ammoKeys = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE].map((code) => keyboard.addKey(code));
     this.enterKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.escKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     makeHudIcons(this);
@@ -189,6 +194,7 @@ export class SeaScene extends Phaser.Scene {
         (direction) => this.changeSails(direction),
         () => this.toggleSpyglass(),
         (side) => this.firePlayer(side),
+        () => this.cycleAmmo(),
       );
     }
     this.sounds = new Sounds(this);
@@ -370,6 +376,7 @@ export class SeaScene extends Phaser.Scene {
     this.rings.visible = v.rangeRings;
     this.rings.labelsVisible = this.touch === null;
     this.touch?.setReload(myShip.reloadPort, myShip.reloadStarboard);
+    this.touch?.setAmmo(ammoLabel(myShip, true));
     this.rings.update(me.x, me.y, me.headingRad, s);
     const myParams = SHIP_CLASSES[myShip.shipClass];
     if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
@@ -446,6 +453,9 @@ export class SeaScene extends Phaser.Scene {
       seconds,
       ship: myShip,
       hullMax: params?.hullPoints ?? 1,
+      sailShare: sailShare(myShip),
+      crewShare: crewShare(myShip),
+      ammoLabel: ammoLabel(myShip, false),
       sailing,
       wind,
       rangeM,
@@ -457,6 +467,8 @@ export class SeaScene extends Phaser.Scene {
             hullMax: SHIP_CLASSES[target.shipClass]?.hullPoints ?? 1,
             sunk: target.sunk,
             repairing: target.repairing,
+            sailShare: sailShare(target),
+            crewShare: crewShare(target),
           }
         : null,
       debug: v.debugText,
@@ -545,6 +557,11 @@ export class SeaScene extends Phaser.Scene {
 
     // Guns: Q fires the port (left) broadside, E the starboard (right) one;
     // + / - (or R / F, or the gun icons) raise and lower the guns.
+    // Ammunition (M3 step 4): 1 round shot, 2 chain shot, 3 grape shot.
+    AMMO.order.forEach((type, i) => {
+      const key = this.ammoKeys[i];
+      if (key && Phaser.Input.Keyboard.JustDown(key)) this.sim.queueCommand({ type: 'setAmmo', shipId: PLAYER_ID, ammo: type });
+    });
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.firePlayer('port');
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
@@ -613,6 +630,12 @@ export class SeaScene extends Phaser.Scene {
   }
 
   /** Fire a broadside. A loaded battery also leaves a ghost cross where it was aimed. */
+  /** Touch: the ammunition button loads the next kind (round, chain, grape). */
+  private cycleAmmo(): void {
+    const me = this.ship(PLAYER_ID);
+    if (me) this.sim.queueCommand({ type: 'setAmmo', shipId: PLAYER_ID, ammo: nextAmmo(ammoOf(me)) });
+  }
+
   private firePlayer(side: Side): void {
     const me = this.ship(PLAYER_ID);
     const params = me ? SHIP_CLASSES[me.shipClass] : undefined;

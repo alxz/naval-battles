@@ -163,3 +163,18 @@ describe('ports', () => {
     expect(docked).toBe(true);
   });
 });
+
+describe('port: sails, crew and ammunition (M3 step 4)', () => {
+  it('a docked ship gets all its sails, new sailors and fresh chain and grape shot', () => {
+    const world = createWorld(1);
+    const ship = world.ships[0]!;
+    const sloop = SHIP_CLASSES['sloop']!;
+    Object.assign(ship, { x: port.x, y: port.y, speed: 0, sails: 0, crew: 20, ammoLeft: { chain: 0, grape: 1 } });
+    stepPortRepair(world, 1, ports);
+    expect(ship.repairing).toBe(true);
+    expect(ship.ammoLeft).toBeUndefined(); // the starting stock again
+    for (let i = 0; i < 100; i++) stepPortRepair(world, 1, ports);
+    expect(ship.sails).toBeCloseTo(sloop.sailPoints);
+    expect(ship.crew).toBeCloseTo(sloop.crew);
+  });
+});

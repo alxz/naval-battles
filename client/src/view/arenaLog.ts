@@ -1,6 +1,8 @@
 // The auto-bot arena log (M3 step 2): plain lines a person can read, kept to a fixed size.
 // Pure: no Phaser and no browser here; the scene stores it and offers it as a download.
 
+import { loadableAmmo } from '../sim/ammo';
+import { crewOf, sailShare } from '../sim/condition';
 import { ARENA } from '../sim/arena';
 import { compassPoint, headingRadToBearingDeg, twaDeg } from '../sim/angles';
 import { BOTS, DAMAGE, GUNS, ISLANDS, SHIP_CLASSES, SHORE, WIND, WORLD } from '../sim/data';
@@ -9,7 +11,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 3 (port law D40) + spawn guard + log v2, 17 Nov 2026';
+export const BUILD_LABEL = 'M3 step 4 (sails, crew, 3 ammunition types), 17 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -105,6 +107,9 @@ export class ArenaLog {
   private nextWatch = 0;
   private lastWind: { fromRad: number; strength: number } | null = null;
   private collisions = 0;
+  private ammoHits: Record<string, number> = { round: 0, chain: 0, grape: 0 };
+  private menLost = 0;
+  private sailsTorn = 0;
   private collisionDamage = 0;
   private warnings = 0;
 
@@ -147,6 +152,11 @@ export class ArenaLog {
     const arena = world.arena;
     if (!arena) return;
     for (const e of events) {
+      if (e.type === 'hit') {
+        this.ammoHits[e.ammo] = (this.ammoHits[e.ammo] ?? 0) + 1;
+        this.menLost += e.crewLost;
+        this.sailsTorn += e.sailsLost;
+      }
       if (e.type === 'targetChosen') this.add(now, `${who(world, e.shipId)} goes after ${who(world, e.targetId)}, ${Math.round(e.distance)} m away`);
       else if (e.type === 'sunk') {
         const winner = arena.pilots.find((p) => p.shipId === e.byShipId);
@@ -198,7 +208,7 @@ export class ArenaLog {
     const parts = [`at ${placeText(e.x, e.y)}`];
     if (loser) {
       const twa = Math.round(twaDeg(loser.headingRad, world.wind.fromRad));
-      parts.push(`loser: ${bot?.mode ?? '?'}, speed ${loser.speed.toFixed(1)} m/s, sails ${Math.round(loser.sailLevel * 100)}%, wind angle ${twa}\u00b0${loser.aground ? ', AGROUND' : ''}${loser.offender ? ', offender' : ''}`);
+      parts.push(`loser: ${bot?.mode ?? '?'}, speed ${loser.speed.toFixed(1)} m/s, sails set ${Math.round(loser.sailLevel * 100)}%, sails left ${Math.round(sailShare(loser) * 100)}%, crew ${crewOf(loser)}, ammo ${loadableAmmo(loser)}, wind angle ${twa}\u00b0${loser.aground ? ', AGROUND' : ''}${loser.offender ? ', offender' : ''}`);
     }
     if (killer && loser) {
       const kBot = world.bots.find((b) => b.shipId === killer.id);
@@ -289,6 +299,7 @@ export class ArenaLog {
         `   ${kind.padEnd(12)} ships ${r.ships}  wins ${String(t.wins).padStart(3)}  losses ${String(t.losses).padStart(3)}  mean life ${life.padStart(6)}  balls ${String(r.balls).padStart(4)}  hits/ball ${r.balls > 0 ? (r.hits / r.balls).toFixed(2) : '-'}  shore deaths ${t.shoreDeaths}  aground ${t.agroundCount}x ${Math.round(t.agroundSeconds)} s  stuck ${t.stuck}`,
       );
     }
+    out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${this.menLost}, sail points torn ${Math.round(this.sailsTorn)}`);
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
     return out;
   }

@@ -1,6 +1,7 @@
 import { onBroadsideFired } from './law';
 import { normalizeAngle } from './angles';
-import { GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
+import { refitShip } from './condition';
+import { AMMO, GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { newBot } from './bot';
 import { orderBroadside } from './guns';
 import { clamp } from './math';
@@ -54,10 +55,14 @@ export function applyCommand(world: World, command: Command): void {
       ship.hull = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? ship.hull;
       ship.sunk = false;
       ship.offender = undefined;
+      refitShip(ship);
       break;
     }
     case 'setElevation':
       ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);
+      break;
+    case 'setAmmo':
+      if (AMMO.types[command.ammo]) ship.ammo = command.ammo;
       break;
     case 'fire':
       // Port law (D40): firing in a port's safe water is allowed, but it has its price (sim/law.ts).

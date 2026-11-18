@@ -13,7 +13,9 @@
     "hullPoints": 264,
     "hullHeight": 6.0,
     "mastHeight": 26.4,
-    "mass": 100
+    "mass": 100,
+    "crew": 60,
+    "sailPoints": 100
   },
   "brigantine": {
     "name": "Brigantine",
@@ -29,7 +31,9 @@
     "hullPoints": 384,
     "hullHeight": 7.2,
     "mastHeight": 36.0,
-    "mass": 170
+    "mass": 170,
+    "crew": 90,
+    "sailPoints": 140
   },
   "merchantman": {
     "name": "Merchantman",
@@ -45,7 +49,9 @@
     "hullPoints": 480,
     "hullHeight": 8.4,
     "mastHeight": 42.0,
-    "mass": 420
+    "mass": 420,
+    "crew": 40,
+    "sailPoints": 170
   },
   "frigate": {
     "name": "Frigate",
@@ -61,6 +67,8 @@
     "hullPoints": 720,
     "hullHeight": 9.6,
     "mastHeight": 54.0,
-    "mass": 600
+    "mass": 600,
+    "crew": 180,
+    "sailPoints": 240
   }
 }

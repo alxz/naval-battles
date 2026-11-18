@@ -4,6 +4,39 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 17 Nov 2026 (night, 2) — M3 step 4: sails, crew and three kinds of shot
+
+### Two new ideas in the code
+
+- **"Absent means new":** the new ship fields (`sails`, `crew`, `ammo`, `ammoLeft`) may be missing; then the ship is as good as new. Every rule reads them through `sim/condition.ts` and `sim/ammo.ts`, so the default lives in one place, old tests and saves keep working, and a refit is just deleting the fields.
+- **Gun numbers per ammunition:** `ammoGuns(type)` gives a copy of `guns.json` with a lower muzzle speed (√rangeShare, so chain flies 60% and grape 30% of the range). The landing cross, the bots' aim and the real balls all use it, so they always agree.
+
+### Rules (plan 4.4–4.6)
+
+| | Round | Chain | Grape |
+|---|---|---|---|
+| range | 100% | 60% | 30% |
+| spread | × 1 | × 1.5 | × 2 |
+| balls per gun | 1 | 1 | 8 |
+| hull (hull zone) | 27 | 2.7 | 0 |
+| men (hull zone) | 2 | 1 | 1 per ball |
+| sails (rigging zone) | 3 | 15 | 0.75 per ball |
+
+- Sails slow the ship: speed × (0.2 + 0.8 × sails). The crew: reload × min(2.5, full / crew); a gun needs 4 men; a short crew widens the gun error.
+- Chain and grape: 6 broadsides each; when out, the guns load round shot. Round shot is not counted until gold exists (M5).
+- Repair at sea also mends sails (to 90%); men lost stay lost. A port mends all sails, signs on 1 man a second and refills chain and grape (free until M5).
+- Bots: grape under 70 m (round again beyond 90 m), chain at an enemy 1 m/s faster whose sails still draw.
+- Screen: keys 1 / 2 / 3; on touch screens a button above "L" (RND / CHN 6 / GRP 6) cycles them. My ship panel and the target card: two short bars over the hull bar, sails (canvas colour) and crew (blue). Computer: the loaded shot above the guns panel. The same sound is not started twice within 30 ms (grape fires 32 balls).
+- Arena log: hits by ammunition, men lost, sail points torn; the sink line shows sails left, crew and the loaded shot.
+
+### Checks
+
+310 tests (18 new); build clean; headless arena, 4 × 20 min: 13.5 wins an hour (13–20 before), hits 730 round, 441 grape, 55 chain. Headless browser computer and iPhone 13: keys 1–3 and the touch button switch the shot, grape fires 8 balls a gun, chain range 89 m at 5°; no errors. Your `islands.json` from GitHub was used this time.
+
+**Not tuned yet:** whether grape is too strong in ramming fights (most grape hits came from bots close together), and chain is rare because bots fight at 115–165 m, beyond its reach. The arena log will show it.
+
+---
+
 ## 17 Nov 2026 (night) — Your answers on the world ideas: D41, D42, item 10
 
 - **O5 closed → D42:** a game day lasts **12 real minutes** (1 game hour = 30 s at ×1); morning 05:00–07:30, day to 18:00, evening to 20:30, night to 05:00. Plan 4.0 and 4.1 updated; provisions (30 days = 6 hours now) are re-tuned in M5.

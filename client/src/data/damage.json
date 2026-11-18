@@ -11,7 +11,9 @@
     "seaMaxShare": 0.75,
     "maxSails": 0.25,
     "safeRange": 500,
-    "sharePerSecond": 0.005
+    "sharePerSecond": 0.005,
+    "sailsMaxShare": 0.9,
+    "sailsPerSecond": 0.01
   },
   "port": {
     "safeRange": 300,
@@ -24,7 +26,9 @@
       "damageFactor": 0.5,
       "leaveFactor": 1.5,
       "forgiveSeconds": 45
-    }
+    },
+    "sailsPerSecond": 0.04,
+    "crewPerSecond": 1.0
   },
   "slowdown": {
     "startShare": 0.5,

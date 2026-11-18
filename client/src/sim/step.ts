@@ -1,3 +1,4 @@
+import { sailSpeedFactor } from './condition';
 import { collideShips } from './collide';
 import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
@@ -37,11 +38,12 @@ export function windFactor(strength: number): number {
 /**
  * The speed the ship is heading for (plan 4.3):
  *   maxSpeed x polar(TWA) x sailLevel x (0.4 + 0.6 x wind)
- * Sail condition (M3) and the Navigation skill (M6) join this formula later.
+ *   x (0.2 + 0.8 x sail condition)   (M3 step 4: shot-away sails slow the ship)
+ * The Navigation skill (M6) joins this formula later.
  */
 export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, tuning: Tuning = DEFAULT_TUNING): number {
   const { share } = sailingInfo(ship, params, wind);
-  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength);
+  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship);
   return damagedSpeed(speed, ship.hull / params.hullPoints);
 }
 

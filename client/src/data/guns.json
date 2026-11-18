@@ -9,5 +9,9 @@
   "maxBallSeconds": 8,
   "damage": 27,
   "gunSigmaDeg": 1.8,
-  "salvoSigmaDeg": 0.6
+  "salvoSigmaDeg": 0.6,
+  "sailDamage": 15,
+  "crewKill": 2,
+  "crewPerGun": 4,
+  "maxReloadFactor": 2.5
 }

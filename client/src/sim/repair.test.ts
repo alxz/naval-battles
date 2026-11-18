@@ -51,3 +51,17 @@ describe('repair at sea', () => {
     expect(bot.hull).toBeGreaterThan(full * 0.2);
   });
 });
+
+describe('repair at sea: sails (M3 step 4)', () => {
+  it('the crew mends torn sails up to 90%, even with a sound hull; lost men stay lost', () => {
+    const me = { ...ship(1, 0, full, 0.25), sails: 10, crew: 30 };
+    const w = world([me]);
+    expect(canRepair(me, w, 0.75)).toBe(true); // the sails are the work
+    stepRepair(w, 1);
+    expect(me.sails).toBeCloseTo(10 + sloop.sailPoints * DAMAGE.repair.sailsPerSecond);
+    for (let i = 0; i < 500; i++) stepRepair(w, 1);
+    expect(me.sails).toBeCloseTo(sloop.sailPoints * DAMAGE.repair.sailsMaxShare);
+    expect(me.crew).toBe(30);
+    expect(canRepair(me, w, 0.75)).toBe(false); // nothing left to mend at sea
+  });
+});

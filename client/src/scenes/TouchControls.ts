@@ -33,6 +33,7 @@ export class TouchControls {
     onSails: (direction: 1 | -1) => void,
     onZoom: () => void,
     onFire: (side: 'port' | 'starboard') => void,
+    onAmmo: () => void,
   ) {
     scene.input.addPointer(2); // allow up to 3 fingers at once (rudder + sails + guns)
 
@@ -44,6 +45,8 @@ export class TouchControls {
     this.add(scene, 'sailsMore', '+', undefined, () => onSails(1));
     this.add(scene, 'gunsUp', 'icon-gun-up', (down) => (this.raise = down));
     this.add(scene, 'gunsDown', 'icon-gun-down', (down) => (this.lower = down));
+    // Above "L": the kind of shot; each tap loads the next kind (round, chain, grape).
+    this.add(scene, 'ammo', 'RND', undefined, onAmmo, true);
     // The button at the top ("zoom" in the layout) is the spyglass: tap to look far for a while.
     this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);
   }
@@ -96,6 +99,12 @@ export class TouchControls {
       if (!ready) b.box.setFillStyle(0x000000, 0.3);
       else if (b.box.fillColor === 0x000000) b.box.setFillStyle(0xffffff, 0.22);
     }
+  }
+
+  /** The ammunition button shows the loaded kind and what is left of it ("CHN 5"). */
+  setAmmo(label: string): void {
+    const b = this.buttons.find((x) => x.name === 'ammo');
+    if (b && b.label instanceof Phaser.GameObjects.Text && b.label.text !== label) b.label.setText(label);
   }
 
   /** The spyglass button is lit (yellow frame) while you look through it. */

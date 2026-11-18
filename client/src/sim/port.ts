@@ -7,6 +7,8 @@
 //  - bots know the same rules: a badly hurt bot runs for the port, and no bot attacks a ship in safe water.
 // The full repair in a dock, for gold, comes with ports and trade (M5).
 
+import { refillAmmo } from './ammo';
+import { crewOf, sailsOf } from './condition';
 import { DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
 import type { DamageParams, Island, ShipState, World } from './types';
 
@@ -95,9 +97,26 @@ export function isDocked(ship: ShipState, ports: readonly Port[] = PORTS, d: Dam
  */
 export function stepPortRepair(world: World, dt: number, ports: readonly Port[] = PORTS, d: DamageParams = DAMAGE): void {
   for (const ship of world.ships) {
-    const full = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 0;
-    if (!isDocked(ship, ports, d) || ship.hull >= full * d.port.maxShare) continue;
-    ship.hull = Math.min(full * d.port.maxShare, ship.hull + full * d.port.sharePerSecond * dt);
-    ship.repairing = true;
+    const params = SHIP_CLASSES[ship.shipClass];
+    if (!params || !isDocked(ship, ports, d)) continue;
+    let work = false;
+    if (ship.hull < params.hullPoints * d.port.maxShare) {
+      ship.hull = Math.min(params.hullPoints * d.port.maxShare, ship.hull + params.hullPoints * d.port.sharePerSecond * dt);
+      work = true;
+    }
+    // M3 step 4: the port also mends every sail, lets new sailors sign on and refills the chain and
+    // grape shot (all free until there is gold, M5).
+    const sails = sailsOf(ship);
+    if (sails < params.sailPoints) {
+      ship.sails = Math.min(params.sailPoints, sails + params.sailPoints * d.port.sailsPerSecond * dt);
+      work = true;
+    }
+    const crew = crewOf(ship);
+    if (crew < params.crew) {
+      ship.crew = Math.min(params.crew, crew + d.port.crewPerSecond * dt);
+      work = true;
+    }
+    refillAmmo(ship);
+    if (work) ship.repairing = true;
   }
 }

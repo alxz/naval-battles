@@ -10,6 +10,8 @@
 // only through commands, like the player. Its shots get the same random errors as the player's.
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
+import { ammoGuns, ammoLeftOf, ammoOf } from './ammo';
+import { sailShare } from './condition';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
 import { nearestPort, portWaypoint, portsOf } from './port';
 import type { Port } from './port';
@@ -21,7 +23,7 @@ import { clamp } from './math';
 import { nextGaussian } from './random';
 import { STEP_SECONDS, targetSpeed } from './step';
 import { nextRandom } from './random';
-import type { BotParams, BotState, Command, DamageParams, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
+import type { AmmoType, BotParams, BotState, Command, DamageParams, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
 
 const SIDES: Side[] = ['port', 'starboard'];
 
@@ -387,6 +389,10 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // --- Guns: aim with the side that faces the enemy, fire when it is in the arc. ---
   // Bots keep the port law: no fire at a protected ship, and no fire from inside safe water
   // unless an offender is there to be shot at.
+  // Ammunition (M3 step 4): grape at close range, chain at a faster enemy whose sails still draw,
+  // round shot for everything else. Takes effect from the next think (the aim uses the loaded kind).
+  const ammo = chooseAmmo(ship, params, enemy, distance, p);
+  if (ammo !== ammoOf(ship)) commands.push({ type: 'setAmmo', shipId: id, ammo });
   if (enemySafe) return commands;
   const myPort = safePortIndex(ship.x, ship.y, ports);
   if (myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
@@ -418,6 +424,23 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     }
   }
   return commands;
+}
+
+/**
+ * The bot's choice of ammunition, with a gap so that it does not switch back and forth:
+ *   grape  closer than grapeRangeM (kept until grapeLeaveM): clear the enemy's deck
+ *   chain  the enemy is chainSpeedGap faster and its sails still draw, and it is within the chain shot's reach
+ *   round  otherwise (and whenever the wanted kind has run out)
+ */
+export function chooseAmmo(ship: ShipState, params: ShipParams, enemy: ShipState, distance: number, p: BotParams = BOTS): AmmoType {
+  const now = ammoOf(ship);
+  const grapeLimit = now === 'grape' ? p.grapeLeaveM : p.grapeRangeM;
+  if (distance < grapeLimit && ammoLeftOf(ship, 'grape') > 0) return 'grape';
+  const far = predictLanding({ ...ship, speed: 0, elevationDeg: GUNS.maxElevationDeg }, params, 'port', STEP_SECONDS, ammoGuns('chain'));
+  const reach = Math.hypot(far.x - ship.x, far.y - ship.y);
+  const runner = enemy.speed > ship.speed + p.chainSpeedGap && sailShare(enemy) > p.chainMinEnemySails;
+  if (runner && distance < reach * p.chainRangeShare && ammoLeftOf(ship, 'chain') > 0) return 'chain';
+  return 'round';
 }
 
 /** Bots hold their fire when the aim point is this close to a port's safe water (balls scatter). */

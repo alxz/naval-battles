@@ -27,5 +27,10 @@
   "fleeHullShare": 0.3,
   "shipAvoidM": 130,
   "shipAvoidTurnDeg": 70,
-  "portSeekRange": 2500
+  "portSeekRange": 2500,
+  "grapeRangeM": 70,
+  "grapeLeaveM": 90,
+  "chainSpeedGap": 1.0,
+  "chainMinEnemySails": 0.5,
+  "chainRangeShare": 0.9
 }

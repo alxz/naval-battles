@@ -3,6 +3,7 @@
 // After winsToPeace wins it turns to peace: nobody attacks, hurt bots sail to a port.
 // Pure rules, no Phaser: the screen (SeaScene, view/arenaLog.ts) only shows and logs it.
 
+import { refitShip } from './condition';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { ISLANDS, SHIP_CLASSES } from './data';
@@ -179,6 +180,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
       repairing: false,
       offender: undefined,
     });
+    refitShip(ship); // full sails and crew, the starting ammunition
     const i = world.bots.findIndex((b) => b.shipId === ship.id);
     const fresh = newBot(ship.id, -1, world);
     if (i >= 0) world.bots[i] = fresh;

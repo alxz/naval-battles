@@ -158,6 +158,7 @@ export type ButtonName =
   | 'sailsMore'
   | 'gunsDown'
   | 'gunsUp'
+  | 'ammo'
   | 'zoom';
 
 /**
@@ -183,6 +184,7 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
     sailsMore: at(right(1), row(1)),
     gunsDown: at(right(1), row(2)),
     gunsUp: at(right(1), row(3)),
+    ammo: at(left(1), row(3)), // above "L": the kind of shot (M3 step 4)
     zoom: at(zoomButtonX(width, height), HUD_MARGIN, z),
   };
 }

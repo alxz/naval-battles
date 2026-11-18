@@ -4,6 +4,7 @@
 // a port does better (package C), a dock mends everything (later, for gold).
 // An offender against a port's law does not repair until it is pardoned.
 
+import { sailShare, sailsOf } from './condition';
 import { DAMAGE, SHIP_CLASSES } from './data';
 import type { DamageParams, ShipState, World } from './types';
 
@@ -12,11 +13,16 @@ export function enemyWithin(ship: ShipState, world: World, range: number): boole
   return world.ships.some((o) => o.team !== ship.team && !o.sunk && Math.hypot(o.x - ship.x, o.y - ship.y) <= range);
 }
 
-/** May this ship repair now, and is there anything left to mend? `maxShare`: 0.75 at sea. */
+/**
+ * May this ship repair now, and is there anything left to mend? `maxShare`: 0.75 of the hull at sea.
+ * The sails are mended too, up to sailsMaxShare (spare canvas is carried; M3 step 4). Lost sailors
+ * cannot be mended: a port gives new ones.
+ */
 export function canRepair(ship: ShipState, world: World, maxShare: number, d: DamageParams = DAMAGE): boolean {
   const full = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 0;
   if (ship.offender) return false; // port law: no mending while the shore guns are after you (sim/law.ts)
-  return !ship.sunk && ship.sailLevel <= d.repair.maxSails + 1e-9 && ship.hull < full * maxShare && !enemyWithin(ship, world, d.repair.safeRange);
+  const work = ship.hull < full * maxShare || sailShare(ship) < d.repair.sailsMaxShare;
+  return !ship.sunk && ship.sailLevel <= d.repair.maxSails + 1e-9 && work && !enemyWithin(ship, world, d.repair.safeRange);
 }
 
 /** One step of repair for every ship. Sets `ship.repairing` (the HUD shows it). */
@@ -24,7 +30,12 @@ export function stepRepair(world: World, dt: number, d: DamageParams = DAMAGE): 
   for (const ship of world.ships) {
     ship.repairing = canRepair(ship, world, d.repair.seaMaxShare, d);
     if (!ship.repairing) continue;
-    const full = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 0;
-    ship.hull = Math.min(full * d.repair.seaMaxShare, ship.hull + full * d.repair.sharePerSecond * dt);
+    const params = SHIP_CLASSES[ship.shipClass];
+    if (!params) continue;
+    const full = params.hullPoints;
+    if (ship.hull < full * d.repair.seaMaxShare) ship.hull = Math.min(full * d.repair.seaMaxShare, ship.hull + full * d.repair.sharePerSecond * dt);
+    const sails = sailsOf(ship);
+    const sailsCap = params.sailPoints * d.repair.sailsMaxShare;
+    if (sails < sailsCap) ship.sails = Math.min(sailsCap, sails + params.sailPoints * d.repair.sailsPerSecond * dt);
   }
 }

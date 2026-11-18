@@ -1,3 +1,4 @@
+import ammoJson from '../data/ammo.json';
 import botsJson from '../data/bots.json';
 import damageJson from '../data/damage.json';
 import gunsJson from '../data/guns.json';
@@ -8,7 +9,14 @@ import shoreJson from '../data/shore.json';
 import shipsJson from '../data/ships.json';
 import windJson from '../data/wind.json';
 import worldJson from '../data/world.json';
-import type { BotParams, DamageParams, GunParams, Island, Polar, ShipParams, ShoreParams, WorldBounds } from './types';
+import type { AmmoParams, AmmoType, BotParams, DamageParams, GunParams, Island, Polar, ShipParams, ShoreParams, WorldBounds } from './types';
+
+/** The three kinds of ammunition (plan 4.5), in the order of the keys 1 / 2 / 3. */
+export const AMMO: { order: AmmoType[]; types: Record<AmmoType, AmmoParams>; startBroadsides: { chain: number; grape: number } } = {
+  order: ammoJson.order as AmmoType[],
+  types: ammoJson.types,
+  startBroadsides: ammoJson.startBroadsides,
+};
 
 /** All ship classes, by id. Balance numbers live in JSON, not in code. */
 export const SHIP_CLASSES: Record<string, ShipParams> = shipsJson;

@@ -1,0 +1,9 @@
+{
+  "order": ["round", "chain", "grape"],
+  "types": {
+    "round": { "name": "Round shot", "short": "ROUND", "rangeShare": 1.0, "spread": 1.0, "pellets": 1, "hull": 1.0, "sails": 0.2, "crew": 1.0 },
+    "chain": { "name": "Chain shot", "short": "CHAIN", "rangeShare": 0.6, "spread": 1.5, "pellets": 1, "hull": 0.1, "sails": 1.0, "crew": 0.5 },
+    "grape": { "name": "Grape shot", "short": "GRAPE", "rangeShare": 0.3, "spread": 2.0, "pellets": 8, "hull": 0.0, "sails": 0.05, "crew": 0.5 }
+  },
+  "startBroadsides": { "chain": 6, "grape": 6 }
+}

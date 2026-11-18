@@ -19,6 +19,8 @@ export interface ShipParams {
   hullHeight: number; // metres from the water to the deck edge (hull hit zone)
   mastHeight: number; // metres from the water to the mast top (rigging hit zone above the hull)
   mass: number; // tons; in a collision the lighter ship suffers more
+  crew: number; // sailors with a full crew (plan 4.10)
+  sailPoints: number; // how much shot the rigging takes before the sails are gone (M3 step 4)
 }
 
 /** Gun and ball numbers for every ship. Loaded from `data/guns.json` (plan 4.4). */
@@ -34,6 +36,25 @@ export interface GunParams {
   damage: number; // hull points one round shot takes off (plan 4.4: hullPoints / hitsToSink)
   gunSigmaDeg: number; // base spread of one gun, degrees (plan 4.4: sigma_gun); tuned with tools/hit_table.py
   salvoSigmaDeg: number; // base error of a whole broadside, degrees (plan 4.4: sigma_salvo, the ship's roll)
+  sailDamage: number; // sail points one ball takes off at sails share 1.0 (chain shot); see data/ammo.json
+  crewKill: number; // sailors one ball kills at crew share 1.0 (round shot) when it hits the hull
+  crewPerGun: number; // a gun needs this many sailors; with fewer, fewer guns fire (plan 4.4)
+  maxReloadFactor: number; // a short crew reloads slower: reload x min(this, full crew / crew)
+}
+
+/** The three kinds of ammunition (plan 4.5). A plain string, no enum. */
+export type AmmoType = 'round' | 'chain' | 'grape';
+
+/** One kind of ammunition (data/ammo.json). Shares multiply the base numbers in guns.json. */
+export interface AmmoParams {
+  name: string;
+  short: string; // for the HUD
+  rangeShare: number; // share of the round shot's range (the muzzle speed is cut by its square root)
+  spread: number; // multiplies the gun error (sigma_gun)
+  pellets: number; // balls per gun (grape: a bag of small balls)
+  hull: number; // share of guns.damage per ball (hull zone)
+  sails: number; // share of guns.sailDamage per ball (rigging zone; a hull hit does nothing to the sails)
+  crew: number; // share of guns.crewKill per ball (hull zone)
 }
 
 /** Port = left side looking forward, starboard = right side. */
@@ -52,6 +73,8 @@ export interface Ball {
   ageSeconds: number;
   /** Hull points this ball takes off, if not the usual `GunParams.damage` (a shore gun's heavier ball). */
   damage?: number;
+  /** What kind of ball it is; absent = round shot (shore guns fire round shot). */
+  ammo?: AmmoType;
 }
 
 /** A gun that will fire a little later (ripple fire). */
@@ -61,13 +84,14 @@ export interface PendingShot {
   gun: number; // 0 .. gunsPerSide-1, from stern to bow
   tick: number; // fires at the start of this step
   salvoErrorDeg: number; // the roll error of this broadside: the same for every gun in it
+  ammo: AmmoType; // what the broadside was loaded with when it was ordered
 }
 
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
 export type SimEvent =
   | { type: 'gunFired'; shipId: number; side: Side; x: number; y: number }
   | { type: 'splash'; x: number; y: number }
-  | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number }
+  | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number; ammo: AmmoType; hullLost: number; sailsLost: number; crewLost: number }
   | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number }
   // Two ships ran into each other at (x, y); how many hull points each lost.
   | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number }
@@ -118,6 +142,12 @@ export interface ShipState {
    * Absent = a law-abiding ship.
    */
   offender?: { port: number; forgiveLeft: number };
+  // M3 step 4. Absent = as good as new (a full rigging, a full crew, round shot, the starting stock).
+  // Read them through sim/condition.ts and sim/ammo.ts, which fill in those defaults.
+  sails?: number; // sail points left (0 .. the class's sailPoints)
+  crew?: number; // sailors left (0 .. the class's crew)
+  ammo?: AmmoType; // what the next broadside is loaded with
+  ammoLeft?: { chain: number; grape: number }; // broadsides of each left; round shot is not counted yet (bought in port in M5)
 }
 
 /** The wind as a ship feels it right now. */
@@ -261,6 +291,11 @@ export interface BotState {
 
 /** Bot behaviour numbers (data/bots.json). */
 export interface BotParams {
+  grapeRangeM: number; // closer than this the bot loads grape shot (if it has any)
+  grapeLeaveM: number; // ... and goes back to round shot beyond this (a gap: no flip-flop)
+  chainSpeedGap: number; // m/s: an enemy this much faster than the bot gets chain shot (stop the runner)
+  chainMinEnemySails: number; // ... unless its sails are already below this share
+  chainRangeShare: number; // ... and only within this share of the chain shot's reach
   thinkEveryTicks: number; // the bot thinks every N steps (3 = 10 times a second)
   engageRange: number; // metres: closer than this it fights
   chaseAgainRange: number; // metres: farther than this it chases again (gap = no flip-flop)
@@ -310,6 +345,8 @@ export type Command =
   | { type: 'setWind'; fromRad: number; strength: number }
   | { type: 'setElevation'; shipId: number; valueDeg: number }
   | { type: 'fire'; shipId: number; side: Side }
+  // Load the next broadsides with this kind of ammunition (keys 1 / 2 / 3).
+  | { type: 'setAmmo'; shipId: number; ammo: AmmoType }
   // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).
   | { type: 'setBot'; shipId: number; enemyId: number | null };
 
@@ -328,6 +365,8 @@ export interface DamageParams {
     maxSails: number; // only with the sails at or below this (almost stopped)
     safeRange: number; // only with no enemy afloat within this many metres
     sharePerSecond: number; // share of the full hull mended per second
+    sailsMaxShare: number; // the crew mends the sails at sea up to this share
+    sailsPerSecond: number; // share of the full sails mended per second at sea
   };
   /** A badly damaged ship sails slower (M3 step 1b). */
   slowdown: {
@@ -342,6 +381,8 @@ export interface DamageParams {
     maxDockSpeed: number; // ... if it moves no faster than this, m/s
     maxShare: number; // the port mends the hull up to this share of the full hull
     sharePerSecond: number; // share of the full hull mended per second in port
+    sailsPerSecond: number; // share of the full sails mended per second in port (up to all of them)
+    crewPerSecond: number; // sailors who join per second in port (until the tavern comes in M5)
     /** Port law (D40): firing in safe water is allowed but punished. */
     law: {
       shooterHullShare: number; // a broadside fired unlawfully in safe water costs the shooter this share of its full hull
