@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) and `dev-log-en.md` (what was done, problems and fixes). The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status (16 Nov 2026):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1/1b (ships × 1.2), 2 (auto-bot arena) and 3 (port law, D40) built; next: sail and crew damage, ammunition, class balance · open decision: O1 (section 9).
+**Status (17 Nov 2026):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1/1b (ships × 1.2), 2 (auto-bot arena) and 3 (port law, D40) and 3b (spawn guard, log v2) built; next: sail and crew damage, ammunition, class balance · open decision: O1 (section 9).
 
 ---
 

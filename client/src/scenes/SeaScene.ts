@@ -42,7 +42,7 @@ import { TuningPanel, releaseFocus } from './TuningPanel';
 import { Wake } from './Wake';
 import { ArenaHud } from './ArenaHud';
 import { createArenaWorld } from '../sim/arena';
-import { ArenaLog, clock } from '../view/arenaLog';
+import { ArenaLog, clock, headerLines, placeText } from '../view/arenaLog';
 
 const PLAYER_ID = 1;
 const TARGET_ID = 2;
@@ -859,10 +859,11 @@ export class SeaScene extends Phaser.Scene {
     this.arenaLog = new ArenaLog();
     this.arenaStartedAt = new Date().toLocaleString();
     const pilots = this.sim.world.arena?.pilots ?? [];
+    for (const line of headerLines(this.sim.world, seed)) this.arenaLog.add(0, line);
     this.arenaLog.add(0, `arena started with ${pilots.length} bots (seed ${seed}):`);
     for (const p of pilots) {
       const ship = this.ship(p.shipId);
-      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}, at (${Math.round(ship?.x ?? 0)}, ${Math.round(ship?.y ?? 0)})`);
+      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}, at ${placeText(ship?.x ?? 0, ship?.y ?? 0)}`);
     }
   }
 

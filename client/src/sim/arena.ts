@@ -8,7 +8,7 @@ import { newBot } from './bot';
 import { ISLANDS, SHIP_CLASSES } from './data';
 import { protectedByPort } from './law';
 import { nextRandom } from './random';
-import { openWaterSpot } from './spawn';
+import { gridSpot, openWaterSpot } from './spawn';
 import { START_BATTLE_SKILL } from './world';
 import { WIND } from './data';
 import { bearingDegToHeadingRad } from './angles';
@@ -26,7 +26,9 @@ function anywhere(world: World, islands: readonly Island[], shipClass: string, o
     const spot = openWaterSpot(world, islands, near, 0, 200, params, others);
     if (spot && others.every((o) => o.sunk || Math.hypot(o.x - spot.x, o.y - spot.y) > 400)) return spot;
   }
-  return null;
+  // Random tries failed (a crowded sea, or an island map with little open water): look over the
+  // whole sea in a grid. Never a fixed place: a fixed place can be on an island.
+  return gridSpot(world, islands, params, others.filter((o) => !o.sunk), 400);
 }
 
 /** A new arena: `count` bots of mixed classes at random places, each on its own side. */
@@ -47,7 +49,8 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
   for (let i = 0; i < count; i++) {
     const id = i + 1;
     const shipClass = ARENA.classes[i % ARENA.classes.length] ?? 'sloop';
-    const spot = anywhere(world, islands, shipClass, world.ships) ?? { x: -2000 + i * 700, y: 0 };
+    const spot = anywhere(world, islands, shipClass, world.ships);
+    if (!spot) continue; // no room at all: this bot is left out (the log header lists who came)
     world.ships.push({
       id,
       shipClass,

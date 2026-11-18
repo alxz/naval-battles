@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA, chooseTargets, createArenaWorld, stepArena, targetScore } from './arena';
-import { ISLANDS, SHIP_CLASSES } from './data';
+import { ISLANDS, reefs, SHIP_CLASSES, WORLD } from './data';
 import { touchesLand } from './land';
 import { Simulation } from './simulation';
 import { STEP_SECONDS } from './step';
@@ -102,4 +102,34 @@ describe('arena scenario (headless)', () => {
     expect(arena.totalWins).toBeGreaterThanOrEqual(1);
     expect(respawns).toBeGreaterThanOrEqual(1);
   }, 60000);
+});
+
+describe('arena spawn on a sea that is almost all land', () => {
+  const rect = (name: string, x0: number, y0: number, x1: number, y1: number) => ({
+    name,
+    points: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }],
+  });
+  it('bots are put only in the open pocket (by the grid fallback), never on land; none is made up out of thin air', () => {
+    const islands = [
+      rect('N', -2900, -1990, 2900, -700),
+      rect('S', -2900, 700, 2900, 1990),
+      rect('W', -2900, -1990, -700, 1990),
+      rect('E', 700, -1990, 2900, 1990),
+      ...reefs(WORLD),
+    ];
+    for (let seed = 1; seed <= 30; seed++) {
+      const w = createArenaWorld(seed, 6, islands);
+      expect(w.ships.length).toBeGreaterThanOrEqual(1);
+      expect(w.ships.length).toBe(w.arena!.pilots.length);
+      for (const s of w.ships) {
+        expect(touchesLand(s, SHIP_CLASSES[s.shipClass]!, islands)).toBe(false);
+        expect(Math.abs(s.x)).toBeLessThan(700);
+        expect(Math.abs(s.y)).toBeLessThan(700);
+      }
+    }
+  });
+  it('a sea with no open water at all gives an arena with no ships, not ships on land', () => {
+    const islands = [rect('All', -2990, -1990, 2990, 1990), ...reefs(WORLD)];
+    expect(createArenaWorld(1, 6, islands).ships).toHaveLength(0);
+  });
 });

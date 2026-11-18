@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ISLANDS, SHIP_CLASSES, WORLD } from './data';
+import { pointInPolygon } from './geometry';
 import { touchesLand } from './land';
-import { openWaterSpot } from './spawn';
+import { gridSpot, isOpenWater, nearestOpenWater, openWaterSpot } from './spawn';
 import type { ShipState } from './types';
 import { createWorld } from './world';
 
@@ -46,5 +47,53 @@ describe('createWorld with more enemies', () => {
     }
     expect(createWorld(123, 3).ships).toEqual(w.ships); // the same seed, the same places
     expect(createWorld(124, 3).ships[2]!.x).not.toBe(w.ships[2]!.x);
+  });
+});
+
+/** A point that is really on land: a spot inside the first real island, found by scanning its box. */
+function pointOnLand(): { x: number; y: number } {
+  const island = ISLANDS.find((i) => i.kind === 'big' || i.kind === 'medium')!;
+  const xs = island.points.map((p) => p.x);
+  const ys = island.points.map((p) => p.y);
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x += 10) {
+    for (let y = Math.min(...ys); y <= Math.max(...ys); y += 10) if (pointInPolygon({ x, y }, island.points)) return { x, y };
+  }
+  throw new Error('no land found');
+}
+
+describe('isOpenWater', () => {
+  it('no on land, not at the reef, not outside the sea; yes in open water', () => {
+    const land = pointOnLand();
+    expect(isOpenWater(land.x, land.y, sloop, ISLANDS)).toBe(false);
+    expect(isOpenWater(WORLD.minX + 10, 0, sloop, ISLANDS)).toBe(false); // on the reef
+    expect(isOpenWater(WORLD.maxX + 500, 0, sloop, ISLANDS)).toBe(false); // outside the sea
+    expect(isOpenWater(160, 90, sloop, ISLANDS)).toBe(true); // the start of the sea
+  });
+});
+
+describe('nearestOpenWater', () => {
+  it('keeps a good spot; moves a spot on land to open water near it; the same answer every time', () => {
+    expect(nearestOpenWater(160, 90, sloop, ISLANDS)).toEqual({ x: 160, y: 90 });
+    const land = pointOnLand();
+    const spot = nearestOpenWater(land.x, land.y, sloop, ISLANDS)!;
+    expect(spot).not.toBeNull();
+    for (const h of [0, 1, 2, 3]) expect(touchesLand({ x: spot.x, y: spot.y, headingRad: h } as ShipState, sloop, ISLANDS)).toBe(false);
+    expect(nearestOpenWater(land.x, land.y, sloop, ISLANDS)).toEqual(spot);
+  });
+  it('null when there is no open water within the radius', () => {
+    const land = pointOnLand();
+    expect(nearestOpenWater(land.x, land.y, sloop, ISLANDS, WORLD, 1)).toBeNull();
+  });
+});
+
+describe('gridSpot', () => {
+  it('finds open water by looking over the whole sea, apart from the others; null if the gap is impossible', () => {
+    const rng = { rngState: 3 };
+    const a = gridSpot(rng, ISLANDS, sloop, [], 400)!;
+    expect(a).not.toBeNull();
+    expect(isOpenWater(a.x, a.y, sloop, ISLANDS)).toBe(true);
+    const b = gridSpot(rng, ISLANDS, sloop, [a], 400)!;
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(400);
+    expect(gridSpot(rng, ISLANDS, sloop, [a], 100000)).toBeNull();
   });
 });

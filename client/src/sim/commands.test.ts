@@ -59,3 +59,29 @@ describe('applyCommand', () => {
     expect(w.wind.fromRad).toBeCloseTo(0.5);
   });
 });
+
+describe('placeShip never puts a ship on land', () => {
+  it("a place on an island becomes the nearest open water; open water stays as asked", async () => {
+    const { ISLANDS: islands, SHIP_CLASSES: classes } = await import('./data');
+    const { pointInPolygon } = await import('./geometry');
+    const { touchesLand } = await import('./land');
+    const island = islands.find((i) => i.kind === 'big' || i.kind === 'medium')!;
+    let land = { x: 0, y: 0 };
+    outer: for (let x = Math.min(...island.points.map((p) => p.x)); x < Math.max(...island.points.map((p) => p.x)); x += 10) {
+      for (let y = Math.min(...island.points.map((p) => p.y)); y < Math.max(...island.points.map((p) => p.y)); y += 10) {
+        if (pointInPolygon({ x, y }, island.points)) {
+          land = { x, y };
+          break outer;
+        }
+      }
+    }
+    const w = createWorld(1, 1);
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: land.x, y: land.y, headingRad: 1, shipClass: 'frigate' });
+    const ship = w.ships.find((s) => s.id === 2)!;
+    expect(ship.shipClass).toBe('frigate');
+    expect(touchesLand(ship, classes['frigate']!, islands)).toBe(false);
+    // The test buttons' normal case is untouched: open water stays exactly where it was asked.
+    applyCommand(w, { type: 'placeShip', shipId: 2, x: 160, y: 250, headingRad: 0 });
+    expect({ x: ship.x, y: ship.y }).toEqual({ x: 160, y: 250 });
+  });
+});

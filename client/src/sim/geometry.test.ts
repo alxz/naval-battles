@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bounds, pointInPolygon } from './geometry';
+import { bounds, distanceToSegment, pointInPolygon } from './geometry';
 
 const square = [
   { x: 0, y: 0 },
@@ -35,5 +35,16 @@ describe('pointInPolygon', () => {
 describe('bounds', () => {
   it('finds the box around the L shape', () => {
     expect(bounds(ell)).toEqual({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+  });
+});
+
+describe('distanceToSegment', () => {
+  it('is the distance to the nearest point of the segment, ends included', () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 10, y: 0 };
+    expect(distanceToSegment({ x: 5, y: 3 }, a, b)).toBe(3); // beside it
+    expect(distanceToSegment({ x: -4, y: 3 }, a, b)).toBe(5); // past the end a: 3-4-5
+    expect(distanceToSegment({ x: 13, y: 4 }, a, b)).toBe(5); // past the end b
+    expect(distanceToSegment({ x: 3, y: 4 }, a, a)).toBe(5); // a "segment" that is a point
   });
 });

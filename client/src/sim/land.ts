@@ -1,4 +1,4 @@
-import { bounds, pointInPolygon } from './geometry';
+import { bounds, distanceToSegment, pointInPolygon } from './geometry';
 import type { Vec2 } from './geometry';
 import type { Island, ShipParams, ShipState } from './types';
 
@@ -78,4 +78,25 @@ export function touchesLand(ship: ShipState, params: ShipParams, islands: readon
     }
   }
   return false;
+}
+
+/**
+ * How far is the nearest land from this point, in metres (0 = on land), and whose it is.
+ * Only for the log and for checks: it walks every edge of every island, so not for every step.
+ */
+export function distanceToLand(x: number, y: number, islands: readonly Island[]): { distance: number; name: string } {
+  let best = Infinity;
+  let name = '';
+  const p = { x, y };
+  for (const island of islands) {
+    const poly = island.points;
+    let d = Infinity;
+    if (pointInPolygon(p, poly)) d = 0;
+    else for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) d = Math.min(d, distanceToSegment(p, poly[j]!, poly[i]!));
+    if (d < best) {
+      best = d;
+      name = island.name;
+    }
+  }
+  return { distance: best, name };
 }

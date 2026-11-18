@@ -1,9 +1,10 @@
 import { onBroadsideFired } from './law';
 import { normalizeAngle } from './angles';
-import { GUNS, SHIP_CLASSES } from './data';
+import { GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { newBot } from './bot';
 import { orderBroadside } from './guns';
 import { clamp } from './math';
+import { nearestOpenWater } from './spawn';
 import { STEP_SECONDS } from './step';
 import type { Command, World } from './types';
 
@@ -34,9 +35,15 @@ export function applyCommand(world: World, command: Command): void {
     case 'setSails':
       ship.sailLevel = clamp(command.value, 0, 1);
       break;
-    case 'placeShip':
-      ship.x = command.x;
-      ship.y = command.y;
+    case 'placeShip': {
+      // Never on land: if the asked place is land (or the reef), the nearest open water is used;
+      // if there is none within 800 m the command is ignored and the ship stays where it is.
+      const kind = command.shipClass !== undefined && SHIP_CLASSES[command.shipClass] ? command.shipClass : ship.shipClass;
+      const params = SHIP_CLASSES[kind];
+      const spot = params ? nearestOpenWater(command.x, command.y, params, ISLANDS, WORLD) : { x: command.x, y: command.y };
+      if (!spot) return;
+      ship.x = spot.x;
+      ship.y = spot.y;
       ship.headingRad = command.headingRad;
       ship.speed = 0;
       ship.aground = false;
@@ -48,6 +55,7 @@ export function applyCommand(world: World, command: Command): void {
       ship.sunk = false;
       ship.offender = undefined;
       break;
+    }
     case 'setElevation':
       ship.elevationDeg = clamp(command.valueDeg, 0, GUNS.maxElevationDeg);
       break;

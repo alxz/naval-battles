@@ -4,6 +4,36 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 17 Nov 2026 — M3 step 3b: no ship on land at the start, and arena log v2
+
+### What you asked
+
+Check that a bot can never appear on an island, and think what else the log should collect.
+
+### What I found (the spawn check)
+
+- The normal ways are safe: `openWaterSpot` (duels, arena respawns) asks `isOpenWater` (60 m of free water, away from the reef). 400 arenas × 6 bots (2400 ships): 0 on land.
+- **Three holes**, all in rarely used paths: (1) the arena start had a fixed fallback place (`-2000 + 700·i, 0`) if 40 random tries failed: on my islands 3 of those 24 places (x = 2200, 2900) are land, on yours it can differ; (2) the command `placeShip` had no check, so the test buttons "target abeam / upwind" put the target on land in 15 of 360 trial places; (3) there was no watchdog: nothing would tell us if a ship ever stood on land.
+
+### What changed
+
+- `sim/spawn.ts`: `isOpenWater` (the one question every spawn asks), `nearestOpenWater` (rings of 16 points every 40 m, no random numbers), `gridSpot` (the last resort: the whole sea in a 250 m grid from a seeded start).
+- Arena: random tries, then the grid; if there is no room at all the bot is left out (the log header lists who came). **No fixed places any more.**
+- `placeShip`: a place on land becomes the nearest open water within 800 m; if there is none the command is ignored.
+- `sim/land.ts`: `distanceToLand` (for the log only); `sim/geometry.ts`: `distanceToSegment`.
+
+### Arena log v2 (`view/arenaLog.ts`)
+
+- Header: build label, **fingerprints of the data** (islands, ships, guns, damage, bots, shore, arena, wind, world: if yours differ from mine the hash differs), sea and wind, ports, seed.
+- Every bot line and respawn: position, distance to the nearest land (and its name) and port; WARNING if a respawn is closer than 60 m to land.
+- Every SUNK line gets a detail line: place, how the loser was sailing (mode, speed, sails, wind angle, aground, offender) and the killer (mode, distance, hull, speed).
+- Watchdog, once a game second: **ON LAND** (not aground), aground start / floats free / **STUCK > 20 s**.
+- Wind line at the start and at every turn of 15° (or 0.1 strength); flee / port / outlaw lines carry hull % and place.
+- Summary table by class (wins, losses, mean life, balls, hits/ball, shore deaths, aground, stuck) and collisions; warning count.
+- First findings in a 20-minute run: the merchantman and the frigate ran aground 11–13 times each near Isla Verde's port (the inlet), 126 collisions in 20 minutes (ramming), 0 warnings on land.
+
+Tests: 288 (273 + 15). Not verified: your own `islands.json` (the log header and the WARNING lines will show it).
+
 ## 16 Nov 2026 (night, 3) — M3 step 3: port law (D40) and the shore guns
 
 ### Before the code

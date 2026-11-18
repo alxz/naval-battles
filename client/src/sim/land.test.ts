@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ISLANDS, SHIP_CLASSES, WORLD } from './data';
-import { hullPoints, touchesLand } from './land';
+import { distanceToLand, hullPoints, touchesLand } from './land';
 import { STEP_SECONDS, stepWorld } from './step';
 import type { Island, ShipState, World } from './types';
 import { createWorld } from './world';
@@ -132,5 +132,16 @@ describe('the reef (package C2: easier to get off)', () => {
       free = !s.aground && Math.abs(Math.cos(s.headingRad)) < 0.5;
     }
     expect(free).toBe(true);
+  });
+});
+
+describe('distanceToLand', () => {
+  const square: Island = { name: 'Square', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }] };
+  const far: Island = { name: 'Far', points: [{ x: 1000, y: 0 }, { x: 1100, y: 0 }, { x: 1100, y: 100 }] };
+  it('0 on land, else the distance to the nearest shore, with the name of that island', () => {
+    expect(distanceToLand(50, 50, [square, far])).toEqual({ distance: 0, name: 'Square' });
+    expect(distanceToLand(130, 50, [square, far])).toEqual({ distance: 30, name: 'Square' });
+    expect(distanceToLand(900, 0, [square, far])).toEqual({ distance: 100, name: 'Far' });
+    expect(distanceToLand(0, 0, []).distance).toBe(Infinity);
   });
 });
