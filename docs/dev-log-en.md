@@ -1,6 +1,35 @@
 # Naval-Battles — Development Log
 
-Short record of what was done, what went wrong and how it was fixed. Newest entry first. Plan: `naval-game-plan-v0.6-en.md`.
+Short record of what was done, what went wrong and how it was fixed. Newest entry first. Plan: `naval-game-plan-v0.7-en.md`.
+
+---
+
+## 18 Nov 2026 (evening) — Your test of steps 4c and 5; plan v0.7
+
+### Test
+
+Arena view after a sinking, LEAVE and results, tall PC window, upright iPhone: all work. Wishes: a save-log button on the results screen; the results text shimmers.
+
+### Arena log (3 h 51 min, build "M3 step 5")
+
+106 wins (27.5 an hour, up from 20–21); sloop 37 / 33, brigantine 41 / 32, merchantman 2 / 32, frigate 26 / 9 (wins / losses). 111 collisions cost 1,900 hull points. 188 "works free" (49 an hour): 68 in mode port, 67 chase, 39 engage; the frigate 47 times, often in open water 350–450 m from land and right after a respawn: a square-rigged ship that starts at speed 0 or tries to tack loses all way (it turns at 0.12 rad/s when slow). Remedy in D45: square rigs wear instead of tacking. 9 finishing attacks in 27 chances, 2 sank their enemy. 0 berth waits (no port was full this time).
+
+### Your suggestions → plan v0.7
+
+Written as decisions in **plan v0.7** (EN and RU; v0.6 stays in `docs/` as history):
+
+| Suggestion | Decision | Where |
+|---|---|---|
+| Two bots sail side by side and hurt each other again and again; damage pause; ramming by bow costs less, speed counts, a ship lying still takes less | D44 collisions and ramming v2 (4.7b) | M3 step 6 |
+| Bots keep distance from allies, turn away after a contact; pursue to a broadside or cut off instead of running parallel; ram when it pays, with randomness | D45 bot seamanship part 2 | M3 step 6 |
+| The camera slides toward the enemy; keep your ship in a central circle; spyglass centred | D43 | M3 step 6 |
+| Range rings fainter; H help over the arena table; bars and random flags over every ship in the arena | D47 and the step 6 list | M3 step 6 |
+| `npm run headless-arena` with logs kept on the server | D46 (files now; SQLite with the backend, O7) | M3 step 6 |
+| Spanish flag in port; clearer shore guns | pictures only, early | M3 step 6 |
+| Central port, Isla Verde (pocket, bigger port, move south-west) | on the new map, not the test sea | M3b |
+| A map of the central Caribbean (your mockup) | D48: new milestone M3b after M3 (O6) | M3b |
+
+Also in v0.7: the status line, key constants and the ship table brought up to date; the M2b and M3 checklists shortened (the details stay in this log); a new risk (the map delays boarding).
 
 ---
 

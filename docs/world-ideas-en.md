@@ -1,6 +1,6 @@
 # Naval-Battles — Ideas for the World
 
-*17 Nov 2026 · The developer's ideas and the assistant's recommendations · Linked to `naval-game-plan-v0.6-en.md`*
+*17 Nov 2026 · The developer's ideas and the assistant's recommendations · Linked to `naval-game-plan-v0.7-en.md`*
 
 This is **not a work plan** but a store of ideas with an assessment. By rule D37 no idea from here enters a started milestone (now M3). Each idea is split into a small first version and a deeper later one; the end gives a suggested order. When an idea is taken up, it gets a decision number (D41, D42, …) in the plan.
 
