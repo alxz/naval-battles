@@ -4,6 +4,43 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 17 Nov 2026 (night) — Your answers on the world ideas: D41, D42, item 10
+
+- **O5 closed → D42:** a game day lasts **12 real minutes** (1 game hour = 30 s at ×1); morning 05:00–07:30, day to 18:00, evening to 20:30, night to 05:00. Plan 4.0 and 4.1 updated; provisions (30 days = 6 hours now) are re-tuned in M5.
+- **D41:** perception is its own milestone **M4b "Eyes at Sea"** right after M4; checklist in the plan, detailed design in `world-ideas-en.md` section 9 (contacts with three levels, sight ranges, islands and fog block sight, memory and a `search` mode for bots, the screen shows only what your ship knows, arena switch "what the bot sees", tests).
+- **Item 10:** a crew that has lost more than 60% surrenders more easily: added to plan 4.7 and the M4 checklist (M4 has not started, so it may go in); proposed curve in section 8. A hireling who finds no loot breaks the contract and demands a fine; pay or fight, the winner takes the loser's ship: section 5.1, with hiring in R4.
+- New in `world-ideas`: section 10, the day-and-night plan for M5 with numbers (clock, light factors for sight, gunnery, repair, market and dock hours, picture).
+
+No code changed. M3 continues: sail and crew damage, 3 ammunition types.
+
+---
+
+## 17 Nov 2026 (late) — Updating the Linux server; ideas for the world
+
+### How to update the Linux server (Brainbox) after new code
+
+`scripts/setup-linux.sh` is the **one-time installer** (system packages, Node, uv, firewall). Do not run it for an update; it is only for a fresh server or if Node or uv was removed (safe to re-run, but slow).
+
+A normal update, from the repository root:
+
+```bash
+cd ~/naval-battles                       # the repository folder
+git status                               # no local changes? (else: git stash, or commit)
+bash scripts/run-linux.sh update         # git pull, npm ci, make_islands.py, npm test
+bash scripts/run-linux.sh preview        # build and serve on port 4173 (or: dev, port 5173)
+```
+
+- `update` runs `git pull` itself (harmless if you already pulled), reinstalls the game's packages exactly from `package-lock.json` (`npm ci`, quick), regenerates the island pictures and ports (`make_islands.py`) and runs the tests.
+- If the game is running (for example in `tmux attach -t naval`), stop it with Ctrl+C first and start it again after the update.
+- After `make_islands.py`, check `git status` before committing from the server: `islands.json` is generated and differs between machines.
+- In the browser, hard-refresh after a rebuild (Ctrl+Shift+R; on iOS close and reopen the tab).
+
+### Ideas for the world
+
+Your list of 17 Nov (day and night, repair and trade by the clock, night theft, night gunnery, sight / silhouette / flag, weather, hidden reefs and currents, cities that trade and grow rich, caravans, hiring pirate bots, learning from strategy games) is written up with my conclusions in the new document **`world-ideas-en.md`** (and `world-ideas-ru.md`). Main points: one foundation, **perception** (bots see only their contacts), comes first, as its own step after M4; no time zones; the plan's 2-minute game day is too short for night (16 minutes recommended, open decision O5); most parts fit M5 (which brings the clock, ports and market anyway), theft, caravans and hirelings fit R4, storms and false flags Stage 2. Nothing enters M3 (D37). Item 10 of your list was empty.
+
+---
+
 ## 17 Nov 2026 — M3 step 3b: no ship on land at the start, and arena log v2
 
 ### What you asked

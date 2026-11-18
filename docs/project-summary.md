@@ -32,8 +32,8 @@ Top-down pixel-art naval game, Caribbean 1650–1720. Single-player sandbox agai
 - **M2b "Open Sea" done** (D37): 6 × 4 km sea with a reef border, 18 generated islands + 2 hand-made (volcano, village), chart (C / ESC), minimap; ship collisions; bots flee at 30% hull; repair at sea to 75%; three bots; a neutral port on the village island (safe water 300 m, repair to 90%, bots use it); fog banks (picture only).
 - **D38:** ships 1.75× faster, wind 0.8 (0.6–1.0). **D39:** bigger ships in the world with new sprites, at the start of M3.
 - **Now: M3** — done: step 1/1b ships × 1.2 (D39), damage slows ships (< 50% hull), wind shifts every 2.5–5 min, second port in the Isla Verde inlet; step 2 auto-bot arena (Tuning → Auto-bot: 6 bots fight each other, log download); step 3 **port law (D40)**: firing in safe water costs 2% hull and makes an offender, a hit on a protected ship does half damage, 3 shore guns per port fire at offenders within 450 m, pardon after 45 s outside (`sim/law.ts`, `sim/shore.ts`, `data/shore.json`). Step 3b: no ship is ever put on land (`isOpenWater`, `nearestOpenWater`, `gridSpot`, `placeShip` check) arena log v2 (data fingerprints, sink details, aground / on-land watchdog, class table) and hull bars over ships (`view/shipBar.ts`, `scenes/ShipBars.ts`, switch "ship bars"). Next: sail and crew damage, 3 ammunition types, ship variety, class balance (arena log), bot tiers, headless bot scenarios, `tools/validate_data.py`.
-- Later: M4 boarding; M5 world, ports, trade; M6 captain and saves.
-- Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`.
+- Later: M4 boarding (surrender gets likelier after 60% crew lost); **M4b "Eyes at Sea": perception (D41)**: ships and bots act only on what they see; M5 world, ports, trade, day and night (**D42: a 12-minute game day**); M6 captain and saves.
+- Plan: `docs/naval-game-plan-v0.6-*.md`; log: `docs/dev-log-*.md`; ideas for the world (not scheduled, D37): `docs/world-ideas-*.md`.
 
 ## Phaser 4 notes
 - Check calls against `node_modules/phaser/types` (most examples are Phaser 3). No `Geom.Point`; `fillPoints` needs `Math.Vector2`.

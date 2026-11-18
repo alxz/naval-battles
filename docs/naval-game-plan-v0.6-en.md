@@ -90,6 +90,8 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D38 | Game speed | All ships sail **1.75× faster** (`maxSpeed` in `ships.json`: sloop 20.1, brigantine 18.4, merchantman 10.5, frigate 16.6 m/s); turning stays as it was. The wind starts at 0.8 and wanders slowly between 0.6 and 1.0. Bots fight at 7.5 m/s | The developer's test of 16 Nov: the game felt slow; "speed scale" 1.5–2.0 felt right. An arcade pace matters more than true speeds | **Confirmed 16 Nov** |
 | D39 | Ship size on screen | Not by zoom ("pixels / metre" 1.5 made the screen too tight). Instead **bigger ships in the world: × 1.2** (sloop 36 m; × 1.5 was tried on 16 Nov and made big ships too big on the screen) with new, more detailed sprites, the first step of M3, together with class sizes and balance | Developer's test of 16 Nov | **Confirmed 16 Nov: × 1.5, first step of M3** |
 | D40 | Port law | A port is neutral ground that defends its peace. Firing in a port's safe water (300 m) is **allowed but punished**: an unlawful broadside costs the shooter 2% of its full hull; a ball that hits a law-abiding ship in safe water does half damage, and the shooter becomes an **offender** wherever he fired from. An offender loses the port's protection and repair, anybody may fire at him, and **3 shore guns** per port fire at him within 450 m (1.5 × the safe range) of the anchorage. Pardon: 45 s spent beyond 450 m. Bots keep the law and attack offenders | The developer's idea of 16 Nov: a port where nobody can ever shoot is too safe; the choice to break the peace should exist and cost something | **Confirmed 16 Nov; built as M3 step 3** |
+| D41 | Perception | A milestone **M4b "Eyes at Sea"** right after M4: every ship keeps a list of the ships it has seen (level: contact, silhouette, flag; last place, heading and time). Bots decide only from that list; your screen shows only what your ship knows. Night, fog and weather then work on bots too | Nearly every world idea of 17 Nov (night, flags, weather, caravans) needs it; it ends "fog is a picture only" and keeps the rule "bots do not cheat" | **Confirmed 17 Nov** |
+| D42 | Length of a day | A game day lasts **12 real minutes** at ×1 (1.5 min at ×8): morning 10%, day 45%, evening 10%, night 35%. Replaces "2 real minutes" (4.0). Provisions and the economy are tuned to it in M5 | With a 2-minute day a night would last 40 s. 12 minutes first (the developer's choice; 16 was suggested), then tuned by play | **Confirmed 17 Nov (O5)** |
 
 **Two plans existed.** The folder `web_claude` holds a different draft ("Sails & Powder": Three.js, TypeScript, Spain, 1700–1725). Your confirmed decisions above override it. Its best ideas are merged into this plan; Appendix B lists them. Please use only the latest plan version from now on, and replace the old `PROJECT_INSTRUCTIONS.md` with the new `project-summary.md`.
 
@@ -115,7 +117,7 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 
 ### Later (the "parking lot")
 
-New ideas go here, not into the current milestone.
+New ideas go here, not into the current milestone. The developer's ideas of 17 Nov for the world (day and night, sight and flags, weather, cities that grow rich, caravans, hired pirates) and their suggested order are in **`world-ideas-en.md`**.
 
 - **Stage 2:** Spain, France, the Dutch; full reputation and letters of marque; fleets; crew morale and experience, rum rations; buying and upgrading ships; storms, fog, regional wind, shallows, day and night; seasons; merchant guilds; more quest types; playable merchant role; fire, flooding, mast loss; repairs at sea; bow and stern guns; treasure fleets and galleons; new maps (Mediterranean, Atlantic); Ironman mode; kedging off (the crew rows an anchor out and hauls the ship off a shore; slow, costs time).
 - **Stage 3:** real-time multiplayer.
@@ -156,7 +158,7 @@ The single source for the numbers that other documents repeat. Scale and display
 | Sighting range | 1,500 m | `data/view.json` |
 | Sloop (player start) | 30 m, 11.5 m/s, turn 0.8 rad/s (your tuning) | `data/ships.json` |
 | Time acceleration | ×1, ×2, ×4, ×8; pause | `data/view.json` |
-| Game day | 2 real minutes at ×1 | `data/world.json` |
+| Game day | 12 real minutes at ×1, with morning, day, evening and night (D42) | `data/world.json` |
 
 ### 4.1 Scale, camera and time
 
@@ -172,7 +174,7 @@ The single source for the numbers that other documents repeat. Scale and display
 | Map size | About 6 × 4 km |
 | Time acceleration | ×1, ×2, ×4, ×8; drops to ×1 when a ship comes into view |
 | Pause | Always available |
-| Game day | 2 real minutes at ×1 |
+| Game day | 12 real minutes at ×1 (D42) |
 | Speed feel | A global `speedScale` (start 1.0) stays as a live slider for tuning |
 
 **Finding from the v0.5 review:** at 2 px/m the screen shows 320 × 180 m, but the guns reached 250 m. In a broadside the enemy is abeam, so it was off-screen in most fights, even with the zoom-out. v0.6 fixes this from three sides: bigger ships in game metres with 1 px/m at zoom ×1 (the sprites keep their pixel size), a shorter maximum gun range (about 200 m), and a combat camera with edge markers. The **M1 scale test** checks the numbers on the computer, the iPhone and the iPad before any art is made.
@@ -341,6 +343,7 @@ defence = theirCrew × 1.1                                  × random(0.8 … 1.
 - **You win:** the ship is captured. Both sides lose crew in proportion to the strength ratio.
 - **You lose:** you lose crew and must wait 30 s before a new attempt.
 - Pirate bots can board you in the same way.
+- **Refinement for M4 (developer's idea, 17 Nov):** a crew that has lost more than 60% of its men gives up sooner. From 40% of the crew left, every time it is raked or boarded there is a growing chance it strikes its colours (about 0 at 40% left, certain at 20%), higher for merchants and low morale, lower while the hull is sound. A beaten crew also fights worse in the boarding roll. The curve is set when M4 starts (`data/boarding.json`).
 
 **After a capture** you take the gold and as much cargo as your hold allows. Then you choose:
 
@@ -505,7 +508,7 @@ These rules make the time between fights interesting. All of them reuse systems 
 **Provisions**
 
 - One value: **days of food and water** for the current crew. A ship carries up to 30 days.
-- One day is used per game day. Provisions are bought in the tavern; the price grows with crew size.
+- One day is used per game day. Provisions are bought in the tavern; the price grows with crew size. (With the 12-minute day of D42, 30 days are 6 real hours at ×1; the numbers are re-tuned in M5.)
 - At zero, the ship loses 5% of its crew each day and reloads 25% slower.
 - **Fishing:** when the ship is nearly stopped, the wind is not strong and no enemy is in sight, choose **Fish**. Time runs fast; every 6 game hours add 1 day of provisions, up to 5 days per stop.
 
@@ -781,7 +784,17 @@ If a criterion fails, we tune for up to one week before M3. If the core is still
 - [ ] Surrender rule; boarding roll; battle report.
 - [ ] Loot crates; plunder screen; take ship / prize / sink / release.
 - [ ] Ship-loss rule.
+- [ ] A crew that has lost more than 60% of its men surrenders more easily (developer's idea, 17 Nov; see 4.7).
 - **Done when:** you start in a sloop and end the session in a captured brigantine. **→ Release R2 "Skirmish".**
+
+#### M4b — Eyes at Sea: perception (D41, about 2 weeks)
+- [ ] `sim/perception.ts`: each ship's known contacts (level contact / silhouette / flag, place, heading, speed, last seen), updated 3 times a second; sight ranges by level, light, fog, lanterns and mast height (`data/sight.json`). Details: `world-ideas-en.md`, section 9.
+- [ ] Bots choose targets, aim, chase and flee only from their contacts; a lost enemy is searched for at its last known place, then forgotten.
+- [ ] Your view: ships your ship does not see are not drawn; edge markers, the target card and hull bars only for known ships; the chart shows "last seen".
+- [ ] Fog banks hide for the rules too (no longer a picture only); a broadside reveals the shooter for a few seconds.
+- [ ] Arena: switch "what the watched bot sees" / "everything"; the log writes "sighted" and "lost sight".
+- [ ] Headless tests: a bot does not attack what it cannot see; it searches where it lost you; the same seed gives the same game.
+- **Done when:** you can slip away from a bot behind an island or in a fog bank, and it looks for you where it saw you last.
 
 #### M5 — World and ports (5 weeks; 6 with both sides)
 - [ ] Map from a small land/sea mask: `tools/build_map.py` creates the Tiled map and the bots' navigation grid; you paint details by hand only near the ports.
@@ -901,7 +914,7 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 
 ## 9. Open decisions
 
-One decision is open (O1). O2, O3 and O4 were closed on 13 Nov.
+One decision is open (O1). O2, O3 and O4 were closed on 13 Nov, O5 on 17 Nov.
 
 | # | Question | Recommended default | Alternative | Decide by |
 |---|---|---|---|---|
@@ -909,6 +922,7 @@ One decision is open (O1). O2, O3 and O4 were closed on 13 Nov.
 | **O2** | Which side does the player take in Stage 1? (D29 against D8) | **Pirate only.** The English captain becomes the first Stage 2 role, together with Spain | Keep both sides (D8). Pirate bots that keep their loot (4.11) and Admiralty bounties give the English captain an income; M5 takes about 1 week longer | **Closed 13 Nov: Pirate only (D29)** |
 | **O3** | World scale and display (D26, D27) | Game metres with 1 px/m at zoom ×1; whole zoom steps; logical height about 360 (computer) and 240 (phone) with integer scaling | Keep 2 px/m and real ship sizes, shorten the gun range to about 120 m and rely on the combat camera | **Closed 13 Nov: scale test (D26, D27)** |
 | **O4** | Score and saving (D30 against D9) | Net gold gained; save in port, suspend at sea | Keep "gold earned" and saving anywhere, and accept that the score can be inflated | **Closed 13 Nov: accepted (D30)** |
+| **O5** | Length of a game day (world ideas, 17 Nov) | 16 real minutes | 12 or 24 minutes | **Closed 17 Nov: 12 minutes (D42)** |
 
 O2 and O4 change no code yet: the side matters only from M5, the score and saves only from M6.
 
