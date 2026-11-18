@@ -133,7 +133,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
   for (const e of [...world.events]) {
     if (e.type === 'gunFired') {
       const pilot = pilotOf(world, e.shipId); // one event per gun (ripple fire)
-      if (pilot) pilot.balls++;
+      if (pilot) pilot.balls += e.balls ?? 1; // grape: every small ball counts, so hits/ball stays honest
     } else if (e.type === 'hit' && e.zone === 'hull') {
       const pilot = pilotOf(world, e.byShipId);
       if (pilot && e.byShipId !== e.shipId) pilot.hullHits++;

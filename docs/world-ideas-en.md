@@ -399,9 +399,25 @@ With a 12-minute day, a "30-day" store is 6 real hours. Proposal for M5: a ship 
 
 ---
 
+## 11. Ideas from the test of 18 Nov (after M3 step 4)
+
+What went into step 4b at once (fixes of step 4): controls lock when sunk, damage slows more, bar icons, ball colours, a bigger touch minimap with a view box. The rest, with recommendations:
+
+| Idea | Recommendation | When |
+|---|---|---|
+| **Finishing shot in safe water.** A chaser may follow a nearly sunk enemy into a port's safe water | Decide by numbers plus a roll: can one or two broadsides sink it (hull left against expected damage of the loaded shot, both sides)? Then a personal chance (bold bots more often; "irrational" now and then) — and right after, leave the 450 m law range and keep away about 45 s. The price (2% hull, shore guns) stays, so it is a gamble, not a free kill | Next M3 bot step |
+| **Port capacity.** Bots get stuck at the berths | A number of berths per port (small port fewer). A bot that sees them full waits in the port's safe water where it is open and deep, then takes its turn. Fewer piles, fewer groundings (the log showed 2-minute pushes at Empty Barrel Land) | Next M3 bot step |
+| **Detail by distance.** Up to 200 m hull, sails and crew; 200–450 m one bar; beyond, nothing | Fits perception (section 9) exactly: the 200 m level = "silhouette+", 450 m = "contact". Bots read the same levels, so it stays honest | M4b |
+| **National flags** next to the bar, up to 400 m; random nations for bots now | A flag is contact level 3 (section 9.1). Random nations are cheap and add colour; what nations mean (wars, allies, letters of marque) needs M5 ports and Stage 2 | Flag picture M4b, meaning M5+ |
+| **Damage on the ship picture** (torn sails, battered hull) | 2–3 damage levels as extra frames from `render_ship.py`; picked by sail and hull share. More frames = bigger sheets, so first test on the iPhone | M5 (or an art step) |
+| **Random island placement** (small at random, large moved a little) | Must keep: open water around ports, no closed passages, every place reachable, the reef free; check with the seed and a headless "reach every port" test | M5 world generation |
+
+---
+
 ## History
 
 | Date | What |
 |---|---|
 | 17 Nov 2026 | First version: the developer's ideas 1–9 and 11, conclusions and order |
 | 17 Nov 2026 (late) | The developer's answers: a 12-minute day (D42), perception as M4b (D41), item 10 (surrender, breaking a contract); detailed plans for M4b and day and night (sections 8–10) |
+| 18 Nov 2026 | Ideas from the test of step 4 (section 11): finishing shot, port capacity, detail by distance, flags, damage pictures, island placement |

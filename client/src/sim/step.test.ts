@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DAMAGE, SHIP_CLASSES } from './data';
-import { STEP_SECONDS, damagedSpeed, sailingInfo, stepShip, stepWorld, targetSpeed, windFactor } from './step';
+import { STEP_SECONDS, damageSpeedFactor, damagedSpeed, sailingInfo, stepShip, stepWorld, targetSpeed, windFactor } from './step';
 import type { ShipState, WindNow } from './types';
 import { createWorld } from './world';
 
@@ -175,6 +175,21 @@ describe('getting off the land', () => {
     stepShip(afloat, sloop, northWind, 1, { speedScale: 1, windDrift: false });
     expect(aground.headingRad).toBeCloseTo(sloop.turnRate, 1);
     expect(afloat.headingRad).toBeLessThan(aground.headingRad * 0.5);
+  });
+});
+
+describe('damageSpeedFactor (M3 step 4b)', () => {
+  it('hull x sails x crew; the worked example of the plan: 30% hull, 80% sails, 60% crew -> about 58%', () => {
+    const sloop = SHIP_CLASSES['sloop']!;
+    const s = createWorld(1).ships[0]!;
+    expect(damageSpeedFactor(s, sloop)).toBe(1);
+    s.hull = sloop.hullPoints * 0.3;
+    s.sails = sloop.sailPoints * 0.8;
+    s.crew = sloop.crew * 0.6;
+    const hull = DAMAGE.slowdown.minFactor + (1 - DAMAGE.slowdown.minFactor) * 0.3 / DAMAGE.slowdown.startShare; // 0.78
+    const expected = hull * (0.2 + 0.8 * 0.8) * (DAMAGE.crew.speedMinFactor + (1 - DAMAGE.crew.speedMinFactor) * 0.6);
+    expect(damageSpeedFactor(s, sloop)).toBeCloseTo(expected, 6);
+    expect(damageSpeedFactor(s, sloop)).toBeCloseTo(0.58, 2);
   });
 });
 

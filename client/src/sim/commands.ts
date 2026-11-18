@@ -28,6 +28,8 @@ export function applyCommand(world: World, command: Command): void {
 
   const ship = world.ships.find((s) => s.id === command.shipId);
   if (!ship) return;
+  // A sunk ship takes no orders (M3 step 4b): no rudder, sails, guns or ammunition until it is placed again.
+  if (ship.sunk && command.type !== 'placeShip') return;
 
   switch (command.type) {
     case 'setRudder':

@@ -32,7 +32,11 @@
   },
   "slowdown": {
     "startShare": 0.5,
-    "minFactor": 0.6,
+    "minFactor": 0.45,
     "freeSpeed": 3
+  },
+  "crew": {
+    "speedMinFactor": 0.7,
+    "turnMinFactor": 0.4
   }
 }

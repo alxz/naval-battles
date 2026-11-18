@@ -8,6 +8,8 @@ import { TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../v
 import type { HudLayout, Rect } from '../view/hudLayout';
 import { Compass } from './Compass';
 import { ICON_SIZE } from './icons';
+import { BAR_ICONS, barIconHeight, barIconPixels, barIconWidth } from '../view/barIcons';
+import type { BarIconName } from '../view/barIcons';
 import { textStyle } from './text';
 import type { TextKind } from './text';
 
@@ -263,14 +265,16 @@ export class Hud {
         gs.strokeRect(x + 0.5, py + 1.5, pip - 1, pip - 1);
       }
     }
-    const hullBar = { x: px, y: s.y + s.h - (c ? 10 : 12), w: s.w - (c ? 46 : 64) - 8, h: c ? 4 : 5 };
+    // A small hull icon in front of the hull bar (M3 step 4b), so each bar says what it is.
+    const hullRow = { x: px, y: s.y + s.h - (c ? 10 : 12), w: s.w - (c ? 46 : 64) - 8, h: c ? 4 : 5 };
+    const hullBar = this.withIcon(gs, 'hull', hullRow);
     this.bar(gs, hullBar, ship.hull / Math.max(1, d.hullMax));
     // A tick at the share that repair at sea can reach.
     gs.fillStyle(0xffffff, 0.9);
     gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
     if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
     // Above the hull bar, two short bars side by side: sails (canvas) and crew (blue) (M3 step 4).
-    this.conditionBars(gs, { x: hullBar.x, y: hullBar.y - (c ? 5 : 7), w: hullBar.w, h: c ? 2 : 3 }, d.sailShare, d.crewShare);
+    this.conditionBars(gs, { x: hullRow.x, y: hullRow.y - (c ? 5 : 7), w: hullRow.w, h: c ? 2 : 3 }, d.sailShare, d.crewShare);
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
     const law = d.offender === 'inside' ? 'OFFENDER!' : d.offender === 'outside' ? `PARDON ${Math.ceil(d.pardonSeconds)}s` : '';
     const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : law !== '' ? law : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
@@ -285,9 +289,10 @@ export class Hud {
       // "+" after the distance: its crew is repairing.
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
       const pad = this.touch ? 6 : 8;
-      const hb = { x: t.x + pad, y: t.y + t.h - (this.touch ? 7 : 10), w: t.w - 2 * pad, h: this.touch ? 3 : 5 };
+      const row = { x: t.x + pad, y: t.y + t.h - (this.touch ? 8 : 11), w: t.w - 2 * pad, h: this.touch ? 3 : 5 };
+      const hb = this.withIcon(this.gfx.target, 'hull', row);
       this.bar(this.gfx.target, hb, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
-      if (!tg.sunk) this.conditionBars(this.gfx.target, { x: hb.x, y: hb.y + hb.h + 1, w: hb.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
+      if (!tg.sunk) this.conditionBars(this.gfx.target, { x: row.x, y: row.y + row.h + 2, w: row.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
     }
 
     // --- Guns ---
@@ -328,19 +333,32 @@ export class Hud {
     }
   }
 
-  /** Sails (canvas colour) and crew (blue): two half-width bars on one line. */
+  /** Sails (canvas colour) and crew (blue): two half-width bars on one line, each with its icon in front. */
   private conditionBars(g: Phaser.GameObjects.Graphics, r: Rect, sails: number, crew: number): void {
     const half = Math.floor((r.w - 3) / 2);
-    for (const [x, share, colour] of [
-      [r.x, sails, SAILS_COLOUR],
-      [r.x + half + 3, crew, CREW_COLOUR],
+    for (const [x, share, colour, icon] of [
+      [r.x, sails, SAILS_COLOUR, 'sails'],
+      [r.x + half + 3, crew, CREW_COLOUR, 'crew'],
     ] as const) {
+      const b = this.withIcon(g, icon, { x, y: r.y, w: half, h: r.h });
       const f = Math.max(0, Math.min(1, share));
       g.fillStyle(0xffffff, 0.18);
-      g.fillRect(x, r.y, half, r.h);
+      g.fillRect(b.x, b.y, b.w, b.h);
       g.fillStyle(f > 0.25 ? colour : 0xe0533d, 1);
-      g.fillRect(x, r.y, Math.round(half * f), r.h);
+      g.fillRect(b.x, b.y, Math.round(b.w * f), b.h);
     }
+  }
+
+  /**
+   * Draw a tiny icon (view/barIcons.ts) at the left end of a bar's row, centred on the bar's height,
+   * and return the room left for the bar itself (M3 step 4b).
+   */
+  private withIcon(g: Phaser.GameObjects.Graphics, name: BarIconName, r: Rect): Rect {
+    const top = Math.round(r.y + r.h / 2 - barIconHeight(name) / 2);
+    g.fillStyle(BAR_ICONS[name].colour, 1);
+    for (const p of barIconPixels(name)) g.fillRect(r.x + p.x, top + p.y, 1, 1);
+    const room = barIconWidth(name) + 2;
+    return { x: r.x + room, y: r.y, w: Math.max(1, r.w - room), h: r.h };
   }
 
   /** A hull bar: dark track, coloured fill. */

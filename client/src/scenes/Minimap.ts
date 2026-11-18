@@ -2,7 +2,7 @@ import { PORTS } from '../sim/port';
 import Phaser from 'phaser';
 import { ISLANDS, WORLD } from '../sim/data';
 import type { ShipState } from '../sim/types';
-import { chartFit, isKnown, toChart } from '../view/chart';
+import { chartFit, isKnown, toChart, viewFrame } from '../view/chart';
 import type { ChartState } from '../view/chart';
 import { hudLayout, panelCovers } from '../view/hudLayout';
 import type { Rect } from '../view/hudLayout';
@@ -14,7 +14,7 @@ const COVERED_ALPHA = 0.25;
  * in the tuning panel). It shows the same knowledge as the chart (view/chart.ts): the reef,
  * the islands you have seen, your ship (yellow, with a short line for its heading) and the
  * other ships where you saw them last (red, pale when out of sight).
- * Computer: bottom right. Touch screens: bottom right too, above the "sails less" button.
+ * Computer: bottom right. Touch screens: top right, left of the right column of buttons (M3 step 4b: bigger).
  * A click or tap on it opens the big chart. Like the HUD panels it fades when a ship is under it.
  */
 export class Minimap {
@@ -53,7 +53,19 @@ export class Minimap {
     this.zone.input?.hitArea.setTo(0, 0, this.box.w, this.box.h);
   }
 
-  update(visible: boolean, state: ChartState, me: ShipState, shipsOnScreen: readonly { x: number; y: number }[], seconds: number, coveredRightPx = 0): void {
+  /**
+   * `view`: the part of the sea the camera shows (centre and half sizes in metres); a thin
+   * white box on the map shows it (M3 step 4b).
+   */
+  update(
+    visible: boolean,
+    state: ChartState,
+    me: ShipState,
+    shipsOnScreen: readonly { x: number; y: number }[],
+    seconds: number,
+    coveredRightPx = 0,
+    view?: { x: number; y: number; halfW: number; halfH: number },
+  ): void {
     this.place(coveredRightPx);
     const g = this.g;
     g.clear();
@@ -103,6 +115,13 @@ export class Minimap {
       const c = at(s);
       g.fillStyle(0xff5040, s.inSight ? 1 : 0.45);
       g.fillRect(Math.round(c.x) - 1, Math.round(c.y) - 1, 3, 3);
+    }
+
+    // What the screen shows now: a thin white box.
+    if (view) {
+      const f = viewFrame(fit, WORLD, view, view.halfW, view.halfH);
+      g.lineStyle(1, 0xffffff, 0.8);
+      g.strokeRect(f.x + 0.5, f.y + 0.5, f.w - 1, f.h - 1);
     }
 
     // You: a yellow dot and a short line where the bow points.

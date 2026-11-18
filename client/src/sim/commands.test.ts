@@ -84,4 +84,23 @@ describe('placeShip never puts a ship on land', () => {
     applyCommand(w, { type: 'placeShip', shipId: 2, x: 160, y: 250, headingRad: 0 });
     expect({ x: ship.x, y: ship.y }).toEqual({ x: 160, y: 250 });
   });
+
+  it('step 4b: a sunk ship takes no orders until it is placed again', () => {
+    const w = createWorld();
+    const ship = w.ships[0]!;
+    ship.sunk = true;
+    ship.elevationDeg = 5;
+    applyCommand(w, { type: 'setRudder', shipId: 1, value: 1 });
+    applyCommand(w, { type: 'setSails', shipId: 1, value: 1 });
+    applyCommand(w, { type: 'setElevation', shipId: 1, valueDeg: 1 });
+    applyCommand(w, { type: 'setAmmo', shipId: 1, ammo: 'grape' });
+    expect(ship.rudder).toBe(0);
+    expect(ship.sailLevel).toBe(0);
+    expect(ship.elevationDeg).toBe(5);
+    expect(ship.ammo).toBeUndefined();
+    applyCommand(w, { type: 'placeShip', shipId: 1, x: ship.x, y: ship.y, headingRad: 0 });
+    expect(ship.sunk).toBe(false);
+    applyCommand(w, { type: 'setRudder', shipId: 1, value: 1 });
+    expect(ship.rudder).toBe(1);
+  });
 });

@@ -41,6 +41,9 @@ describe('hudLayout', () => {
         expect(inside(b, sc.w, sc.h)).toBe(true);
         for (const r of [l.ship, l.target, l.guns]) expect(overlaps(b, r)).toBe(false);
       }
+      // The big minimap (M3 step 4b) is under no button and at least twice a button wide.
+      for (const btn of [...Object.values(touchButtonRects(sc.w, sc.h)), l.sound, l.autoZoom, l.spyglass]) expect(overlaps(l.minimap, btn)).toBe(false);
+      expect(l.minimap.w).toBeGreaterThanOrEqual(2 * l.buttonSize);
       for (let i = 0; i < buttons.length; i++)
         for (let j = i + 1; j < buttons.length; j++) expect(overlaps(buttons[i]!, buttons[j]!)).toBe(false);
     });

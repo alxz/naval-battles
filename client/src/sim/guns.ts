@@ -150,7 +150,7 @@ export function stepGunsAndBalls(world: World, dt: number, g: GunParams = GUNS):
       if (ammo !== 'round') ball.ammo = ammo;
       world.balls.push(ball);
     }
-    world.events.push({ type: 'gunFired', shipId: ship.id, side: shot.side, x: from.x, y: from.y });
+    world.events.push({ type: 'gunFired', shipId: ship.id, side: shot.side, x: from.x, y: from.y, ammo, balls: kind.pellets });
   }
 
   const hitBalls = new Set<number>();

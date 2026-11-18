@@ -2,7 +2,8 @@
 // Pure: no Phaser and no browser here; the scene stores it and offers it as a download.
 
 import { loadableAmmo } from '../sim/ammo';
-import { crewOf, sailShare } from '../sim/condition';
+import { crewOf, crewShare, sailShare } from '../sim/condition';
+import { damageSpeedFactor } from '../sim/step';
 import { ARENA } from '../sim/arena';
 import { compassPoint, headingRadToBearingDeg, twaDeg } from '../sim/angles';
 import { BOTS, DAMAGE, GUNS, ISLANDS, SHIP_CLASSES, SHORE, WIND, WORLD } from '../sim/data';
@@ -11,7 +12,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 4 (sails, crew, 3 ammunition types), 17 Nov 2026';
+export const BUILD_LABEL = 'M3 step 4b (damage slows more, controls lock when sunk, ammo colours), 18 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -208,7 +209,8 @@ export class ArenaLog {
     const parts = [`at ${placeText(e.x, e.y)}`];
     if (loser) {
       const twa = Math.round(twaDeg(loser.headingRad, world.wind.fromRad));
-      parts.push(`loser: ${bot?.mode ?? '?'}, speed ${loser.speed.toFixed(1)} m/s, sails set ${Math.round(loser.sailLevel * 100)}%, sails left ${Math.round(sailShare(loser) * 100)}%, crew ${crewOf(loser)}, ammo ${loadableAmmo(loser)}, wind angle ${twa}\u00b0${loser.aground ? ', AGROUND' : ''}${loser.offender ? ', offender' : ''}`);
+      const lParams = SHIP_CLASSES[loser.shipClass];
+      parts.push(`loser: ${bot?.mode ?? '?'}, speed ${(e.speedBefore ?? loser.speed).toFixed(1)} m/s, sails set ${Math.round((e.sailLevelBefore ?? loser.sailLevel) * 100)}%, sails left ${Math.round(sailShare(loser) * 100)}%, crew ${crewOf(loser)}, ammo ${loadableAmmo(loser)}${lParams ? `, speed left ${Math.round(damageSpeedFactor(loser, lParams) * 100)}%` : ''}, wind angle ${twa}\u00b0${loser.aground ? ', AGROUND' : ''}${loser.offender ? ', offender' : ''}`);
     }
     if (killer && loser) {
       const kBot = world.bots.find((b) => b.shipId === killer.id);
@@ -272,7 +274,9 @@ export class ArenaLog {
     const now = world.tick * (1 / 30);
     const ship = world.ships.find((s) => s.id === shipId);
     const full = ship ? (SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 1) : 1;
-    const state = ship ? ` [hull ${Math.round((100 * ship.hull) / full)}%, ${placeText(ship.x, ship.y)}]` : '';
+    const params = ship ? SHIP_CLASSES[ship.shipClass] : undefined;
+    const cond = ship && params ? `, sails ${Math.round(sailShare(ship) * 100)}%, crew ${Math.round(crewShare(ship) * 100)}%, speed left ${Math.round(damageSpeedFactor(ship, params) * 100)}%` : '';
+    const state = ship ? ` [hull ${Math.round((100 * ship.hull) / full)}%${cond}, ${placeText(ship.x, ship.y)}]` : '';
     if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees${state}`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs${state}`);
     else if (mode === 'outlaw') this.add(now, `${who(world, shipId)} runs from the shore guns${state}`);

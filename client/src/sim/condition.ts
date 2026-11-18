@@ -2,8 +2,8 @@
 // The fields on ShipState may be absent (a new ship, an old save): absent means "as good as new".
 // Every rule reads them through these functions, so the default lives in one place.
 
-import { GUNS, SHIP_CLASSES } from './data';
-import type { GunParams, ShipParams, ShipState } from './types';
+import { DAMAGE, GUNS, SHIP_CLASSES } from './data';
+import type { DamageParams, GunParams, ShipParams, ShipState } from './types';
 
 function paramsOf(ship: ShipState): ShipParams | undefined {
   return SHIP_CLASSES[ship.shipClass];
@@ -42,6 +42,19 @@ export function crewShortage(ship: ShipState): number {
  */
 export function sailSpeedFactor(ship: ShipState): number {
   return 0.2 + 0.8 * sailShare(ship);
+}
+
+/**
+ * M3 step 4b: a short-handed ship sails slower. The target speed falls in a straight line
+ * from 1 (full crew) to crew.speedMinFactor (nobody left): too few hands to trim the sails.
+ */
+export function crewSpeedFactor(ship: ShipState, d: DamageParams = DAMAGE): number {
+  return d.crew.speedMinFactor + (1 - d.crew.speedMinFactor) * crewShare(ship);
+}
+
+/** M3 step 4b: ... and turns slower: from 1 (full crew) to crew.turnMinFactor (nobody left). */
+export function crewTurnFactor(ship: ShipState, d: DamageParams = DAMAGE): number {
+  return d.crew.turnMinFactor + (1 - d.crew.turnMinFactor) * crewShare(ship);
 }
 
 /**

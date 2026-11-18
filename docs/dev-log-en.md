@@ -4,6 +4,50 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 18 Nov 2026 — M3 step 4b: fixes after your test of step 4
+
+### What the logs showed (two step-3 logs, one step-4 log of 3 h 53 min)
+
+| | Step 3 (17 Nov) | Step 3 (18 Nov, PC) | Step 4 (server) |
+|---|---|---|---|
+| Wins an hour | 19.4 | 20.5 | 17.5 |
+| Frigate wins / losses | 21 / 8 | 16 / 7 | 20 / 7 |
+| Merchantman wins / losses | 3 / 21 | 0 / 10 | 1 / 17 |
+| Collisions | 1333 | 53 | 312 |
+| Times aground | 309 | 102 | 109 |
+
+- Damage barely slowed ships: at the sinking a ship still had 71–92% of its sails (round shot tore little, chain shot was rare: 115 hits against 2063), crew losses did not touch speed or turning, and the hull slowdown started only below 50%.
+- **My log bug:** "speed 0.0, sails set 0%" in almost every sinking line; the sinking zeroes them before the log reads them.
+- Grape counted every small ball as a hit but the gun as one ball ("hits/ball 5.00").
+- 56 of 68 sinkings were ships already sailing to port; ships pile up at the Empty Barrel Land berths.
+
+### What changed
+
+1. **A sunk ship takes no orders** until it is placed again ("Sail again", a respawn): `applyCommand` ignores all but `placeShip`; the screen does not read the ship keys (rudder, sails, guns, elevation, ammunition) and drops presses made while sunk, so nothing fires after "Sail again". View keys (zoom, chart, spyglass, sound) still work.
+2. **Damage slows more** (new numbers, tune them in JSON):
+   - round shot tears sails twice as much (`ammo.json` round `sails` 0.2 → 0.4);
+   - crew: speed × (0.7 + 0.3 × crew share), turning × (0.4 + 0.6 × crew share) (`damage.json` `crew`), also aground;
+   - hull: down to 45% at hull 0 instead of 60% (`slowdown.minFactor`).
+   Example: 30% hull, 80% sails, 60% crew → about 58% of the speed (it was about 75%) and 76% of the turn rate.
+3. **Bar icons:** a brown hull, a canvas sail and a blue sailor in front of the bars, in my panel and the target card (`view/barIcons.ts`, rows of `#` and `.`).
+4. **Ball colours:** round shot black, chain shot two brown halves that tumble, grape red and black (`view/ballLook.ts`; textures in `Cannonballs.ts`).
+5. **Minimap:** on touch screens 2.4 buttons wide at the top right, left of the right button column (iPhone about 98 × 65 instead of 41 × 27); the chart button keeps its old small place when the minimap is off. Everywhere a thin white box shows what the screen shows (`view/chart.ts` `viewFrame`).
+6. **Arena log:** the `sunk` event carries the speed and sails set **before** the sinking; "speed left N%" (hull × sails × crew, `damageSpeedFactor`) in the sink line and in "sails to port" / "flees" lines, with sails and crew; a grape gun counts 8 balls.
+
+### Checks
+
+- 322 tests (12 new: crew speed and turn, the worked example, commands of a sunk ship, the sunk event, grape counting, `viewFrame`, bar icons, ball looks, a big minimap under no button), `tsc`, build.
+- Headless arena 4 × 60 min, old numbers against new: 75 → 91 wins (18.8 → 22.8 an hour); ships turning for port keep about 55% of their speed (mean of 111 lines); sail points torn about twice as many.
+- Headless browser, computer and iPhone 13: icons and colours visible; after `damageHull` sank my ship, keys 1 / 3 / W / D / R and the touch buttons changed nothing (ammunition, sails, rudder and elevation the same).
+
+### Your other ideas (recorded in the plan, not in this step, D37)
+
+- Finishing shot in a port's safe water with a roll, then leave for 45 s; port capacity (bots wait outside when the berths are full): the next M3 bot step.
+- Detail by distance (200 m / 450 m), national flags up to 400 m, random nations for bots: M4b (perception).
+- Damage on the ship picture; random island placement: M5.
+
+---
+
 ## 17 Nov 2026 (night, 2) — M3 step 4: sails, crew and three kinds of shot
 
 ### Two new ideas in the code

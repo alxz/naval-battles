@@ -49,13 +49,13 @@ describe('stepArena', () => {
     const w = createArenaWorld(5);
     w.events = [
       { type: 'gunFired', shipId: 1, side: 'port', x: 0, y: 0 },
-      { type: 'gunFired', shipId: 1, side: 'port', x: 0, y: 0 },
+      { type: 'gunFired', shipId: 1, side: 'port', x: 0, y: 0, ammo: 'grape', balls: 8 },
       { type: 'hit', shipId: 2, byShipId: 1, zone: 'hull', x: 0, y: 0, z: 1, ammo: 'round', hullLost: 27, sailsLost: 0, crewLost: 2 },
       { type: 'hit', shipId: 2, byShipId: 1, zone: 'rigging', x: 0, y: 0, z: 9, ammo: 'round', hullLost: 0, sailsLost: 3, crewLost: 0 },
     ];
     stepArena(w, STEP_SECONDS);
     const p1 = w.arena!.pilots[0]!;
-    expect(p1.balls).toBe(2);
+    expect(p1.balls).toBe(9); // a grape gun fires 8 small balls
     expect(p1.hullHits).toBe(1);
     w.ships[1]!.sunk = true;
     w.ships[1]!.hull = 0;

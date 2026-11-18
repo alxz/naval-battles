@@ -89,10 +89,10 @@ export interface PendingShot {
 
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
 export type SimEvent =
-  | { type: 'gunFired'; shipId: number; side: Side; x: number; y: number }
+  | { type: 'gunFired'; shipId: number; side: Side; x: number; y: number; ammo?: AmmoType; balls?: number } // balls: grape fires 8 (absent = 1)
   | { type: 'splash'; x: number; y: number }
   | { type: 'hit'; shipId: number; byShipId: number; zone: 'hull' | 'rigging'; x: number; y: number; z: number; ammo: AmmoType; hullLost: number; sailsLost: number; crewLost: number }
-  | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number }
+  | { type: 'sunk'; shipId: number; byShipId: number; x: number; y: number; speedBefore?: number; sailLevelBefore?: number } // how it sailed the moment before it sank (for the log)
   // Two ships ran into each other at (x, y); how many hull points each lost.
   | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number }
   // Port law (sim/law.ts, sim/shore.ts). `port` = index into the list of ports.
@@ -373,6 +373,11 @@ export interface DamageParams {
     startShare: number; // below this share of the hull the ship slows down
     minFactor: number; // at hull 0 the target speed is this share of what it would be
     freeSpeed: number; // m/s: speeds up to this are never cut (a wreck can still crawl into port)
+  };
+  /** A short-handed ship sails and turns worse (M3 step 4b): nobody to trim the sails and haul the braces. */
+  crew: {
+    speedMinFactor: number; // with no crew left the target speed is this share (a straight line from 1 at a full crew)
+    turnMinFactor: number; // with no crew left the turn rate is this share
   };
   /** A neutral port ("Open Sea" package C). */
   port: {

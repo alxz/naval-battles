@@ -96,3 +96,25 @@ export function chartFit(world: WorldBounds, panel: Rect): ChartFit {
 export function toChart(fit: ChartFit, world: WorldBounds, p: { x: number; y: number }): { x: number; y: number } {
   return { x: fit.x + (p.x - world.minX) * fit.scale, y: fit.y + (p.y - world.minY) * fit.scale };
 }
+
+/**
+ * The part of the sea the camera shows, as a rectangle on the chart or minimap (M3 step 4b):
+ * centre and half sizes in metres. Clipped to the sea, so it never leaves the map; at least 2 x 2 pixels.
+ */
+export function viewFrame(
+  fit: ChartFit,
+  world: WorldBounds,
+  centre: { x: number; y: number },
+  halfW: number,
+  halfH: number,
+): Rect {
+  const left = Math.max(world.minX, centre.x - halfW);
+  const right = Math.min(world.maxX, centre.x + halfW);
+  const top = Math.max(world.minY, centre.y - halfH);
+  const bottom = Math.min(world.maxY, centre.y + halfH);
+  const a = toChart(fit, world, { x: left, y: top });
+  const b = toChart(fit, world, { x: Math.max(left, right), y: Math.max(top, bottom) });
+  const x = Math.round(a.x);
+  const y = Math.round(a.y);
+  return { x, y, w: Math.max(2, Math.round(b.x) - x), h: Math.max(2, Math.round(b.y) - y) };
+}

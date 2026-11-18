@@ -438,7 +438,8 @@ export class SeaScene extends Phaser.Scene {
     const rangeM = params ? gunRange(myShip, params) : 0;
     // Ship centres on the screen: a HUD panel over one of them turns see-through.
     const shipsOnScreen = poses.map((p) => ({ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }));
-    this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom);
+    const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
+    this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
     this.hud.update({
       soundOn: v.sound,
       autoZoomOn: v.autoZoom,
@@ -542,6 +543,29 @@ export class SeaScene extends Phaser.Scene {
 
   /** Keys -> commands. Rudder and elevation are held; sails change one step per key press. */
   private readInput(seconds: number): void {
+    // A sunk ship takes no orders until "Sail again" (M3 step 4b); the view keys below still work.
+    if (!this.ship(PLAYER_ID)?.sunk) this.readShipInput(seconds);
+    else {
+      // Read (and forget) the presses, so a key pressed while sunk does not act after "Sail again".
+      const KD = Phaser.Input.Keyboard;
+      [this.keys.Q, this.keys.E, this.keys.W, this.keys.S, this.cursors.up, this.cursors.down, ...this.ammoKeys].forEach((k) => k && KD.JustDown(k));
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
+    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.chart.setOpen(false);
+
+    // H shows or hides the debug text (keys and all the numbers).
+    if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
+
+    // Zoom is only about the picture, so it does not go through the simulation.
+    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.stepManualZoom(1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.stepManualZoom(-1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.V)) this.toggleSpyglass();
+  }
+
+  /** Rudder, sails, guns, elevation and ammunition: only for a ship afloat. */
+  private readShipInput(seconds: number): void {
     const left = this.keys.A.isDown || this.cursors.left.isDown || (this.touch?.left ?? false);
     const right = this.keys.D.isDown || this.cursors.right.isDown || (this.touch?.right ?? false);
     const rudder = left === right ? 0 : right ? 1 : 0 - 1;
@@ -564,9 +588,6 @@ export class SeaScene extends Phaser.Scene {
     });
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.firePlayer('port');
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
-    if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
-    if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
-    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.chart.setOpen(false);
     const up = this.keys.R.isDown || this.raiseKeys.some((k) => k.isDown) || this.hud.raise || (this.touch?.raise ?? false);
     const down = this.keys.F.isDown || this.lowerKeys.some((k) => k.isDown) || this.hud.lower || (this.touch?.lower ?? false);
     const raise = (up ? 1 : 0) - (down ? 1 : 0);
@@ -577,14 +598,6 @@ export class SeaScene extends Phaser.Scene {
         this.sim.queueCommand({ type: 'setElevation', shipId: PLAYER_ID, valueDeg: next });
       }
     }
-
-    // H shows or hides the debug text (keys and all the numbers).
-    if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
-
-    // Zoom is only about the picture, so it does not go through the simulation.
-    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.stepManualZoom(1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.stepManualZoom(-1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.V)) this.toggleSpyglass();
   }
 
   /** One step in or out through view.json manualZoomSteps (keys Z / X, the mouse wheel). */
@@ -607,7 +620,9 @@ export class SeaScene extends Phaser.Scene {
 
   /** One step more or less sail. Used by the keys and by the touch buttons. */
   private changeSails(direction: 1 | -1): void {
-    const sails = this.ship(PLAYER_ID)?.sailLevel ?? 0;
+    const me = this.ship(PLAYER_ID);
+    if (!me || me.sunk) return;
+    const sails = me.sailLevel;
     this.sim.queueCommand({ type: 'setSails', shipId: PLAYER_ID, value: sails + direction * SAIL_STEP });
   }
 
@@ -633,7 +648,7 @@ export class SeaScene extends Phaser.Scene {
   /** Touch: the ammunition button loads the next kind (round, chain, grape). */
   private cycleAmmo(): void {
     const me = this.ship(PLAYER_ID);
-    if (me) this.sim.queueCommand({ type: 'setAmmo', shipId: PLAYER_ID, ammo: nextAmmo(ammoOf(me)) });
+    if (me && !me.sunk) this.sim.queueCommand({ type: 'setAmmo', shipId: PLAYER_ID, ammo: nextAmmo(ammoOf(me)) });
   }
 
   private firePlayer(side: Side): void {

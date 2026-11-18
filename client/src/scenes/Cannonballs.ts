@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import artJson from '../data/shipArt.json';
 import { sideAngleRad } from '../sim/guns';
+import { ballSpinTurnsPerSecond, ballTexture } from '../view/ballLook';
 import type { Ball, SimEvent, WindNow } from '../sim/types';
 
 /** Screen pixels up per metre of height: the same number the ship pictures were drawn with. */
@@ -119,7 +120,7 @@ export class Cannonballs {
       if (!pair) {
         pair = {
           shadow: this.scene.add.image(0, 0, 'ball-shadow').setDepth(1.5).setAlpha(0.35),
-          ball: this.scene.add.image(0, 0, 'ball').setDepth(4),
+          ball: this.scene.add.image(0, 0, ballTexture(b.ammo)).setDepth(4),
         };
         this.balls.set(b.id, pair);
       }
@@ -128,6 +129,8 @@ export class Cannonballs {
       const z = Math.max(0, b.z + b.vz * ahead);
       pair.shadow.setPosition(x * s, y * s).setScale(Math.max(1, s));
       pair.ball.setPosition(x * s, (y - z * HEIGHT_SCALE) * s).setScale(Math.max(1, s));
+      const spin = ballSpinTurnsPerSecond(b.ammo);
+      if (spin > 0) pair.ball.setRotation(2 * Math.PI * spin * (b.ageSeconds + ahead));
     }
     for (const [id, pair] of this.balls) {
       if (alive.has(id)) continue;
@@ -177,6 +180,21 @@ export class Cannonballs {
     g.fillStyle(0x1a1a1a, 1);
     g.fillRect(0, 0, 3, 3);
     g.generateTexture('ball', 3, 3);
+    g.clear();
+    // Chain shot: two brown half-balls joined by a chain (5 x 3), it tumbles in flight.
+    g.fillStyle(0x8a5226, 1);
+    g.fillRect(0, 0, 2, 3);
+    g.fillRect(3, 0, 2, 3);
+    g.fillStyle(0x3a2412, 1);
+    g.fillRect(2, 1, 1, 1);
+    g.generateTexture('ball-chain', 5, 3);
+    g.clear();
+    // Grape shot: a small red-and-black ball (2 x 2).
+    g.fillStyle(0xd23a2a, 1);
+    g.fillRect(0, 0, 2, 2);
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillRect(1, 1, 1, 1);
+    g.generateTexture('ball-grape', 2, 2);
     g.clear();
     g.fillStyle(0x000000, 1);
     g.fillRect(0, 0, 3, 2);

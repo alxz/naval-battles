@@ -1,4 +1,4 @@
-import { sailSpeedFactor } from './condition';
+import { crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
 import { collideShips } from './collide';
 import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
@@ -39,11 +39,12 @@ export function windFactor(strength: number): number {
  * The speed the ship is heading for (plan 4.3):
  *   maxSpeed x polar(TWA) x sailLevel x (0.4 + 0.6 x wind)
  *   x (0.2 + 0.8 x sail condition)   (M3 step 4: shot-away sails slow the ship)
+ *   x (0.7 + 0.3 x crew share)        (M3 step 4b: too few hands to trim the sails)
  * The Navigation skill (M6) joins this formula later.
  */
 export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, tuning: Tuning = DEFAULT_TUNING): number {
   const { share } = sailingInfo(ship, params, wind);
-  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship);
+  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship) * crewSpeedFactor(ship);
   return damagedSpeed(speed, ship.hull / params.hullPoints);
 }
 
@@ -57,6 +58,17 @@ export function damagedSpeed(speed: number, hullShare: number, d: DamageParams =
   if (hullShare >= s.startShare) return speed;
   const factor = s.minFactor + (1 - s.minFactor) * Math.max(0, hullShare) / s.startShare;
   return Math.max(Math.min(speed, s.freeSpeed), speed * factor);
+}
+
+/**
+ * How much of its speed the damage leaves a ship (hull x sails x crew), 0..1: for the log and the screen.
+ * The freeSpeed floor of damagedSpeed is left out (it only matters for a crawling wreck).
+ */
+export function damageSpeedFactor(ship: ShipState, params: ShipParams, d: DamageParams = DAMAGE): number {
+  const s = d.slowdown;
+  const hullShare = ship.hull / params.hullPoints;
+  const hull = hullShare >= s.startShare ? 1 : s.minFactor + (1 - s.minFactor) * Math.max(0, hullShare) / s.startShare;
+  return hull * sailSpeedFactor(ship) * crewSpeedFactor(ship, d);
 }
 
 /** How much of the turn rate the rudder gives at this speed: minSteerShare at a standstill, 1 from half of top speed. */
@@ -79,7 +91,8 @@ export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt:
   ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / params.speedTimeConstant));
 
   // Aground, the crew warps the ship round with boats and anchors: it turns at the full rate.
-  const steer = ship.aground ? 1 : steerShare(ship, params, tuning);
+  // A short-handed ship turns slower (M3 step 4b), aground or not.
+  const steer = (ship.aground ? 1 : steerShare(ship, params, tuning)) * crewTurnFactor(ship);
   ship.headingRad = normalizeAngle(ship.headingRad + params.turnRate * ship.rudder * steer * dt);
 
   ship.x += Math.cos(ship.headingRad) * ship.speed * dt;

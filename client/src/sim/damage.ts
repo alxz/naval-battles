@@ -15,11 +15,13 @@ export function damageHull(world: World, ship: ShipState, amount: number, byShip
   if (!decided && protectedByPort(ship, ports)) return;
   ship.hull = Math.max(0, ship.hull - amount);
   if (ship.hull === 0) {
+    const speedBefore = ship.speed;
+    const sailLevelBefore = ship.sailLevel;
     ship.sunk = true;
     ship.speed = 0;
     ship.sailLevel = 0;
     ship.rudder = 0;
     ship.repairing = false;
-    world.events.push({ type: 'sunk', shipId: ship.id, byShipId, x: ship.x, y: ship.y });
+    world.events.push({ type: 'sunk', shipId: ship.id, byShipId, x: ship.x, y: ship.y, speedBefore, sailLevelBefore });
   }
 }

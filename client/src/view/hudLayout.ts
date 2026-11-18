@@ -24,9 +24,9 @@ export interface HudLayout {
   debugY: number;
   /** The sound on/off button. */
   sound: Rect;
-  /** The chart (sea map) button, right of the sound button. On touch screens it is the minimap's place (used when the minimap is off). */
+  /** The chart (sea map) button, right of the sound button. On touch screens at the right edge under the gear (shown when the minimap is off). */
   chart: Rect;
-  /** The minimap: bottom right on a computer; on touch screens above the "sails less" button. */
+  /** The minimap: bottom right on a computer; on touch screens top right, left of the right column of buttons. */
   minimap: Rect;
   /** Size of a touch button (0 on a computer). */
   buttonSize: number;
@@ -52,6 +52,8 @@ const TARGET_H = 30;
 const GUNS_H = 46;
 const MINIMAP_W = 108; // computer: 6 x 4 km at 18 px per km
 const MINIMAP_H = 72;
+/** Touch: the minimap is this many buttons wide (M3 step 4b: it was one, too small on a phone). */
+const MINIMAP_TOUCH_SCALE = 2.4;
 /** Touch: the target card shows only when the enemy is this close (metres); farther away the edge arrows tell the distance. */
 export const TARGET_CARD_RANGE_TOUCH = 400;
 const GUNS_W_COMPUTER = 210; // room for the small +/- gun icons
@@ -96,13 +98,18 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   const sound: Rect = touch ? { x: zoomButtonX(width, height) + z + m, y: m, w: z, h: z } : { x: m, y: m, w: SOUND_ICON, h: SOUND_ICON };
   // Touch: the minimap (the sea is 3 : 2) at the right edge, under the tuning gear.
   const b = touchButtonRects(width, height);
-  const mapH = Math.round((buttonSize * 2) / 3);
-  const minimap: Rect = touch
-    ? { x: width - m - buttonSize, y: GEAR_H + 2, w: buttonSize, h: mapH }
-    : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
-  const chart: Rect = touch ? minimap : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
+  // Touch, minimap off: the chart button sits at the right edge under the tuning gear.
+  const chartButton: Rect = { x: width - m - buttonSize, y: GEAR_H + 2, w: buttonSize, h: Math.round((buttonSize * 2) / 3) };
+  const chart: Rect = touch ? chartButton : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
   const spyglass: Rect = touch ? { x: zoomButtonX(width, height), y: m, w: z, h: z } : { x: chart.x + chart.w + 6, y: chart.y, w: chart.w, h: chart.h };
   const autoZoom: Rect = touch ? { x: sound.x + sound.w + m, y: m, w: z, h: z } : { x: spyglass.x + spyglass.w + 6, y: chart.y, w: chart.w, h: chart.h };
+  // Touch (M3 step 4b): a big minimap at the top right, left of the right column of buttons;
+  // as wide as MINIMAP_TOUCH_SCALE buttons, but never onto the small buttons in the top middle.
+  const mapRight = b.sailsMore.x - 4;
+  const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (autoZoom.x + autoZoom.w + m)));
+  const minimap: Rect = touch
+    ? { x: mapRight - mapW, y: m, w: mapW, h: Math.round((mapW * 2) / 3) }
+    : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
   // Computer: the target card in the top middle. Touch: at the left edge, under my ship.
   const target: Rect = touch
     ? { x: m, y: ship.y + ship.h + 4, w: TARGET_W_TOUCH, h: TARGET_H_TOUCH }

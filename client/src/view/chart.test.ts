@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Island, ShipState } from '../sim/types';
-import { chartFit, discover, isKnown, newChart, toChart, updateSightings } from './chart';
+import { chartFit, discover, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
 
 const square = (name: string, x: number, y: number, kind?: string): Island => ({
   name,
@@ -58,5 +58,19 @@ describe('chartFit and toChart', () => {
     const nw = toChart(fit, world, { x: -3000, y: -2000 });
     expect(nw.y).toBeCloseTo(10, 6);
     expect(nw.x).toBeCloseTo(310 - 3000 * fit.scale, 6);
+  });
+});
+
+describe('viewFrame (M3 step 4b)', () => {
+  const world = { minX: -3000, maxX: 3000, minY: -2000, maxY: 2000, reefWidth: 60 };
+  const fit = chartFit(world, { x: 0, y: 0, w: 120, h: 80 }); // 0.02 px per metre
+
+  it('the camera view as a box on the map', () => {
+    expect(viewFrame(fit, world, { x: 0, y: 0 }, 500, 300)).toEqual({ x: 50, y: 34, w: 20, h: 12 });
+  });
+
+  it('clipped at the edge of the sea, never smaller than 2 x 2', () => {
+    expect(viewFrame(fit, world, { x: -3000, y: -2000 }, 500, 300)).toEqual({ x: 0, y: 0, w: 10, h: 6 });
+    expect(viewFrame(fit, world, { x: 0, y: 0 }, 10, 10)).toMatchObject({ w: 2, h: 2 });
   });
 });
