@@ -32,7 +32,13 @@ Check that a bot can never appear on an island, and think what else the log shou
 - Summary table by class (wins, losses, mean life, balls, hits/ball, shore deaths, aground, stuck) and collisions; warning count.
 - First findings in a 20-minute run: the merchantman and the frigate ran aground 11–13 times each near Isla Verde's port (the inlet), 126 collisions in 20 minutes (ramming), 0 warnings on land.
 
-Tests: 288 (273 + 15). Not verified: your own `islands.json` (the log header and the WARNING lines will show it).
+### Hull bars over the ships (your request, a small view-only step)
+
+- `view/shipBar.ts` (where the bar goes, how wide, how full; 4 tests) and `scenes/ShipBars.ts` (one Graphics, redrawn every frame, above the ships, below the HUD). Picture only: nothing in `sim/` changed.
+- A 3 px bar over every floating ship, centred, placed above the masts or the bow / stern for the current heading, 16–48 px wide by ship size and zoom, on whole pixels. Colours as in the HUD (green above 50%, yellow above 25%, red below; at least 1 px while afloat). Hidden for a sunk ship and, in a duel, for your own ship (it has its panel); in the arena every ship has one.
+- Tuning → View → "ship bars" switches them off. Checked in the headless browser (computer; the arena shows the bar under the name label); the phone layout was not checked by eye.
+
+Tests: 292 (273 + 15 + 4). Not verified: your own `islands.json` (the log header and the WARNING lines will show it).
 
 ## 16 Nov 2026 (night, 3) — M3 step 3: port law (D40) and the shore guns
 

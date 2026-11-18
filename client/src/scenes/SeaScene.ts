@@ -2,6 +2,7 @@ import { PORTS, inSafeWater } from '../sim/port';
 import { Fog } from './Fog';
 import { Spyglass } from './Spyglass';
 import { PortMarks } from './PortMarks';
+import { ShipBars } from './ShipBars';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
@@ -101,6 +102,7 @@ export class SeaScene extends Phaser.Scene {
   private chart!: Chart;
   private minimap!: Minimap;
   private portMarks!: PortMarks;
+  private shipBars!: ShipBars;
   private fog!: Fog;
   private escKey!: Phaser.Input.Keyboard.Key;
   private started = false; // false until the first duel has been set up
@@ -161,6 +163,7 @@ export class SeaScene extends Phaser.Scene {
     this.islands = new Islands(this);
     this.spyglass = new Spyglass(this);
     this.portMarks = new PortMarks(this);
+    this.shipBars = new ShipBars(this);
     this.fog = new Fog(this);
     this.rings = new RangeRings(this);
     this.markers2 = new LandingMarkers(this);
@@ -249,6 +252,7 @@ export class SeaScene extends Phaser.Scene {
         debugText: false,
         minimap: true,
         fog: true,
+        shipBars: true,
         enemyCount: 3,
         sound: true,
         volume: 0.7,
@@ -331,6 +335,8 @@ export class SeaScene extends Phaser.Scene {
       else image.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     });
 
+    // Hull bars over the ships; in a duel your own ship has its panel, in the arena every ship gets one.
+    this.shipBars.update(this.sim.world.ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex);
     this.islands.update(s);
     const watched = this.sim.world.ships[this.focusIndex];
     this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);

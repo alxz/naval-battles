@@ -26,6 +26,7 @@ export interface TuningValues {
   debugText: boolean; // the debug text with keys and numbers (H on a computer)
   minimap: boolean; // the small map on the screen
   fog: boolean; // drifting fog banks
+  shipBars: boolean; // a small hull bar over every ship
   enemyCount: number; // how many bots fight you (1-3); used when a duel starts
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
@@ -114,6 +115,7 @@ export class TuningPanel {
     this.debugController = view.add(v, 'debugText').name('debug text (H)');
     view.add(v, 'minimap').name('minimap');
     view.add(v, 'fog').name('fog');
+    view.add(v, 'shipBars').name('ship bars');
 
     // The auto-bot arena (M3 step 2): bots fight each other, you watch; a test tool.
     const arena = this.gui.addFolder('Auto-bot (test)');
