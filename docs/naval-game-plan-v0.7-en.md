@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) `dev-log-en.md` (what was done, problems and fixes, in detail) and `world-ideas-en.md` (ideas for the world, not yet scheduled). This plan keeps the decisions and the checklists short; the dev log has the details. The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); next: **step 6** from your test of 18 Nov (collisions and ramming v2, bot seamanship part 2, camera circle, arena view, headless arena), then ship variety and class balance · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
+**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); step 6a built (collisions and ramming v2, bot seamanship part 2, headless arena); next: **6b** (camera circle, arena view, pictures), then ship variety and class balance · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
 
 ---
 
@@ -797,11 +797,11 @@ Built (details in the dev log, 16–19 Nov):
 **Findings from the arena logs (16–18 Nov, about 30 game hours):** 20–27 wins an hour; the frigate wins most, the merchantman almost never (2 wins, 32 losses in 4 h); most sinkings are of ships already running for port; 111 collisions cost 1,900 hull points in 4 h; chain shot is rare (166 hits against 2,502 round shot); 9 finishing attacks in 27 chances, 2 sank their enemy.
 
 Next — **step 6** (your test of 18 Nov):
-- [ ] Collisions and ramming v2 (D44, 4.7b): damage by place and speed, a 2 s pause per pair, pushed apart until clear.
-- [ ] Bot seamanship part 2 (D45): distance from other ships, turning away after a contact, wearing for square rigs, pursuit to a broadside or a cut-off, deliberate ramming with a chance.
+- [x] **6a, 19 Nov — collisions and ramming v2 (D44, 4.7b):** damage by place and own speed, × the square of the closing speed (`hullPerMps2` 1.2), at most 30% of a ship's hull per collision, a 2 s pause per pair, the pair's bots steer clear for 6 s.
+- [x] **6a, 19 Nov — bot seamanship part 2 (D45):** steer for where the enemy will be (cut-off); square rigs (and slow brigantines) wear instead of tacking; bear away from a ship alongside; turn away and ease sail after a contact; a deliberate ram (heavier or the enemy crippled, faster, its side toward us, our hull sound, 20% roll).
 - [ ] Camera circle (D43); the spyglass centred on your ship or the watched bot; range rings fainter.
 - [ ] Arena (D47): sails and crew bars and random flags over every ship; the help text (H) no longer covers the bot table; the results screen gets "save log" and text that does not shimmer.
-- [ ] Headless arena (D46): `npm run headless-arena`.
+- [x] **6a, 19 Nov — headless arena (D46):** `npm run headless-arena` (Vite bundles `headless/arena.ts` for Node), logs in `client/arena-logs/`, page on port 4180; on Linux `bash scripts/run-linux.sh arena`. Headless 4 × 60 min: 22.8 wins an hour; accidental collisions mostly gone; 40 rams tried in 226 chances, 11 hit.
 - [ ] Port flag of Spain of the period (the Cross of Burgundy) and clearer shore-gun sprites (pictures only; the port stays neutral in Stage 1, D29).
 
 Then:

@@ -40,10 +40,11 @@ uv run --with numpy --with pillow tools/make_islands.py
 # 6. Check that everything works.
 (cd client && npm test && npm run build)
 
-# 7. Open the game ports in the firewall, if ufw is on (5173 = dev server, 4173 = built game).
+# 7. Open the game ports in the firewall, if ufw is on (5173 = dev server, 4173 = built game, 4180 = arena logs).
 if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
   sudo ufw allow 5173/tcp
   sudo ufw allow 4173/tcp
+  sudo ufw allow 4180/tcp # the headless arena's log page (M3 step 6)
 fi
 
 echo

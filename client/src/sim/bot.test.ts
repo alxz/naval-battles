@@ -335,7 +335,8 @@ describe('fleeing and repair (package B)', () => {
     const events = run(w, 150, [], (world) => {
       world.ships[0]!.hull = sloop.hullPoints;
     });
-    for (const e of events) if (e.type === 'collision' && e.damageA + e.damageB > 0) collisions++;
+    // Collisions between the bots themselves (since M3 step 6 they may ram you on purpose).
+    for (const e of events) if (e.type === 'collision' && e.shipA !== 1 && e.shipB !== 1 && e.damageA + e.damageB > 0) collisions++;
     expect(collisions).toBeLessThanOrEqual(1);
     expect(events.some((e) => e.type === 'hit' && e.shipId === 1)).toBe(true); // and they still fight you
   });

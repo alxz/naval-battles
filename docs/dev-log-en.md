@@ -4,6 +4,34 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 — M3 step 6a: collisions and ramming v2, bot seamanship part 2, headless arena
+
+### Three new ideas in the code
+
+- **A memory of collisions in the world** (`world.contacts`): after a damaging contact the pair is written down with two times (in steps): until when it takes no new damage (2 s) and until when its bots steer clear of each other (6 s). Plain data, so saves and tests repeat.
+- **Wearing ship** (`rudderFor`): the rudder for a heading normally takes the short way. A square-rigged ship (and a slow brigantine) whose short way would take the bow through the wind turns the long way, through downwind, so it never stops in irons. That was the frigate's "works free" in open water.
+- **A Node build of the game rules** (`headless/arena.ts`, `vite.headless.config.ts`): Vite bundles the arena with `src/sim` and the JSON data into one file that Node runs, without Phaser or a browser.
+
+### Collisions (D44)
+
+damage = 1.2 × (closing − 1)² × 2 × other mass / both masses × place × (0.5 + 0.5 × own speed / closing), at most 30% of the ship's hull. Place: struck amidships 1, near bow or stern 0.6, struck with its own bow 0.25, side against side 0.3. Example, a sloop at 8 m/s rams a sloop lying still amidships: the struck one loses 29 (was 48), the rammer 15 (was 24); at 13 m/s: 86 and 43.
+
+### Bots (D45)
+
+- Chase toward the point where the enemy will be (at most 30 s ahead): no more parallel runs behind it.
+- Bear away 20° from a ship alongside closer than 25 m of water; after a contact turn 50° away and ease sail for 6 s.
+- Ram on purpose: within 150 m, heavier (or the enemy crippled), faster (or it is almost stopped), its side toward us, our hull above 50%; then a 20% roll; a ram lasts at most 15 s; a "no" stands 30 s. Log: "RAM? … RAMS / keeps firing", a summary line.
+
+### Headless arena (D46)
+
+`npm run headless-arena` (options `--minutes 60 --runs 0 --seed N --port 4180 --dir arena-logs`): run after run, the log written every 10 game minutes, a page on port 4180 lists the logs, `/current` shows the running one. 60 game minutes take about 10 s. Linux: `bash scripts/run-linux.sh arena` (open port 4180 once: `sudo ufw allow 4180/tcp`).
+
+### Checks
+
+354 tests (new: 7 in `botStep6.test.ts`, collisions: place, own speed, pause, cap); `tsc`; build; headless browser computer and iPhone (a ram seen in the arena, no errors). Headless arena 4 × 60 min: 22.8 wins an hour (step 5: 25); a first try with ram chance 30% and k 2 gave 19.5 an hour and 3,300 hull points lost in collisions, most of them accidental head-on crashes; with the cap, the side-on rule and 20%: 40 rams tried in 226 chances, 11 hit. Still seen: many small pushes in the crowded Isla Verde harbour (a map matter, M3b), the merchantman stuck at the West reef now and then.
+
+---
+
 ## 18 Nov 2026 (evening) — Your test of steps 4c and 5; plan v0.7
 
 ### Test

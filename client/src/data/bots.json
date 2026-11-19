@@ -51,5 +51,15 @@
   "finishRecklessChance": 0.08,
   "finishSeconds": 25,
   "finishMemorySeconds": 30,
-  "berthWaitM": 200
+  "berthWaitM": 200,
+  "leadMaxSeconds": 30,
+  "wearBelowMps": 4,
+  "abeamBerthM": 25,
+  "abeamTurnDeg": 20,
+  "contactTurnDeg": 50,
+  "ramRangeM": 150,
+  "ramMassShare": 0.8,
+  "ramChance": 0.2,
+  "ramSeconds": 15,
+  "ramMemorySeconds": 30
 }

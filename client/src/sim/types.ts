@@ -106,7 +106,8 @@ export type SimEvent =
   // Bots (M3 step 4c / 5): for the arena log.
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
-  | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number };
+  | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
+  | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -221,6 +222,8 @@ export interface World {
   shore?: ShoreBattery[];
   /** The auto-bot arena: every ship is a bot, each fights for itself (sim/arena.ts). Absent in a normal game. */
   arena?: ArenaState;
+  /** M3 step 6 (D44): pairs of ships that just collided: no new damage between them before `untilTick`. Absent = none. */
+  contacts?: { a: number; b: number; untilTick: number; avoidUntilTick?: number }[];
 }
 
 /** The changing state of one port's shore battery (plain data, like everything in the world). */
@@ -266,7 +269,7 @@ export interface ArenaState {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish' | 'ram';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
@@ -298,6 +301,8 @@ export interface BotState {
   finishLeft?: number; // seconds left of a finishing attack in a port's safe water (mode 'finish')
   finishMemory?: { enemyId: number; seconds: number }; // it already decided about this enemy in safe water; ask again after this
   waitingBerth?: boolean; // sailing to a port whose berths are full: waiting off the anchorage
+  ramLeft?: number; // M3 step 6: seconds left of a deliberate ram (mode 'ram')
+  ramMemory?: number; // seconds before it may weigh another ram
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -351,6 +356,17 @@ export interface BotParams {
   finishSeconds: number; // the attack lasts at most this long, then it leaves (it is an offender by then)
   finishMemorySeconds: number; // a "no" stands this long before it may think again about the same enemy
   berthWaitM: number; // a full port: it waits this far off the anchorage
+  // M3 step 6 (D45): seamanship part 2
+  leadMaxSeconds: number; // a chaser steers for where the enemy will be, at most this far ahead (cuts it off)
+  wearBelowMps: number; // a mixed rig wears (turns through downwind) instead of tacking when slower than this; a square rig always wears
+  abeamBerthM: number; // water kept between its side and a ship alongside (other than a ram target)
+  abeamTurnDeg: number; // how far it bears away from a ship too close alongside
+  contactTurnDeg: number; // after a collision: turn this far away from the other ship and ease sail, for the pause
+  ramRangeM: number; // a ram is weighed only within this distance...
+  ramMassShare: number; // ...against a ship at most 1 / this heavier, or a crippled one...
+  ramChance: number; // ...and then tried with this chance (a personal roll; it is not always wise)
+  ramSeconds: number; // a ram lasts at most this long
+  ramMemorySeconds: number; // before it weighs another ram
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -380,9 +396,17 @@ export type Command =
 export interface DamageParams {
   collision: {
     minClosingSpeed: number; // m/s: slower contacts only push the ships apart, without damage
-    hullPerMps: number; // hull points per m/s of closing speed, for two ships of equal mass
+    // M3 step 6 (D44): damage = hullPerMps2 x (closing - minClosingSpeed)^2 x mass share x place x own-speed factor
+    hullPerMps2: number; // hull points per (m/s)^2 above the minimum, for two ships of equal mass
     bowFactor: number; // a ship that hits with its bow takes only this share (the bow is strong)
     bowArcDeg: number; // "with its bow" = the other ship lies within this angle of dead ahead
+    sideArcDeg: number; // struck "amidships" = within this angle of the beam (full damage)
+    endFactor: number; // struck near the bow or the stern (not amidships, not with its own bow)
+    alongsideDeg: number; // hulls within this angle of each other (either way) = side against side...
+    alongsideFactor: number; // ...and both take only this share
+    pairPauseSeconds: number; // after a damaging contact the same two ships take no new damage for this long
+    avoidSeconds: number; // ...and the bots of the pair steer clear of each other this long
+    maxHullShare: number; // one collision takes at most this share of a ship's full hull (a head-on crash is bad, not fatal)
     speedKept: number; // share of its speed a ship keeps after a damaging collision
     gapM: number; // metres of water left between the hulls after they are pushed apart
   };

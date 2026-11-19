@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collideShips, collisionDamage, hullOverlap, strikesWithBow } from './collide';
+import { cappedDamage, collideShips, collisionDamage, hullOverlap, impactPlace, strikesWithBow } from './collide';
+import type { ImpactSide } from './collide';
 import { DAMAGE, SHIP_CLASSES } from './data';
 import { STEP_SECONDS, stepWorld } from './step';
 import type { Island, ShipState, World } from './types';
@@ -41,18 +42,50 @@ describe('hullOverlap', () => {
   });
 });
 
-describe('collisionDamage and strikesWithBow', () => {
-  it('equal ships lose the same; the lighter loses more; a bow strike costs the rammer half', () => {
-    const same = collisionDamage(8, 100, 100, false, false);
-    expect(same.a).toBeCloseTo(DAMAGE.collision.hullPerMps * 8, 6);
+describe('collisionDamage, impactPlace and strikesWithBow (M3 step 6, D44)', () => {
+  const k = DAMAGE.collision.hullPerMps2;
+  const side = (mass: number, own = 0): ImpactSide => ({ mass, place: 'side', ownSpeed: own });
+
+  it('grows with the square of the closing speed above 1 m/s; the lighter ship loses more', () => {
+    const same = collisionDamage(8, side(100, 8), side(100, 8));
+    expect(same.a).toBeCloseTo(k * 49, 6); // both sailed into it: own factor 1
     expect(same.b).toBeCloseTo(same.a, 6);
-    const uneven = collisionDamage(8, sloop.mass, frigate.mass, false, false); // a = sloop
-    expect(uneven.a).toBeGreaterThan(uneven.b * 5);
-    expect(collisionDamage(8, 100, 100, true, false).a).toBeCloseTo(same.a * DAMAGE.collision.bowFactor, 6);
+    expect(collisionDamage(5, side(100, 5), side(100, 5)).a).toBeCloseTo(k * 16, 6);
+    const uneven = collisionDamage(8, side(sloop.mass, 8), side(frigate.mass, 0)); // a = sloop
+    expect(uneven.a).toBeGreaterThan(uneven.b);
+  });
+
+  it('place: own bow 0.25, amidships 1, near bow or stern 0.6, side against side 0.3', () => {
+    const at = (place: ImpactSide['place']): number => collisionDamage(8, { mass: 100, place, ownSpeed: 8 }, side(100, 8)).a;
+    expect(at('bow') / at('side')).toBeCloseTo(DAMAGE.collision.bowFactor, 6);
+    expect(at('end') / at('side')).toBeCloseTo(DAMAGE.collision.endFactor, 6);
+    expect(at('alongside') / at('side')).toBeCloseTo(DAMAGE.collision.alongsideFactor, 6);
+  });
+
+  it('a ship lying still takes half of what it would take sailing into the blow', () => {
+    const moving = collisionDamage(8, side(100, 8), side(100, 0));
+    expect(moving.b / moving.a).toBeCloseTo(0.5, 6);
+  });
+
+  it('one collision takes at most maxHullShare of a ship\'s full hull', () => {
+    const raw = collisionDamage(20, side(100, 20), side(100, 20)); // a head-on crash at 20 m/s
+    const capped = cappedDamage(raw, sloop.hullPoints, frigate.hullPoints);
+    expect(raw.a).toBeGreaterThan(sloop.hullPoints * DAMAGE.collision.maxHullShare);
+    expect(capped.a).toBeCloseTo(sloop.hullPoints * DAMAGE.collision.maxHullShare, 6);
+    expect(cappedDamage({ a: 5, b: 5 }, sloop.hullPoints, sloop.hullPoints)).toEqual({ a: 5, b: 5 });
   });
 
   it('a slow touch does no damage', () => {
-    expect(collisionDamage(DAMAGE.collision.minClosingSpeed - 0.1, 100, 100, false, false)).toEqual({ a: 0, b: 0 });
+    expect(collisionDamage(DAMAGE.collision.minClosingSpeed - 0.1, side(100, 1), side(100, 0))).toEqual({ a: 0, b: 0 });
+  });
+
+  it('impactPlace: a T is bow for the rammer and side for the struck; parallel hulls are alongside', () => {
+    const rammer = ship(1, 0, 0, Math.PI / 2); // heading south
+    const struck = ship(2, 0, 20, 0); // lying east-west, south of it
+    expect(impactPlace(rammer, 0, 1, struck.headingRad)).toBe('bow');
+    expect(impactPlace(struck, 0, -1, rammer.headingRad)).toBe('side');
+    expect(impactPlace(ship(3, 0, 0, 0), 0, 1, Math.PI)).toBe('alongside'); // opposite courses, side by side
+    expect(impactPlace(ship(4, 0, 0, 0), -1, -0.3, Math.PI / 2)).toBe('end'); // met near its stern
   });
 
   it('bow: the other ship within 35 degrees of dead ahead', () => {
@@ -72,8 +105,9 @@ describe('collideShips', () => {
     collideShips(w, []);
     const event = w.events.find((e) => e.type === 'collision');
     expect(event).toBeDefined();
-    expect(sloop.hullPoints - rammer.hull).toBeCloseTo(DAMAGE.collision.hullPerMps * 8 * DAMAGE.collision.bowFactor, 6); // 24
-    expect(sloop.hullPoints - victim.hull).toBeCloseTo(DAMAGE.collision.hullPerMps * 8, 6); // 48
+    const k = DAMAGE.collision.hullPerMps2 * 7 * 7; // (8 - 1)^2
+    expect(sloop.hullPoints - rammer.hull).toBeCloseTo(k * DAMAGE.collision.bowFactor, 6); // its bow, sailing into it: about 25
+    expect(sloop.hullPoints - victim.hull).toBeCloseTo(k * 0.5, 6); // amidships, lying still: half, about 49
     expect(hullOverlap(rammer, sloop, victim, sloop)).toBeNull();
     expect(rammer.speed).toBeCloseTo(8 * DAMAGE.collision.speedKept, 6);
   });
@@ -94,7 +128,35 @@ describe('collideShips', () => {
     const w = world([me, big]);
     collideShips(w, []);
     expect(sloop.hullPoints - me.hull).toBeGreaterThan(50);
-    expect(frigate.hullPoints - big.hull).toBeLessThan(25);
+    expect(frigate.hullPoints - big.hull).toBeLessThan(frigate.hullPoints * 0.05); // under 5% of its hull
+  });
+
+  it('two hulls scraping along each other: one damage, then a pause of 2 s for that pair (your test, 18 Nov)', () => {
+    const a = ship(1, 0, 0, 0, 6); // east...
+    const b = ship(2, 6, 11, Math.PI + 0.3, 10); // ...and a little north of west: they close sideways, sides touching
+    const w = world([a, b]);
+    const lost = (): number => 2 * sloop.hullPoints - a.hull - b.hull;
+    collideShips(w, []);
+    const first = lost();
+    expect(first).toBeGreaterThan(0);
+    // Pushed back into each other every step for 1.9 s: no new damage.
+    for (let i = 0; i < 57; i++) {
+      w.tick++;
+      Object.assign(a, { x: 0, y: 0 });
+      Object.assign(b, { x: 6, y: 11 });
+      a.speed = 6;
+      b.speed = 10;
+      collideShips(w, []);
+    }
+    expect(lost()).toBeCloseTo(first, 6);
+    // After the pause a new blow counts again.
+    w.tick += 10;
+    Object.assign(a, { x: 0, y: 0 });
+    Object.assign(b, { x: 6, y: 11 });
+    a.speed = 6;
+    b.speed = 10;
+    collideShips(w, []);
+    expect(lost()).toBeGreaterThan(first);
   });
 
   it('a fatal collision sinks the ship and names the other as the cause', () => {

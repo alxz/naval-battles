@@ -12,7 +12,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 5 (bots: work free, chase runners, finishing attack in safe water, berths), 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 6a (collisions v2, bot seamanship: cut-off, wearing, spacing, ramming; headless arena), 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -108,6 +108,9 @@ export class ArenaLog {
   private finishAttacks = 0;
   private finishKills = 0;
   private berthWaits = 0;
+  private ramDecisions = 0;
+  private ramTries = 0;
+  private ramHits = 0;
   private onLandWarned = new Set<number>();
   private nextWatch = 0;
   private lastWind: { fromRad: number; strength: number } | null = null;
@@ -204,6 +207,10 @@ export class ArenaLog {
         if (e.go) this.finishAttacks++;
         const why = e.canFinish ? `can sink it (expects ${Math.round(e.expected)} damage, it has ${Math.round(e.enemyHull)} hull)` : `cannot sink it (expects ${Math.round(e.expected)}, it has ${Math.round(e.enemyHull)})`;
         this.add(now, `FINISH? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} in safe water: ${why} -> ${e.go ? (e.canFinish ? 'GOES IN' : 'GOES IN anyway (reckless)') : 'waits outside'}`);
+      } else if (e.type === 'ramDecision') {
+        this.ramDecisions++;
+        if (e.go) this.ramTries++;
+        this.add(now, `RAM? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} at ${Math.round(e.distance)} m -> ${e.go ? 'RAMS' : 'keeps firing'}`);
       } else if (e.type === 'berthWait') {
         this.berthWaits++;
         this.add(now, `${who(world, e.shipId)} finds the berths of ${e.port} full (${e.occupied}/${e.berths}): waits off the port`);
@@ -211,6 +218,7 @@ export class ArenaLog {
       else if (e.type === 'collision' && (e.damageA > 0 || e.damageB > 0)) {
         this.collisions++;
         this.collisionDamage += e.damageA + e.damageB;
+        if (world.bots.some((b) => b.mode === 'ram' && (b.shipId === e.shipA || b.shipId === e.shipB))) this.ramHits++;
         this.add(now, `collision: ${who(world, e.shipA)} (-${Math.round(e.damageA)}) and ${who(world, e.shipB)} (-${Math.round(e.damageB)})`);
       }
     }
@@ -300,6 +308,7 @@ export class ArenaLog {
     const state = ship ? ` [hull ${Math.round((100 * ship.hull) / full)}%${cond}, ${placeText(ship.x, ship.y)}]` : '';
     if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees${state}`);
     else if (mode === 'finish') this.add(now, `${who(world, shipId)} goes into safe water to finish its enemy${state}`);
+    else if (mode === 'ram') this.add(now, `${who(world, shipId)} turns to ram its enemy${state}`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs${state}`);
     else if (mode === 'outlaw') this.add(now, `${who(world, shipId)} runs from the shore guns${state}`);
   }
@@ -327,6 +336,7 @@ export class ArenaLog {
     }
     out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${Math.round(this.menLost)}, sail points torn ${Math.round(this.sailsTorn)}`);
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
+    out.push(`   rams: tried ${this.ramTries} of ${this.ramDecisions} chances, ${this.ramHits} collisions while ramming`);
     out.push(`   finishing attacks in safe water: ${this.finishAttacks} of ${this.finishDecisions} chances, ${this.finishKills} sank their enemy; waits for a berth: ${this.berthWaits}`);
     return out;
   }

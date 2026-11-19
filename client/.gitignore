@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Headless arena (M3 step 6): the built runner and its logs
+.headless
+arena-logs

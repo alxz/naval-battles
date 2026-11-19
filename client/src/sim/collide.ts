@@ -8,14 +8,23 @@
 //
 // When they touch:
 //   - they are pushed apart along that direction, the lighter ship more (never onto land);
-//   - if they came together faster than `minClosingSpeed`, both take hull damage: more for the
-//     lighter ship, and only `bowFactor` for a ship that struck with its strong bow; both lose
-//     most of their speed. A slow touch does no damage: the ships just lean on each other.
+//   - if they came together faster than `minClosingSpeed`, both take hull damage (M3 step 6, D44):
+//       damage = hullPerMps2 x (closing - min)^2      a fast ram hurts much more than a bump
+//                x 2 x other mass / both masses       the lighter ship suffers more
+//                x place                              struck amidships 1, near bow or stern 0.6,
+//                                                     struck with its own bow 0.25, side against side 0.3
+//                x (0.5 + 0.5 x own / closing)        its own share of the speed: a ship lying still
+//                                                     takes half of what one sailing into the blow takes
+//       at most maxHullShare of the ship's full hull in one collision (a head-on crash is bad, not fatal)
+//     and both lose most of their speed. A slow touch does no damage: the ships just lean on each other.
+//   - after a damaging contact the same two ships take no new damage for pairPauseSeconds, so two
+//     hulls scraping along each other are not hurt again and again (your test, 18 Nov).
 
 import { degToRad, normalizeAngle } from './angles';
 import { DAMAGE, SHIP_CLASSES } from './data';
 import { damageHull } from './damage';
 import { touchesLand } from './land';
+import { STEP_SECONDS } from './step';
 import type { DamageParams, Island, ShipParams, ShipState, World } from './types';
 
 /** Push direction (a unit vector from ship a toward ship b) and how deep the hulls overlap, or null. */
@@ -47,18 +56,59 @@ export function strikesWithBow(ship: ShipState, towardX: number, towardY: number
   return off <= degToRad(d.collision.bowArcDeg);
 }
 
+/** Where a ship meets the other (M3 step 6): with its bow, struck amidships, near bow or stern, or side against side. */
+export type ImpactPlace = 'bow' | 'side' | 'end' | 'alongside';
+
 /**
- * Hull points each ship loses when they close at `closing` m/s.
- * Two equal ships each lose hullPerMps x closing; a heavier ship loses less, a lighter one more.
+ * `towardX, towardY`: a unit vector from this ship toward the other; `otherHeadingRad`: the other's heading.
+ * Side against side first (the hulls lie within alongsideDeg of each other, either way round),
+ * then its own bow, then amidships (within sideArcDeg of the beam), else near the bow or the stern.
  */
-export function collisionDamage(closing: number, massA: number, massB: number, bowA: boolean, bowB: boolean, d: DamageParams = DAMAGE): { a: number; b: number } {
-  if (closing < d.collision.minClosingSpeed) return { a: 0, b: 0 };
-  const base = d.collision.hullPerMps * closing;
-  const total = massA + massB;
+export function impactPlace(ship: ShipState, towardX: number, towardY: number, otherHeadingRad: number, d: DamageParams = DAMAGE): ImpactPlace {
+  const c = d.collision;
+  const between = Math.abs(normalizeAngle(ship.headingRad - otherHeadingRad));
+  if (between <= degToRad(c.alongsideDeg) || between >= Math.PI - degToRad(c.alongsideDeg)) return 'alongside';
+  if (strikesWithBow(ship, towardX, towardY, d)) return 'bow';
+  const off = Math.abs(normalizeAngle(Math.atan2(towardY, towardX) - ship.headingRad));
+  return Math.abs(off - Math.PI / 2) <= degToRad(c.sideArcDeg) ? 'side' : 'end';
+}
+
+export function placeFactor(place: ImpactPlace, d: DamageParams = DAMAGE): number {
+  const c = d.collision;
+  return place === 'bow' ? c.bowFactor : place === 'side' ? 1 : place === 'end' ? c.endFactor : c.alongsideFactor;
+}
+
+/** One ship in a collision: its weight, where it was met, its own speed toward the other (m/s, 0 if moving away). */
+export interface ImpactSide {
+  mass: number;
+  place: ImpactPlace;
+  ownSpeed: number;
+}
+
+/** Hull points each ship loses when they close at `closing` m/s (the formula at the top of this file). */
+export function collisionDamage(closing: number, a: ImpactSide, b: ImpactSide, d: DamageParams = DAMAGE): { a: number; b: number } {
+  const c = d.collision;
+  if (closing < c.minClosingSpeed) return { a: 0, b: 0 };
+  const base = c.hullPerMps2 * (closing - c.minClosingSpeed) ** 2;
+  const total = a.mass + b.mass;
+  const own = (s: ImpactSide): number => 0.5 + 0.5 * Math.min(1, Math.max(0, s.ownSpeed) / closing);
   return {
-    a: base * ((2 * massB) / total) * (bowA ? d.collision.bowFactor : 1),
-    b: base * ((2 * massA) / total) * (bowB ? d.collision.bowFactor : 1),
+    a: base * ((2 * b.mass) / total) * placeFactor(a.place, d) * own(a),
+    b: base * ((2 * a.mass) / total) * placeFactor(b.place, d) * own(b),
   };
+}
+
+/** The damage of one collision, capped at maxHullShare of each ship's full hull. */
+export function cappedDamage(raw: { a: number; b: number }, hullA: number, hullB: number, d: DamageParams = DAMAGE): { a: number; b: number } {
+  return { a: Math.min(raw.a, hullA * d.collision.maxHullShare), b: Math.min(raw.b, hullB * d.collision.maxHullShare) };
+}
+
+/** Are these two ships still in the pause after a collision? Drops pauses that are over. */
+function paused(world: World, a: number, b: number): boolean {
+  const list = world.contacts;
+  if (!list || list.length === 0) return false;
+  world.contacts = list.filter((c) => Math.max(c.untilTick, c.avoidUntilTick ?? 0) > world.tick);
+  return world.contacts.some((c) => c.untilTick > world.tick && ((c.a === a && c.b === b) || (c.a === b && c.b === a)));
 }
 
 /** Find every pair of ships that touch, push them apart and apply the damage. Call once per step, after the ships moved. */
@@ -78,9 +128,21 @@ export function collideShips(world: World, islands: readonly Island[], d: Damage
       const closing =
         (a.speed * Math.cos(a.headingRad) - b.speed * Math.cos(b.headingRad)) * hit.nx +
         (a.speed * Math.sin(a.headingRad) - b.speed * Math.sin(b.headingRad)) * hit.ny;
-      const bowA = strikesWithBow(a, hit.nx, hit.ny, d);
-      const bowB = strikesWithBow(b, -hit.nx, -hit.ny, d);
-      const damage = collisionDamage(closing, pa.mass, pb.mass, bowA, bowB, d);
+      const ownA = a.speed * (Math.cos(a.headingRad) * hit.nx + Math.sin(a.headingRad) * hit.ny);
+      const ownB = -b.speed * (Math.cos(b.headingRad) * hit.nx + Math.sin(b.headingRad) * hit.ny);
+      const damage = paused(world, a.id, b.id)
+        ? { a: 0, b: 0 }
+        : cappedDamage(
+            collisionDamage(
+              closing,
+              { mass: pa.mass, place: impactPlace(a, hit.nx, hit.ny, b.headingRad, d), ownSpeed: ownA },
+              { mass: pb.mass, place: impactPlace(b, -hit.nx, -hit.ny, a.headingRad, d), ownSpeed: ownB },
+              d,
+            ),
+            pa.hullPoints,
+            pb.hullPoints,
+            d,
+          );
 
       // Push apart: the lighter ship moves more. A ship that would be pushed onto land stays, the other moves instead.
       const push = hit.depth + d.collision.gapM;
@@ -111,6 +173,12 @@ export function collideShips(world: World, islands: readonly Island[], d: Damage
           damageB: damage.b,
           x: (a.x + b.x) / 2,
           y: (a.y + b.y) / 2,
+        });
+        (world.contacts ??= []).push({
+          a: a.id,
+          b: b.id,
+          untilTick: world.tick + Math.round(d.collision.pairPauseSeconds / STEP_SECONDS),
+          avoidUntilTick: world.tick + Math.round(d.collision.avoidSeconds / STEP_SECONDS),
         });
         damageHull(world, a, damage.a, b.id);
         damageHull(world, b, damage.b, a.id);

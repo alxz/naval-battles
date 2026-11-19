@@ -306,9 +306,9 @@ export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, 
  * Is another ship close ahead? Then a heading that turns away from it (to the side it is not on).
  * Bots do not ram: a collision costs them hull too.
  */
-export function avoidShips(ship: ShipState, params: ShipParams, ships: readonly ShipState[], headingRad: number, p: BotParams): number | null {
+export function avoidShips(ship: ShipState, params: ShipParams, ships: readonly ShipState[], headingRad: number, p: BotParams, ignoreId = -1): number | null {
   for (const other of ships) {
-    if (other.id === ship.id || other.sunk) continue;
+    if (other.id === ship.id || other.sunk || other.id === ignoreId) continue;
     const otherLength = SHIP_CLASSES[other.shipClass]?.length ?? 0;
     const dx = other.x - ship.x;
     const dy = other.y - ship.y;
@@ -318,6 +318,57 @@ export function avoidShips(ship: ShipState, params: ShipParams, ships: readonly 
     const off = normalizeAngle(Math.atan2(dy, dx) - headingRad); // > 0: it lies to starboard of our course
     if (Math.abs(off) > Math.PI / 3) continue; // not ahead
     return normalizeAngle(headingRad + (off >= 0 ? -1 : 1) * degToRad(p.shipAvoidTurnDeg));
+  }
+  // M3 step 6 (D45): a ship close alongside (your test: two chasers side by side, scraping):
+  // bear away from it a little, so the hulls do not close.
+  for (const other of ships) {
+    if (other.id === ship.id || other.sunk || other.id === ignoreId) continue;
+    const otherBeam = SHIP_CLASSES[other.shipClass]?.beam ?? 0;
+    const dx = other.x - ship.x;
+    const dy = other.y - ship.y;
+    const off = normalizeAngle(Math.atan2(dy, dx) - headingRad);
+    if (Math.abs(off) < Math.PI / 4 || Math.abs(off) > (3 * Math.PI) / 4) continue; // not alongside
+    const sideGap = Math.abs(Math.sin(off)) * Math.hypot(dx, dy) - (params.beam + otherBeam) / 2;
+    if (sideGap > p.abeamBerthM) continue;
+    return normalizeAngle(headingRad + (off >= 0 ? -1 : 1) * degToRad(p.abeamTurnDeg));
+  }
+  return null;
+}
+
+/**
+ * Where to steer to meet a moving ship (M3 step 6, D45): its place after the time we need to get
+ * there (distance / our speed, at most leadMaxSeconds), so a chaser cuts the corner instead of
+ * running parallel or behind.
+ */
+export function interceptBearing(ship: ShipState, enemy: ShipState, p: BotParams = BOTS): number {
+  const dx = enemy.x - ship.x;
+  const dy = enemy.y - ship.y;
+  const distance = Math.hypot(dx, dy);
+  const t = Math.min(p.leadMaxSeconds, distance / Math.max(3, ship.speed));
+  return Math.atan2(dy + Math.sin(enemy.headingRad) * enemy.speed * t, dx + Math.cos(enemy.headingRad) * enemy.speed * t);
+}
+
+/**
+ * The rudder toward a heading (M3 step 6, D45). A square-rigged ship (and a mixed one that is
+ * slow) does not tack: when the short turn would take its bow through the wind, it turns the
+ * long way round, through downwind ("wearing ship"), which never stops it in irons.
+ */
+export function rudderFor(ship: ShipState, params: ShipParams, headingRad: number, wind: WindNow, p: BotParams = BOTS): number {
+  let diff = normalizeAngle(headingRad - ship.headingRad);
+  const wears = params.rig === 'square' || (params.rig === 'mixed' && ship.speed < p.wearBelowMps);
+  if (wears && Math.abs(diff) > degToRad(20)) {
+    const w = normalizeAngle(wind.fromRad - ship.headingRad); // where the wind comes from, off the bow
+    if (Math.sign(w) === Math.sign(diff) && Math.abs(w) < Math.abs(diff)) diff -= Math.sign(diff) * 2 * Math.PI;
+  }
+  return clamp(p.rudderGain * diff, -1, 1);
+}
+
+/** The other ship of a recent collision (within avoidSeconds, sim/collide.ts), if any. */
+function contactWith(world: World, shipId: number): number | null {
+  for (const c of world.contacts ?? []) {
+    if (Math.max(c.untilTick, c.avoidUntilTick ?? 0) <= world.tick) continue; // they steer clear a while longer than the damage pause
+    if (c.a === shipId) return c.b;
+    if (c.b === shipId) return c.a;
   }
   return null;
 }
@@ -384,8 +435,24 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const hullShare = ship.hull / params.hullPoints;
   const ports = portsOf(islands);
   const port = nearestPort(ship.x, ship.y, ports);
+  // A deliberate ram (D45) runs until it hits, times out or the enemy gets away.
+  if (bot.ramMemory !== undefined) {
+    bot.ramMemory -= thinkSeconds;
+    if (bot.ramMemory <= 0) delete bot.ramMemory;
+  }
+  if (bot.mode === 'ram') {
+    bot.ramLeft = (bot.ramLeft ?? 0) - thinkSeconds;
+    if (bot.ramLeft <= 0 || distance > 2 * p.ramRangeM || contactWith(world, id) === enemy.id || protectedByPort(enemy, ports)) {
+      delete bot.ramLeft;
+      bot.ramMemory = p.ramMemorySeconds;
+      bot.mode = 'engage';
+    }
+  }
+  const ramming = bot.mode === 'ram';
   if (finishing) {
     bot.mode = 'finish';
+  } else if (ramming) {
+    // keep ramming
   } else if (bot.mode === 'port') {
     // In port (or on the way): stay until the port has done all it can, then hunt again.
     if (!port || hullShare >= DAMAGE.port.maxShare - 1e-6) startChase(bot, distance);
@@ -416,6 +483,25 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   }
   const waiting = enemySafe && !goIn && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff');
   if (waiting) bot.mode = 'idle';
+  // M3 step 6 (D45): ram on purpose when it pays: close, at least nearly as heavy (or the enemy is
+  // crippled), faster than the enemy (or it is nearly stopped), our own hull sound; then a roll.
+  if (!ramming && !waiting && !goIn && bot.ramMemory === undefined && (bot.mode === 'engage' || bot.mode === 'chase') && distance <= p.ramRangeM) {
+    const ep = SHIP_CLASSES[enemy.shipClass];
+    const crippled = !!ep && (enemy.hull < ep.hullPoints * p.weakHullShare || sailShare(enemy) < 0.4);
+    const heavy = !!ep && params.mass >= ep.mass * p.ramMassShare;
+    const faster = ship.speed >= enemy.speed + 1 || enemy.speed < 3;
+    // Its side must face us (we would strike it amidships, not glance off its bow or stern).
+    const aspect = Math.abs(normalizeAngle(Math.atan2(ship.y - enemy.y, ship.x - enemy.x) - enemy.headingRad));
+    const sideOn = aspect > Math.PI / 4 && aspect < (3 * Math.PI) / 4;
+    if ((heavy || crippled) && faster && sideOn && hullShare > 0.5) {
+      const go = nextRandom(world) < p.ramChance;
+      world.events.push({ type: 'ramDecision', shipId: id, enemyId: enemy.id, go, distance });
+      if (go) {
+        bot.mode = 'ram';
+        bot.ramLeft = p.ramSeconds;
+      } else bot.ramMemory = p.ramMemorySeconds;
+    }
+  }
 
   // --- Course and sails. ---
   let goal: number;
@@ -433,9 +519,13 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     const tooClose = port !== null && port.distance < DAMAGE.port.safeRange + 250;
     goal = tooClose && port ? Math.atan2(ship.y - port.port.y, ship.x - port.port.x) : bearing;
     sails = tooClose ? 0.5 : 0;
+  } else if (bot.mode === 'ram') {
+    bot.side = null;
+    goal = interceptBearing(ship, enemy, p); // bow first into where it will be
+    sails = 1;
   } else if (bot.mode === 'chase') {
     bot.side = null;
-    goal = bearing;
+    goal = interceptBearing(ship, enemy, p); // cut it off (D45), not a tail chase
     sails = 1;
   } else if (bot.mode === 'breakOff') {
     bot.side = null;
@@ -476,16 +566,27 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     // at the enemy under full sail, beating against the wind if needed, instead of sailing
     // beam-on and firing at long range (your test, 15 Nov). It still fires when lined up.
     if (distance > mine.preferredRange + 2 * p.rangeBand || ((weak || bot.mode === 'finish') && distance > mine.preferredRange + p.rangeBand)) {
-      goal = bearing;
+      goal = interceptBearing(ship, enemy, p);
       sails = 1;
     }
   }
   let steer = steerWithTacks(goal, params, world.wind, bot, p);
-  const clear = avoidShips(ship, params, world.ships, steer, p);
+  const clear = avoidShips(ship, params, world.ships, steer, p, ramming ? enemy.id : -1);
   if (clear !== null) steer = clear;
+  // Just collided (D45): turn away from that ship and ease sail for a few seconds (avoidSeconds),
+  // unless it was the ship we meant to ram.
+  const touched = contactWith(world, id);
+  if (touched !== null && !(ramming && touched === enemy.id)) {
+    const other = world.ships.find((s) => s.id === touched);
+    if (other) {
+      const off = normalizeAngle(Math.atan2(other.y - ship.y, other.x - ship.x) - ship.headingRad);
+      steer = normalizeAngle(ship.headingRad + (off >= 0 ? -1 : 1) * degToRad(p.contactTurnDeg));
+      sails = Math.min(sails, p.minSails);
+    }
+  }
   const away = nearPort ? null : avoidLand(ship, params, islands, steer, p);
   if (away !== null) steer = away;
-  const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  const rudder = rudderFor(ship, params, steer, world.wind, p);
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: id, value: rudder });
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: id, value: sails });
 
@@ -559,7 +660,7 @@ function leavePort(world: World, bot: BotState, ship: ShipState, params: ShipPar
   const away = avoidLand(ship, params, islands, steer, p);
   if (away !== null) steer = away;
   const commands: Command[] = [];
-  const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  const rudder = rudderFor(ship, params, steer, world.wind, p);
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
   if (ship.sailLevel < 0.99) commands.push({ type: 'setSails', shipId: ship.id, value: 1 });
   return commands;
@@ -585,7 +686,7 @@ function sailToPort(
   if (away !== null) steer = away;
   const sails = course.sails;
   const commands: Command[] = [];
-  const rudder = clamp(p.rudderGain * normalizeAngle(steer - ship.headingRad), -1, 1);
+  const rudder = rudderFor(ship, params, steer, world.wind, p);
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;

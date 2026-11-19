@@ -4,6 +4,8 @@
 #   bash scripts/run-linux.sh preview   build, then serve the built game -> http://<server>:4173
 #   bash scripts/run-linux.sh test      unit tests and the build only
 #   bash scripts/run-linux.sh update    git pull, packages, islands, tests
+#   bash scripts/run-linux.sh arena     headless bot arena, run after run; logs -> http://<server>:4180
+#                                      (more options: bash scripts/run-linux.sh arena --minutes 120 --runs 4)
 # Open the address from any computer, iPad or iPhone in the same network.
 # To keep it running after you log out, start it inside tmux:  tmux new -s naval
 set -euo pipefail
@@ -31,8 +33,12 @@ case "$mode" in
     uv run --with numpy --with pillow tools/make_islands.py
     (cd client && npm test)
     ;;
+  arena)
+    echo "== Arena logs at http://${address:-<server>}:4180 (Ctrl+C stops; open the port once: sudo ufw allow 4180/tcp)"
+    cd client && npm run headless-arena -- "${@:2}"
+    ;;
   *)
-    echo "Use: bash scripts/run-linux.sh dev | preview | test | update" >&2
+    echo "Use: bash scripts/run-linux.sh dev | preview | test | update | arena" >&2
     exit 1
     ;;
 esac

@@ -1,9 +1,16 @@
 {
   "collision": {
     "minClosingSpeed": 1.0,
-    "hullPerMps": 6,
-    "bowFactor": 0.5,
+    "hullPerMps2": 1.2,
+    "maxHullShare": 0.3,
+    "bowFactor": 0.25,
     "bowArcDeg": 35,
+    "sideArcDeg": 30,
+    "endFactor": 0.6,
+    "alongsideDeg": 30,
+    "alongsideFactor": 0.3,
+    "pairPauseSeconds": 2,
+    "avoidSeconds": 6,
     "speedKept": 0.2,
     "gapM": 0.5
   },
