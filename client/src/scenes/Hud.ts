@@ -12,7 +12,7 @@ import { BAR_ICONS, barIconHeight, barIconPixels, barIconWidth } from '../view/b
 import type { BarIconName } from '../view/barIcons';
 import { ammoIconPixels, ammoIconSize } from '../view/ammoIcons';
 import type { AmmoSlot } from '../view/ammoIcons';
-import { textStyle } from './text';
+import { paint, textStyle } from './text';
 import type { TextKind } from './text';
 
 const SAIL_PIPS = 4; // the sails go 0, 25, 50, 75, 100 %
@@ -301,7 +301,7 @@ export class Hud {
     const law = d.offender === 'inside' ? 'OFFENDER!' : d.offender === 'outside' ? `PARDON ${Math.ceil(d.pardonSeconds)}s` : '';
     const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : law !== '' ? law : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
     const colour = status === 'REPAIRING' || status === 'SAFE WATER' ? '#7be07a' : d.offender === 'outside' && status === law ? '#ffd24a' : '#ff8070';
-    this.status.setText(status).setColor(colour);
+    paint(this.status, status, colour);
 
     // --- Target ---
     this.targetText.setVisible(target !== null);
@@ -403,7 +403,8 @@ export class Hud {
         g.lineStyle(1, READY, 1);
         g.strokeRect(left - 3 + 0.5, iconBottom - 13 + 0.5, size.w * SCALE + 5, 11);
       }
-      this.ammoCounts[i]?.setText(slot.count).setColor(slot.empty ? '#ff8070' : '#ffe9a8').setPosition(cx, iconBottom - 23).setAlpha(this.fade.guns);
+      const count = this.ammoCounts[i];
+      if (count) paint(count, slot.count, slot.empty ? '#ff8070' : '#ffe9a8').setPosition(cx, iconBottom - 23).setAlpha(this.fade.guns);
       this.ammoKeys[i]?.setText(slot.key).setPosition(left - 5, iconBottom - 11).setAlpha(this.fade.guns * 0.8);
     });
   }
@@ -440,7 +441,7 @@ export class Hud {
     if (left <= 0) {
       g.fillStyle(READY, 1);
       g.fillCircle(x, y, r);
-      text.setColor('#1b1b1b').setText(key);
+      paint(text, key, '#1b1b1b');
       return;
     }
     const total = reloadSecondsOf(d.ship);
@@ -453,7 +454,7 @@ export class Hud {
     g.fillPath();
     g.lineStyle(1, 0x9aa5ad, 1);
     g.strokeCircle(x, y, r);
-    text.setColor('#ffffff').setText(String(Math.ceil(left)));
+    paint(text, String(Math.ceil(left)), '#ffffff');
   }
 
   /** Elevation gauge: a wedge (0-10 degrees drawn 6x wider) with ticks at 0, 5, 10 degrees and a needle. */

@@ -4,6 +4,36 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (late night) — M3 step 6e: speed
+
+### Measured first
+
+CPU profiles of the simulation (Node, headless arena) and of the game in headless Chrome (software graphics), before and after. The game did not leak: over 17 game minutes of arena at ×8 the heap stayed at 59–65 MB and the number of objects did not grow.
+
+| | Before (6d) | After (6e) |
+|---|---|---|
+| Headless arena, 60 game minutes | 18.9 s | 6.7 s |
+| Worst simulation tick (20 min arena) | 11.5 ms | about 7.6 ms |
+| Arena in the browser: work per frame, average / worst | 4.3 / 25.7 ms | 3.4 / 13.5 ms |
+| Battle (5 bots): work per frame, average / worst | 2.4 / 6.6 ms | 2.2 / 5.5 ms |
+| Texts drawn again per frame (battle / arena) | 6.7 / 14 | 0.7 / 4.3 |
+| Drawing commands for the arena flags per frame | about 2,900 | 0 (pictures) |
+
+### What was slow, and what changed
+
+- **Land checks** (about 30% of the simulation): every bot asked "land ahead?" up to 50 times a think, each time testing every island. New: the water grid also keeps each cell's distance to land (`landDist`, two sweeps over the grid); `touchesLand` and `landAhead` answer "no" at once when there is more open water round the ship than the hull and the look-ahead can reach. The distance is measured so that it can only be too small, never too large, so no answer changes.
+- **A\*** made four arrays of 240,000 cells for every search (about 4 MB for the garbage collector each time). Now they are made once and reused (a stamp per cell says which search wrote it); the search leans 1.4× toward the goal (far fewer cells looked at; the way is pulled tight afterwards); bots replan at slightly different moments (by ship number).
+- **Aiming**: the bisection flew 21 test balls each time a bot aimed. Now a table of 401 landing distances per ship size and kind of shot, made once.
+- **Harbour test**: ports farther than their harbour reaches are skipped at once.
+- **Screen**: `paint()` changes a text only when its words or colour change (Phaser draws a text again and sends it to the graphics card on every `setColor`); flags are pictures made once; range rings, port rings and the shore-gun ring are drawn once per zoom and moved / turned each frame; the minimap redraws its islands only when you discover one; the tuning panel's width comes from a ResizeObserver (reading `offsetWidth` made the browser lay out the page twice a frame).
+- **Speed meter** in the help (H): "fps · frame ms (max) · sim ms (max)".
+
+### Checks
+
+379 tests; the same seed gives the same arena log, line for line; headless arena 6 × 60 min with the same results as 6d (24–36 sinkings an hour, aground 1–34, works free 5–22); build; `build:test`; headless browser computer and iPhone, the test file from the disk.
+
+---
+
 ## 19 Nov 2026 (night) — M3 step 6d: your test of 6c; a test build for testers
 
 ### Your test and log (2057, 4 h 12 min)

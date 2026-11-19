@@ -23,9 +23,9 @@ import { clamp } from './math';
 import { nextGaussian } from './random';
 import { STEP_SECONDS, targetSpeed } from './step';
 import { nextRandom } from './random';
-import { findRoute, lineIsOpen, waterGridFor } from './path';
+import { findRoute, landClearM, lineIsOpen, waterGridFor } from './path';
 import type { Point } from './path';
-import type { AmmoType, BotParams, BotState, Command, DamageParams, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
+import type { AmmoType, BotParams, BotState, Command, DamageParams, GunParams, Island, ShipParams, ShipState, Side, WindNow, World } from './types';
 
 const SIDES: Side[] = ['port', 'starboard'];
 
@@ -179,20 +179,45 @@ export function broadsideHeading(bearingRad: number, distance: number, side: Sid
  * Returns null when the distance is out of reach.
  */
 export function aimElevation(ship: ShipState, params: ShipParams, side: Side, distance: number, maxDeg: number): number | null {
-  const still = { ...ship, speed: 0 };
-  const reach = (deg: number): number => {
-    const p = predictLanding({ ...still, elevationDeg: deg }, params, side, STEP_SECONDS);
-    return Math.hypot(p.x - ship.x, p.y - ship.y);
-  };
-  if (distance > reach(maxDeg)) return null;
+  // M3 step 6e (speed): read from a table of landing distances (REACH_STEPS + 1 elevations, made once
+  // per ship size and kind of shot) instead of flying 21 test balls every time a bot aims.
+  const table = reachTable(ship, params, side, maxDeg, ammoGuns(loadableAmmo(ship)));
+  const n = table.length - 1;
+  if (distance > table[n]!) return null;
+  if (distance <= table[0]!) return 0;
   let lo = 0;
-  let hi = maxDeg;
-  for (let i = 0; i < 20; i++) {
-    const mid = (lo + hi) / 2;
-    if (reach(mid) < distance) lo = mid;
+  let hi = n;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (table[mid]! < distance) lo = mid;
     else hi = mid;
   }
-  return (lo + hi) / 2;
+  const t = (distance - table[lo]!) / (table[hi]! - table[lo]! || 1);
+  return ((lo + t) / n) * maxDeg;
+}
+
+/** Elevation steps in a reach table (0 to maxDeg). */
+const REACH_STEPS = 400;
+const reachTables = new Map<string, Float64Array>();
+
+/**
+ * How far a ball lands from a ship lying still (from its middle), for elevations 0 .. maxDeg in
+ * REACH_STEPS steps. The same for any place, heading and side, so it is made once per ship beam,
+ * muzzle speed and top elevation.
+ */
+export function reachTable(ship: ShipState, params: ShipParams, side: Side, maxDeg: number, g: GunParams): Float64Array {
+  const key = `${params.beam}|${g.muzzleSpeed}|${g.gravity}|${maxDeg}`;
+  let table = reachTables.get(key);
+  if (!table) {
+    table = new Float64Array(REACH_STEPS + 1);
+    const still = { ...ship, x: 0, y: 0, headingRad: 0, speed: 0 };
+    for (let i = 0; i <= REACH_STEPS; i++) {
+      const p = predictLanding({ ...still, elevationDeg: (i / REACH_STEPS) * maxDeg }, params, side, STEP_SECONDS, g);
+      table[i] = Math.hypot(p.x, p.y);
+    }
+    reachTables.set(key, table);
+  }
+  return table;
 }
 
 /**
@@ -239,6 +264,8 @@ export function avoidLand(ship: ShipState, params: ShipParams, islands: readonly
  * (LAND_CLEARANCE_M wider and longer) at a quarter, half and all of the way.
  */
 export function landAhead(ship: ShipState, params: ShipParams, islands: readonly Island[], headingRad: number, lookM: number, clearanceM = LAND_CLEARANCE_M): boolean {
+  // M3 step 6e (speed): nothing within reach of the swept, widened hull: no land ahead.
+  if (islands.length > 0 && landClearM(waterGridFor(islands), ship.x, ship.y) > lookM + Math.hypot(params.length / 2 + clearanceM, params.beam / 2 + clearanceM) + 1) return false;
   const fat: ShipParams = { ...params, length: params.length + 2 * clearanceM, beam: params.beam + 2 * clearanceM };
   return [0.25, 0.5, 1].some((share) =>
     touchesLand({ ...ship, headingRad, x: ship.x + Math.cos(headingRad) * lookM * share, y: ship.y + Math.sin(headingRad) * lookM * share }, fat, islands),
@@ -409,7 +436,7 @@ export function headingVia(bot: BotState, ship: ShipState, islands: readonly Isl
     return direct;
   }
   let route = bot.route;
-  if (!route || route.points.length === 0 || route.ageSeconds > p.routeReplanSeconds || Math.hypot(route.goalX - goal.x, route.goalY - goal.y) > p.routeGoalMoveM) {
+  if (!route || route.points.length === 0 || route.ageSeconds > p.routeReplanSeconds + (ship.id % 4) * 0.25 /* spread the bots' planning over different ticks (M3 step 6e) */ || Math.hypot(route.goalX - goal.x, route.goalY - goal.y) > p.routeGoalMoveM) {
     const points = findRoute(g, ship, goal);
     if (!points) {
       delete bot.route;
@@ -817,8 +844,8 @@ export function chooseAmmo(ship: ShipState, params: ShipParams, enemy: ShipState
   const now = ammoOf(ship);
   const grapeLimit = rammer ? p.rammerGrapeM : now === 'grape' ? p.grapeLeaveM : p.grapeRangeM;
   if (distance < grapeLimit && ammoLeftOf(ship, 'grape') > 0) return 'grape';
-  const far = predictLanding({ ...ship, speed: 0, elevationDeg: GUNS.maxElevationDeg }, params, 'port', STEP_SECONDS, ammoGuns('chain'));
-  const reach = Math.hypot(far.x - ship.x, far.y - ship.y);
+  const chainTable = reachTable(ship, params, 'port', GUNS.maxElevationDeg, ammoGuns('chain'));
+  const reach = chainTable[chainTable.length - 1]!;
   // A rammer tears the sails first (a slow enemy is easy to ram), whatever its speed.
   if (rammer && sailShare(enemy) > p.chainMinEnemySails && distance < reach * p.rammerChainShare && ammoLeftOf(ship, 'chain') > 0) return 'chain';
   const runner = enemy.speed > ship.speed + p.chainSpeedGap && sailShare(enemy) > p.chainMinEnemySails;

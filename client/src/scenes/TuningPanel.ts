@@ -204,8 +204,22 @@ export class TuningPanel {
 
   /** Width of the open panel in CSS pixels (0 when closed), so the minimap can step aside. */
   openWidthCss(): number {
-    return this.gui._closed ? 0 : this.gui.domElement.offsetWidth;
+    // M3 step 6e (speed): reading offsetWidth makes the browser lay the page out again; it was read
+    // twice a frame. Now a ResizeObserver tells us when the width changes, and we keep the number.
+    if (this.gui._closed) return 0;
+    if (this.widthCss < 0) {
+      this.widthCss = this.gui.domElement.offsetWidth;
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => {
+          this.widthCss = this.gui.domElement.offsetWidth;
+        }).observe(this.gui.domElement);
+      }
+    }
+    return this.widthCss;
   }
+
+  /** The open panel's width in CSS pixels, kept up to date by a ResizeObserver (-1: not measured yet). */
+  private widthCss = -1;
 
   /** The M key switches the sound; keep the check box in step. */
   toggleSound(): void {

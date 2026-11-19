@@ -28,6 +28,17 @@ const KINDS: Record<TextKind, { family: string; size: number }> = {
   huge: { family: FONT_MAIN, size: 24 }, // touch button labels
 };
 
+/**
+ * Change a text's words and colour only when they really change (M3 step 6e, speed). Phaser draws a
+ * text again into its own picture and sends that picture to the graphics card on every setColor, even
+ * with the same colour: the HUD did that 7 times a frame, the arena 14 times.
+ */
+export function paint(t: Phaser.GameObjects.Text, text: string, colour?: string): Phaser.GameObjects.Text {
+  if (t.text !== text) t.setText(text);
+  if (colour !== undefined && t.style.color !== colour) t.setColor(colour);
+  return t;
+}
+
 /** The text style for one kind of text. */
 export function textStyle(kind: TextKind, colour = '#ffffff'): Phaser.Types.GameObjects.Text.TextStyle {
   const k = KINDS[kind];

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { touchButtonRects } from '../view/hudLayout';
 import type { ButtonName } from '../view/hudLayout';
 import { ICON_SIZE } from './icons';
-import { textStyle } from './text';
+import { paint, textStyle } from './text';
 
 interface Button {
   name: ButtonName;
@@ -94,7 +94,7 @@ export class TouchControls {
       const ready = left <= 0;
       const text = ready ? letter : String(Math.ceil(left));
       if (b.label.text !== text) b.label.setText(text);
-      b.label.setColor(ready ? '#ffe066' : '#b8c4cc');
+      paint(b.label, b.label.text, ready ? '#ffe066' : '#b8c4cc');
       b.box.setStrokeStyle(1, ready ? 0xffe066 : 0xffffff, ready ? 0.9 : 0.35);
       if (!ready) b.box.setFillStyle(0x000000, 0.3);
       else if (b.box.fillColor === 0x000000) b.box.setFillStyle(0xffffff, 0.22);

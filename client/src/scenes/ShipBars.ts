@@ -3,9 +3,9 @@ import { SHIP_CLASSES } from '../sim/data';
 import type { ShipState } from '../sim/types';
 import { barColour } from '../view/hudLayout';
 import { BAR_HEIGHT_PX, shipBar } from '../view/shipBar';
-import { textStyle } from './text';
+import { paint, textStyle } from './text';
 import { sailShare, crewShare } from '../sim/condition';
-import { FLAG_COLOURS, FLAGS } from '../view/flags';
+import { FLAG_COLOURS, FLAGS, NATIONS } from '../view/flags';
 import type { Nation } from '../view/flags';
 import { BAR_ICONS } from '../view/barIcons';
 
@@ -23,9 +23,30 @@ const SMALL_BAR_PX = 2;
 export class ShipBars {
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly labels: Phaser.GameObjects.Text[] = [];
+  private readonly flags: Phaser.GameObjects.Image[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.g = scene.add.graphics().setDepth(2.5);
+    // The flags are drawn once into small pictures (M3 step 6e, speed: before, every pixel of every
+    // flag was drawn again in every frame, about 2,900 drawing commands a frame in the arena).
+    for (const nation of NATIONS) {
+      const key = `flag-${nation}`;
+      if (scene.textures.exists(key)) continue;
+      const rows = FLAGS[nation];
+      const w = (rows[0]?.length ?? 9) + 2;
+      const h = rows.length + 2;
+      const fg = scene.make.graphics({}, false);
+      fg.fillStyle(FLAG_COLOURS['S'] ?? 0, 1).fillRect(0, 0, w, h);
+      rows.forEach((row, r) => {
+        for (let c = 0; c < row.length; c++) {
+          const colour = FLAG_COLOURS[row[c] ?? '.'];
+          if (colour !== undefined) fg.fillStyle(colour, 1).fillRect(1 + c, 1 + r, 1, 1);
+        }
+      });
+      fg.generateTexture(key, w, h);
+      fg.destroy();
+    }
+    for (let i = 0; i < MAX_LABELS; i++) this.flags.push(scene.add.image(0, 0, `flag-${NATIONS[0]}`).setOrigin(0, 0).setDepth(2.5).setVisible(false));
     for (let i = 0; i < MAX_LABELS; i++) this.labels.push(scene.add.text(0, 0, '', textStyle('small')).setDepth(3).setVisible(false));
   }
 
@@ -52,9 +73,10 @@ export class ShipBars {
         return;
       }
       const bar = shipBar(params, pose.x, pose.y, pose.headingRad, 1, s);
-      t.setVisible(true).setText(look.text).setColor(look.colour);
+      paint(t.setVisible(true), look.text, look.colour);
       t.setPosition(Math.round(bar.x + bar.width / 2 - t.width / 2), Math.round(bar.y - 3 - t.height));
     });
+    for (const f of this.flags) f.setVisible(false);
     if (!visible) return;
     ships.forEach((ship, i) => {
       const pose = poses[i];
@@ -78,13 +100,7 @@ export class ShipBars {
       const rows = FLAGS[nation];
       const fx = bar.x - (rows[0]?.length ?? 9) - 4;
       const fy = bar.y - 1;
-      g.fillStyle(FLAG_COLOURS['S'] ?? 0, 1).fillRect(fx - 1, fy - 1, (rows[0]?.length ?? 9) + 2, rows.length + 2);
-      rows.forEach((row, r) => {
-        for (let c = 0; c < row.length; c++) {
-          const colour = FLAG_COLOURS[row[c] ?? '.'];
-          if (colour !== undefined) g.fillStyle(colour, 1).fillRect(fx + c, fy + r, 1, 1);
-        }
-      });
+      this.flags[i]?.setTexture(`flag-${nation}`).setPosition(fx - 1, fy - 1).setVisible(true);
     });
   }
 }

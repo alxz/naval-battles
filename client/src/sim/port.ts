@@ -106,7 +106,10 @@ export function portWaypoint(x: number, y: number, port: Port): { x: number; y: 
  */
 export function inHarbour(x: number, y: number, ports: readonly Port[], d: DamageParams = DAMAGE): boolean {
   for (const port of ports) {
-    if (Math.hypot(port.x - x, port.y - y) <= d.port.dockRange) return true;
+    const dist = Math.hypot(port.x - x, port.y - y);
+    if (dist <= d.port.dockRange) return true;
+    // M3 step 6e (speed): beyond the farthest point of the harbour, no need to look at the inlet.
+    if (dist > harbourReach(port, d)) continue;
     const path = port.path;
     if (!path) continue;
     for (let i = 1; i < path.length; i++) {
@@ -119,6 +122,18 @@ export function inHarbour(x: number, y: number, ports: readonly Port[], d: Damag
     }
   }
   return false;
+}
+
+const reachCache = new WeakMap<Port, number>();
+/** How far from the anchorage the harbour (the inlet with towPathM on each side) reaches, metres. */
+function harbourReach(port: Port, d: DamageParams): number {
+  let r = reachCache.get(port);
+  if (r === undefined) {
+    r = d.port.dockRange;
+    for (const p of port.path ?? []) r = Math.max(r, Math.hypot(p.x - port.x, p.y - port.y) + d.port.towPathM);
+    reachCache.set(port, r);
+  }
+  return r;
 }
 
 const portCache = new WeakMap<readonly Island[], Port[]>();

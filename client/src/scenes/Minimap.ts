@@ -19,6 +19,9 @@ const COVERED_ALPHA = 0.25;
  */
 export class Minimap {
   private readonly g: Phaser.GameObjects.Graphics;
+  /** The sea, the islands you know and the ports: drawn again only when they change (M3 step 6e). */
+  private readonly base: Phaser.GameObjects.Graphics;
+  private baseKey = '';
   private readonly zone: Phaser.GameObjects.Zone;
   private readonly touch: boolean;
   private home: Rect = { x: 0, y: 0, w: 132, h: 88 };
@@ -29,9 +32,41 @@ export class Minimap {
   constructor(scene: Phaser.Scene, touch: boolean, onTap: () => void) {
     this.touch = touch;
     // Depth 126 like the chart button: it stays on top of the open chart and closes it again.
+    this.base = scene.add.graphics().setScrollFactor(0).setDepth(touch ? 126 : 105);
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(touch ? 126 : 105);
     this.zone = scene.add.zone(0, 0, 10, 10).setOrigin(0, 0).setScrollFactor(0).setDepth(127).setInteractive();
     this.zone.on('pointerdown', () => onTap());
+  }
+
+  /** The sea (a faint tint and a thin frame, so the ships show through), the islands you know, the ports. */
+  private drawBase(at: (p: { x: number; y: number }) => { x: number; y: number }, known: readonly (typeof ISLANDS)[number][]): void {
+    const g = this.base;
+    g.clear();
+    const nw = at({ x: WORLD.minX, y: WORLD.minY });
+    const se = at({ x: WORLD.maxX, y: WORLD.maxY });
+    g.fillStyle(0x0b2a44, 0.22);
+    g.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
+    g.lineStyle(1, 0xcfe6f7, 0.7); // the reef: the frame of the sea
+    g.strokeRect(nw.x + 0.5, nw.y + 0.5, se.x - nw.x - 1, se.y - nw.y - 1);
+    // Islands you have seen. Small ones are at least one pixel, so they do not vanish.
+    g.fillStyle(0xe8d29a, 0.9);
+    for (const island of known) {
+      const points = island.points.map((p) => {
+        const c = at(p);
+        return new Phaser.Math.Vector2(c.x, c.y);
+      });
+      g.fillPoints(points, true);
+      const first = points[0];
+      if (first) g.fillRect(Math.round(first.x), Math.round(first.y), 1, 1);
+    }
+    // The port: a white dot with a red middle.
+    for (const port of PORTS) {
+      const c = at(port);
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(Math.round(c.x) - 1, Math.round(c.y) - 1, 3, 3);
+      g.fillStyle(0xe0533d, 1);
+      g.fillRect(Math.round(c.x), Math.round(c.y), 1, 1);
+    }
   }
 
   layout(width: number, height: number): void {
@@ -71,42 +106,23 @@ export class Minimap {
     g.clear();
     if (visible) this.zone.setInteractive();
     else this.zone.disableInteractive();
+    this.base.setVisible(visible);
     if (!visible) return;
     const b = this.box;
     const goal = panelCovers(b, shipsOnScreen) ? COVERED_ALPHA : 1;
     this.alpha += (goal - this.alpha) * Math.min(1, seconds * 6);
     g.setAlpha(this.alpha);
+    this.base.setAlpha(this.alpha);
 
-    // No plate: only a faint tint and a thin frame, so the sea and ships show through.
     const fit = chartFit(WORLD, { x: b.x, y: b.y, w: b.w, h: b.h });
     const at = (p: { x: number; y: number }): { x: number; y: number } => toChart(fit, WORLD, p);
-    const nw = at({ x: WORLD.minX, y: WORLD.minY });
-    const se = at({ x: WORLD.maxX, y: WORLD.maxY });
-    g.fillStyle(0x0b2a44, 0.22);
-    g.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
-    g.lineStyle(1, 0xcfe6f7, 0.7); // the reef: the frame of the sea
-    g.strokeRect(nw.x + 0.5, nw.y + 0.5, se.x - nw.x - 1, se.y - nw.y - 1);
-
-    // Islands you have seen. Small ones are at least one pixel, so they do not vanish.
-    g.fillStyle(0xe8d29a, 0.9);
-    for (const island of ISLANDS) {
-      if (island.kind === 'reef' || !isKnown(state, island)) continue;
-      const points = island.points.map((p) => {
-        const c = at(p);
-        return new Phaser.Math.Vector2(c.x, c.y);
-      });
-      g.fillPoints(points, true);
-      const first = points[0];
-      if (first) g.fillRect(Math.round(first.x), Math.round(first.y), 1, 1);
-    }
-
-    // The port: a white dot with a red middle.
-    for (const port of PORTS) {
-      const c = at(port);
-      g.fillStyle(0xffffff, 1);
-      g.fillRect(Math.round(c.x) - 1, Math.round(c.y) - 1, 3, 3);
-      g.fillStyle(0xe0533d, 1);
-      g.fillRect(Math.round(c.x), Math.round(c.y), 1, 1);
+    // The still part (sea, known islands, ports) only when the box moves or a new island is known:
+    // before, every island was cut into triangles again in every frame (M3 step 6e, speed).
+    const known = ISLANDS.filter((island) => island.kind !== 'reef' && isKnown(state, island));
+    const key = `${b.x},${b.y},${b.w},${b.h},${known.length}`;
+    if (key !== this.baseKey) {
+      this.baseKey = key;
+      this.drawBase(at, known);
     }
 
     // Other ships where you saw them last.

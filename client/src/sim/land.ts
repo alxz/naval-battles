@@ -1,5 +1,6 @@
 import { bounds, distanceToSegment, pointInPolygon } from './geometry';
 import type { Vec2 } from './geometry';
+import { landClearM, waterGridFor } from './path';
 import type { Island, ShipParams, ShipState } from './types';
 
 /**
@@ -62,12 +63,16 @@ function boxOf(island: Island): ReturnType<typeof bounds> {
  * The last two catch thin things that pass between the hull points: a pier, a moored boat, a spit of sand.
  */
 export function touchesLand(ship: ShipState, params: ShipParams, islands: readonly Island[]): boolean {
-  const points = hullPoints(ship, params);
-  const corners = hullCorners(ship, params);
   const reach = Math.hypot(params.length, params.beam) / 2;
+  // M3 step 6e (speed): open sea all round (the grid's distance to land, never too large): no land.
+  if (islands.length > 0 && landClearM(waterGridFor(islands), ship.x, ship.y) > reach + 1) return false;
+  let points: Vec2[] | null = null;
+  let corners: Vec2[] | null = null;
   for (const island of islands) {
     const box = boxOf(island);
     if (ship.x + reach < box.minX || ship.x - reach > box.maxX || ship.y + reach < box.minY || ship.y - reach > box.maxY) continue;
+    points ??= hullPoints(ship, params);
+    corners ??= hullCorners(ship, params);
     if (points.some((p) => pointInPolygon(p, island.points))) return true;
     const poly = island.points;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {

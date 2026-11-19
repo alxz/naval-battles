@@ -22,6 +22,13 @@ export interface WaterGrid {
   rows: number;
   /** 1 = open water (far enough from land), 0 = land or too close to it. */
   open: Uint8Array;
+  /**
+   * M3 step 6e (speed): for each cell, the distance to the nearest land cell, in cells, measured
+   * along the grid (steps of 1 and diagonals of 1.414). A step along the grid is never shorter than
+   * the straight line, so landClearM() divides by 1.0824 (the worst case) and subtracts a cell and a
+   * half: what it returns is never more than the true free radius.
+   */
+  landDist: Float32Array;
 }
 
 export interface Point {
@@ -79,13 +86,43 @@ export function buildWaterGrid(islands: readonly Island[], cellM = GRID_CELL_M, 
         for (let c = c0; c <= c1; c++) land[r * cols + c] = 1;
       }
     }
-    // Thin things (a pier, a moored boat) may miss every cell middle: close the cells their corners are in.
-    for (const p of poly) {
-      const c = Math.floor((p.x - minX) / cellM);
-      const r = Math.floor((p.y - minY) / cellM);
-      if (c >= 0 && c < cols && r >= 0 && r < rows) land[r * cols + c] = 1;
+    // Thin things (a pier, a moored boat) may miss every cell middle: close the cells their edges
+    // pass through (sampled every half cell; M3 step 6e, before only the corners).
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[j]!;
+      const b = poly[i]!;
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cellM / 2)));
+      for (let k = 0; k <= steps; k++) {
+        const c = Math.floor((a.x + ((b.x - a.x) * k) / steps - minX) / cellM);
+        const r = Math.floor((a.y + ((b.y - a.y) * k) / steps - minY) / cellM);
+        if (c >= 0 && c < cols && r >= 0 && r < rows) land[r * cols + c] = 1;
+      }
     }
   }
+  // Distance to land, in cells (two sweeps: from the top left, then from the bottom right).
+  const landDist = new Float32Array(cols * rows);
+  for (let i = 0; i < landDist.length; i++) landDist[i] = land[i] ? 0 : 1e9;
+  const relax = (r: number, c: number, dr: number, dc: number, w: number): void => {
+    const rr = r + dr;
+    const cc = c + dc;
+    if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) return;
+    const d = landDist[rr * cols + cc]! + w;
+    if (d < landDist[r * cols + c]!) landDist[r * cols + c] = d;
+  };
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      relax(r, c, 0, -1, 1);
+      relax(r, c, -1, 0, 1);
+      relax(r, c, -1, -1, Math.SQRT2);
+      relax(r, c, -1, 1, Math.SQRT2);
+    }
+  for (let r = rows - 1; r >= 0; r--)
+    for (let c = cols - 1; c >= 0; c--) {
+      relax(r, c, 0, 1, 1);
+      relax(r, c, 1, 0, 1);
+      relax(r, c, 1, 1, Math.SQRT2);
+      relax(r, c, 1, -1, Math.SQRT2);
+    }
   // Room to the shore: a disc of radius clearanceM round each land cell.
   const reach = Math.ceil(clearanceM / cellM);
   const disc: number[][] = [];
@@ -101,7 +138,18 @@ export function buildWaterGrid(islands: readonly Island[], cellM = GRID_CELL_M, 
         if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) open[rr * cols + cc] = 0;
       }
     }
-  return { cellM, minX, minY, cols, rows, open };
+  return { cellM, minX, minY, cols, rows, open, landDist };
+}
+
+/**
+ * At least this many metres of water round the point (M3 step 6e): a quick "no land near" answer
+ * for touchesLand and the bots' look-ahead. Never more than the true distance to land; 0 off the grid.
+ */
+export function landClearM(g: WaterGrid, x: number, y: number): number {
+  const c = Math.floor((x - g.minX) / g.cellM);
+  const r = Math.floor((y - g.minY) / g.cellM);
+  if (c < 0 || c >= g.cols || r < 0 || r >= g.rows) return 0;
+  return Math.max(0, (g.landDist[r * g.cols + c]! / 1.0824 - 1.5) * g.cellM);
 }
 
 const grids = new WeakMap<readonly Island[], WaterGrid>();
@@ -169,6 +217,32 @@ function middleOf(g: WaterGrid, cell: number): Point {
   return { x: g.minX + ((cell % g.cols) + 0.5) * g.cellM, y: g.minY + (Math.floor(cell / g.cols) + 0.5) * g.cellM };
 }
 
+/**
+ * M3 step 6e (speed): A* leans this much harder toward the goal than plain A*. The way found may be
+ * up to this share longer than the shortest one (in practice a few per cent, and it is pulled tight
+ * afterwards), but the search looks at far fewer cells: a long way round an island took up to 11 ms.
+ */
+const HEURISTIC_WEIGHT = 1.4;
+
+interface SearchBuffers {
+  n: number;
+  generation: number;
+  cost: Float64Array;
+  score: Float64Array;
+  came: Int32Array;
+  done: Uint8Array;
+  stamp: Uint32Array;
+}
+let buffers: SearchBuffers | null = null;
+
+/** The A* arrays for a grid of n cells, made again only when the grid size changes. */
+function searchBuffers(n: number): SearchBuffers {
+  if (!buffers || buffers.n !== n || buffers.generation > 4e9) {
+    buffers = { n, generation: 0, cost: new Float64Array(n), score: new Float64Array(n), came: new Int32Array(n), done: new Uint8Array(n), stamp: new Uint32Array(n) };
+  }
+  return buffers;
+}
+
 /** A small binary heap of cell numbers, ordered by a score array. */
 class Heap {
   private items: number[] = [];
@@ -221,11 +295,22 @@ export function findRoute(g: WaterGrid, from: Point, to: Point, maxCells = 60000
   const start = nearestOpenCell(g, from.x, from.y);
   const goal = nearestOpenCell(g, to.x, to.y);
   if (start === null || goal === null) return null;
+  // M3 step 6e (speed): the search's arrays are made once and reused; a cell's numbers count only
+  // when its stamp is this search's (before, four arrays of 240,000 cells were made for every
+  // search: the garbage collector had to clear about 4 MB each time).
   const n = g.cols * g.rows;
-  const cost = new Float64Array(n).fill(Infinity);
-  const score = new Float64Array(n).fill(Infinity);
-  const came = new Int32Array(n).fill(-1);
-  const done = new Uint8Array(n);
+  const b = searchBuffers(n);
+  const gen = ++b.generation;
+  const { cost, score, came, done, stamp } = b;
+  const touch = (cell: number): void => {
+    if (stamp[cell] !== gen) {
+      stamp[cell] = gen;
+      cost[cell] = Infinity;
+      score[cell] = Infinity;
+      came[cell] = -1;
+      done[cell] = 0;
+    }
+  };
   const gc = goal % g.cols;
   const gr = Math.floor(goal / g.cols);
   const guess = (cell: number): number => {
@@ -233,8 +318,10 @@ export function findRoute(g: WaterGrid, from: Point, to: Point, maxCells = 60000
     const dr = Math.abs(Math.floor(cell / g.cols) - gr);
     return Math.max(dc, dr) + (Math.SQRT2 - 1) * Math.min(dc, dr); // octile distance, in cells
   };
+  touch(start);
+  touch(goal);
   cost[start] = 0;
-  score[start] = guess(start);
+  score[start] = HEURISTIC_WEIGHT * guess(start);
   const heap = new Heap(score);
   heap.push(start);
   let seen = 0;
@@ -253,7 +340,9 @@ export function findRoute(g: WaterGrid, from: Point, to: Point, maxCells = 60000
         const cc = c + dc;
         if (rr < 0 || rr >= g.rows || cc < 0 || cc >= g.cols) continue;
         const next = rr * g.cols + cc;
-        if (!g.open[next] || done[next]) continue;
+        if (!g.open[next]) continue;
+        touch(next);
+        if (done[next]) continue;
         // A diagonal step may not cut a closed corner.
         if (dr !== 0 && dc !== 0 && (!g.open[r * g.cols + cc] || !g.open[rr * g.cols + c])) continue;
         const step = dr !== 0 && dc !== 0 ? Math.SQRT2 : 1;
@@ -261,7 +350,7 @@ export function findRoute(g: WaterGrid, from: Point, to: Point, maxCells = 60000
         if (tentative < cost[next]!) {
           cost[next] = tentative;
           came[next] = cell;
-          score[next] = tentative + guess(next);
+          score[next] = tentative + HEURISTIC_WEIGHT * guess(next);
           heap.push(next);
         }
       }

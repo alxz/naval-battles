@@ -30,32 +30,37 @@ export class RangeRings {
   /** x, y in game metres; s = screen pixels per metre. */
   update(x: number, y: number, headingRad: number, s: number): void {
     const g = this.g;
-    g.clear();
     for (const label of this.labels) label.setVisible(this.visible && this.labelsVisible);
+    g.setVisible(this.visible);
     if (!this.visible) return;
 
     const px = x * s;
     const py = y * s;
     const rings = viewJson.rangeRings;
-    const maxRange = Math.max(...rings);
-
-    // Broadside arcs, port and starboard.
-    const arc = (viewJson.fireArcPreviewDeg * Math.PI) / 180;
-    g.fillStyle(0xffe08a, viewJson.fireArcAlpha);
-    for (const side of [Math.PI / 2, -Math.PI / 2]) {
-      const centre = headingRad + side;
-      g.beginPath();
-      g.slice(px, py, maxRange * s, centre - arc, centre + arc, false);
-      g.fillPath();
+    // M3 step 6e (speed): the rings and arcs are drawn once round (0, 0) for heading 0, and drawn
+    // again only when the zoom changes; every frame the picture is only moved and turned.
+    if (this.drawnScale !== s) {
+      this.drawnScale = s;
+      g.clear();
+      const maxRange = Math.max(...rings);
+      // Broadside arcs, port and starboard.
+      const arc = (viewJson.fireArcPreviewDeg * Math.PI) / 180;
+      g.fillStyle(0xffe08a, viewJson.fireArcAlpha);
+      for (const side of [Math.PI / 2, -Math.PI / 2]) {
+        g.beginPath();
+        g.slice(0, 0, maxRange * s, side - arc, side + arc, false);
+        g.fillPath();
+      }
+      // The rings. Fainter since M3 step 6b (your test: the rings were too strong over the ships).
+      g.lineStyle(1, 0xd8ecff, viewJson.rangeRingAlpha);
+      for (const r of rings) g.strokeCircle(0, 0, r * s);
     }
-
-    // The rings, with their distance written at the upper left (the top centre holds the target card).
-    // Fainter since M3 step 6b (your test: the rings were too strong over the ships).
-    g.lineStyle(1, 0xd8ecff, viewJson.rangeRingAlpha);
+    g.setPosition(px, py).setRotation(headingRad);
+    // Their distance written at the upper left (the top centre holds the target card).
     const diag = Math.SQRT1_2;
-    rings.forEach((r, i) => {
-      g.strokeCircle(px, py, r * s);
-      this.labels[i]?.setPosition(px - r * s * diag - 1, py - r * s * diag - 1);
-    });
+    rings.forEach((r, i) => this.labels[i]?.setPosition(px - r * s * diag - 1, py - r * s * diag - 1));
   }
+
+  /** The zoom the rings were last drawn for (NaN: not drawn yet). */
+  private drawnScale = Number.NaN;
 }

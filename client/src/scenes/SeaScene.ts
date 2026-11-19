@@ -10,6 +10,7 @@ import { ShipBars } from './ShipBars';
 import type { ShipLabel } from './ShipBars';
 import { battleName, isWanted, shipLabel } from '../view/wanted';
 import { nationFor } from '../view/flags';
+import { PerfMeter } from '../view/perfMeter';
 import type { Nation } from '../view/flags';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
@@ -135,6 +136,7 @@ export class SeaScene extends Phaser.Scene {
   private touch: TouchControls | null = null;
   private lastRudder = 0;
   private cameraCentre: Point | null = null; // metres
+  private readonly perf = new PerfMeter();
   private arenaSeed = 1; // the arena's seed: it also picks the bots' flags (view/flags.ts)
   private spyglassLeft = 0; // seconds of looking through the spyglass left (0 = not looking)
   private spyglass!: Spyglass;
@@ -336,7 +338,9 @@ export class SeaScene extends Phaser.Scene {
     }
 
     // 1. Let the simulation catch up with real time (the arena can run faster).
+    const simStart = performance.now();
     const alpha = this.sim.update(seconds * (this.arena ? this.timeScale : 1));
+    this.perf.note(delta, performance.now() - simStart);
     if (this.arena) {
       this.pickFocus();
       if (this.sim.world.arena?.peace && !this.peaceShown) {
@@ -545,6 +549,7 @@ export class SeaScene extends Phaser.Scene {
             // In the arena you do not steer: the arena keys instead of the ship keys (a shorter box, M3 step 6b).
             .slice(this.arena ? 6 : 0))
             .concat(this.botLine())
+            .concat(['', this.perf.line(this.game.loop.actualFps)])
         : [],
     });
 
