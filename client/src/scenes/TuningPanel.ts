@@ -27,7 +27,7 @@ export interface TuningValues {
   minimap: boolean; // the small map on the screen
   fog: boolean; // drifting fog banks
   shipBars: boolean; // a small hull bar over every ship
-  enemyCount: number; // how many bots fight you (1-3); used when a duel starts
+  enemyCount: number; // how many bots fight you (1-5; 0 = random 3-5); used when a battle starts
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
   screenShake: boolean; // shake the view when your ship is hit or fires
@@ -108,7 +108,7 @@ export class TuningPanel {
       .add(v, 'logicalHeight', 160, 480, 20)
       .name('logical height')
       .onFinishChange((h: number) => callbacks.onLogicalHeight(h));
-    view.add(v, 'combatCamera').name('combat camera');
+    view.add(v, 'combatCamera').name('camera circle');
     view.add(v, 'autoZoom').name('auto combat zoom');
     view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');
@@ -154,7 +154,7 @@ export class TuningPanel {
       .add(v, 'targetBehaviour', { 'bot (fights you)': 'bot', 'circle (slow)': 'circle', moored: 'moored' })
       .name('behaviour')
       .onChange(() => callbacks.onTargetBehaviour());
-    target.add(v, 'enemyCount', 1, 3, 1).name('bots (next battle)');
+    target.add(v, 'enemyCount', 0, 5, 1).name('bots (0 = 3-5 random)');
     target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart battle');
     target
       .add(v, 'targetClass', Object.keys(SHIP_CLASSES))

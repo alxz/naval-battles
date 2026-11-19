@@ -1,24 +1,25 @@
 // Pure helper: the automatic combat zoom. Positions in game metres, screen sizes in logical pixels.
-import { combatCameraCentre } from './combatCamera';
 import type { Point } from './combatCamera';
 
 export interface ZoomFitOptions {
   widthPx: number; // the screen, in logical pixels
   heightPx: number;
   pixelsPerMetre: number; // at zoom x1
-  keepInside: number; // the combat camera rule (0.8 = your ship stays in the middle 80%)
   marginPx: number; // the enemy must be at least this far inside the screen edge
   spareToZoomInPx: number; // extra room needed before zooming in (stops flip-flopping)
   closeFightRange: number; // metres: zoom in past the smallest step only when the enemy is this close
   closeFightRangeSpare: number; // metres: once zoomed in, stay until the enemy is this much farther
 }
 
-/** Would the combat camera show both ships at this zoom? */
+/**
+ * Would the view show both ships at this zoom? With the camera circle (D43) the camera may be right
+ * on your ship, so the test is made from there (the safe case).
+ */
 export function fitsAtZoom(player: Point, enemy: Point, zoom: number, o: ZoomFitOptions, marginPx: number): boolean {
   const s = o.pixelsPerMetre * zoom;
   const halfW = o.widthPx / 2 / s;
   const halfH = o.heightPx / 2 / s;
-  const c = combatCameraCentre(player, enemy, halfW, halfH, { range: Infinity, keepInside: o.keepInside });
+  const c = player;
   const m = marginPx / s;
   return Math.abs(enemy.x - c.x) <= halfW - m && Math.abs(enemy.y - c.y) <= halfH - m;
 }

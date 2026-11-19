@@ -1,5 +1,5 @@
 import { bearingDegToHeadingRad } from './angles';
-import { ISLANDS, SHIP_CLASSES, WIND } from './data';
+import { ENEMIES, ISLANDS, SHIP_CLASSES, WIND } from './data';
 import { openWaterSpot } from './spawn';
 import type { World } from './types';
 
@@ -30,7 +30,16 @@ const SPAWN_MIN_M = 400;
 const SPAWN_MAX_M = 800;
 
 /**
- * `enemies`: how many enemy ships (1 to 3). Ship 2 always starts 150 m to starboard (the
+ * How many bots for a new battle (M3 step 6c): the number chosen in the panel, or with 0 ("random")
+ * a number from ENEMIES.min to ENEMIES.max that follows from the seed.
+ */
+export function enemiesFor(seed: number, chosen: number): number {
+  if (chosen > 0) return chosen;
+  return ENEMIES.min + (Math.abs(Math.floor(seed)) % (ENEMIES.max - ENEMIES.min + 1));
+}
+
+/**
+ * `enemies`: how many enemy ships (1 to 5). Ship 2 always starts 150 m to starboard (the
  * practice target of the tests); ships 3 and up start at random places in open water.
  */
 export function createWorld(seed: number = DEFAULT_SEED, enemies = 1): World {

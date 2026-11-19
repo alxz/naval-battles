@@ -107,6 +107,8 @@ export class Hud {
   private readonly spyglassIcon: Phaser.GameObjects.Image;
   private readonly autoZoomIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
+  private layoutNow = { debugX: 0, debugY: 0 };
+  private debugBelowY = 0;
   private readonly hint: Phaser.GameObjects.Text;
   private readonly ammoCounts: Phaser.GameObjects.Text[] = [];
   private readonly ammoKeys: Phaser.GameObjects.Text[] = [];
@@ -208,6 +210,7 @@ export class Hud {
     const so = l.sound;
     this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
     this.debugText.setPosition(l.debugX, l.debugY);
+    this.layoutNow = l;
     const ch = l.chart;
     this.chartIcon.setPosition(ch.x + ch.w / 2, ch.y + ch.h / 2).setScale(Math.max(1, Math.floor((ch.w * 0.8) / ICON_SIZE)));
     const place = (icon: Phaser.GameObjects.Image, r: { x: number; y: number; w: number; h: number }): void => {
@@ -344,12 +347,19 @@ export class Hud {
 
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
+    // In the arena the bot table and its buttons fill the top left: the help goes below them (M3 step 6b).
+    if (d.debug) this.debugText.setPosition(this.layoutNow.debugX, Math.max(this.layoutNow.debugY, this.debugBelowY));
     this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
       this.gfx.debug.fillStyle(0x000000, plate);
       this.gfx.debug.fillRoundedRect(b.x - 4, b.y - 3, b.width + 8, b.height + 6, 6);
     }
+  }
+
+  /** Keep the help text (H) below this screen y (the arena table's bottom; 0 = no limit). */
+  setDebugBelow(y: number): void {
+    this.debugBelowY = y;
   }
 
   /** Sails (canvas colour) and crew (blue): two half-width bars on one line, each with its icon in front. */

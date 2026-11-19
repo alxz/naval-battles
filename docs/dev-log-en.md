@@ -4,6 +4,33 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (evening) — M3 steps 6c and 6b: your test of 6a; camera circle, arena flags
+
+### Your logs (18 Nov, 1928 local and 1945 Linux)
+
+149 and 111 "works free" in about 2 h each, 109 and 70 of them at Isla Verde. Three causes: (1) a bot repaired in the harbour turned to chase or wait and steered straight at the enemy or straight "away from the port" — into the shore of the round harbour; (2) bots in the bay north-west of the island sailed straight at the inlet's mouth through the island; (3) the frigate and merchantman (84 and 67 m long) went for repairs into a harbour of radius 85 m and could not turn there, and a square rig beating upwind in the south-west corner (wind from the north-east) wore again and again onto the reef.
+
+### Three new ideas in the code
+
+- **A water grid and A*** (`sim/path.ts`): the sea in 10 m cells; a cell is open if it is at least 16 m from land. A* is the classic shortest-path search: it grows a chain of open cells from the ship, always first where "steps taken + straight distance left" is smallest, until it reaches the goal. The chain is then pulled tight into a few straight legs. Used only when the straight line is blocked; a route is planned again every 4 s or when the goal moved 60 m.
+- **Harbour boats** (`inHarbour`, `towMps`): in a harbour a ship with sails set moves at least 1.5 m/s, even into the wind (boats tow it). A rule of the game, so you get it too.
+- **A lead point**: the bot turns its side toward where the enemy will be after the ball's flight (own motion counted), not where it is.
+
+### Changes
+
+- Bots: ways round the land; the way out of a port (`portExit`); small harbours only for ships up to 0.7 × the harbour radius (`portsFor`); go about early when land is ahead on a tack; square rigs tack at ≥ 6 m/s, wear when slower; unstick also accepts 30 m of open water (a small harbour).
+- Gunnery: broadside to the lead point; a loaded side within 25° of the beam turns onto the shot; 25 s without a broadside → close in.
+- Rammer (your idea): a ram that struck makes the bot a rammer for the rest of its life: preferred range ≤ 100 m, chain shot at middle range, grape < 80 m, ram chance 50%, a "no" stands 12 s. Log: "... is a RAMMER now", summary counts rammers.
+- WANTED: a red "WANTED: name" over an offender until pardoned (arena names; in a battle "YOU" or "SLOOP 3").
+- A battle has 3–5 bots (panel "bots": 0 = random; `world.json` enemiesMin/Max).
+- 6b: camera circle (D43), spyglass centred, auto zoom fit from your ship, fainter rings; arena sails/crew bars and flags (`view/flags.ts`), names above the bars, help below the table and shorter; results: SAVE LOG and whole-pixel text; Spanish port flag and bigger shore guns (`make_islands.py`, shapes unchanged).
+
+### Checks
+
+371 tests (new: `path.test.ts`, `botStep6c.test.ts`, `wanted.test.ts`, `flags.test.ts`, camera circle, enemiesFor); `tsc`; build; headless browser computer and iPhone (WANTED, spyglass, arena flags, results with SAVE LOG; no errors). Headless arena 4 × 60 min (seeds 100–103): "works free" 45/19/79/58 → 28/30/5/23, aground 105/111/231/170 → 107/93/26/79, Isla Verde stuck 1/10/9/24 → 4/11/0/0; 24–37 sinkings an hour (was 12–24): the bots shoot better. Still seen: fights pressed against shores (a crippled merchantman pinned by a frigate's rams).
+
+---
+
 ## 19 Nov 2026 — M3 step 6a: collisions and ramming v2, bot seamanship part 2, headless arena
 
 ### Three new ideas in the code

@@ -3,5 +3,7 @@
   "maxX": 3000,
   "minY": -2000,
   "maxY": 2000,
-  "reefWidth": 60
+  "reefWidth": 60,
+  "enemiesMin": 3,
+  "enemiesMax": 5
 }

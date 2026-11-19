@@ -23,6 +23,8 @@ export interface Port {
   guns?: { x: number; y: number }[];
   /** How many ships can lie at the anchorage at once (M3 step 5): a small harbour up an inlet has fewer. */
   berths: number;
+  /** M3 step 6c: the radius of the round harbour at the head of an inlet (a small harbour only takes small ships). */
+  harbourR?: number;
 }
 
 /** The ports of these islands. */
@@ -32,7 +34,8 @@ export function portsOf(islands: readonly Island[], d: DamageParams = DAMAGE): P
     const path = island.inlet?.path;
     const guns = island.port.guns;
     const berths = path ? d.port.berthsInlet : d.port.berths;
-    return [{ name: island.name, x: island.port.x, y: island.port.y, berths, ...(path ? { path } : {}), ...(guns ? { guns } : {}) }];
+    const harbourR = island.inlet?.harbour?.r;
+    return [{ name: island.name, x: island.port.x, y: island.port.y, berths, ...(path ? { path } : {}), ...(guns ? { guns } : {}), ...(harbourR !== undefined ? { harbourR } : {}) }];
   });
 }
 
@@ -94,6 +97,39 @@ export function portWaypoint(x: number, y: number, port: Port): { x: number; y: 
   }
   const next = path[Math.min(path.length - 1, best + 2)]!;
   return { x: next.x, y: next.y, inside };
+}
+
+/**
+ * Is this point in a port's harbour (M3 step 6c), where the harbour boats tow ships: up an inlet
+ * (within towPathM of its middle line, or in the round harbour at its head), or within the dock
+ * range of an anchorage in open water.
+ */
+export function inHarbour(x: number, y: number, ports: readonly Port[], d: DamageParams = DAMAGE): boolean {
+  for (const port of ports) {
+    if (Math.hypot(port.x - x, port.y - y) <= d.port.dockRange) return true;
+    const path = port.path;
+    if (!path) continue;
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1]!;
+      const b = path[i]!;
+      const lx = b.x - a.x;
+      const ly = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * lx + (y - a.y) * ly) / (lx * lx + ly * ly || 1)));
+      if (Math.hypot(a.x + lx * t - x, a.y + ly * t - y) <= d.port.towPathM) return true;
+    }
+  }
+  return false;
+}
+
+const portCache = new WeakMap<readonly Island[], Port[]>();
+/** The ports of these islands, worked out once. */
+export function portsCached(islands: readonly Island[]): Port[] {
+  let ports = portCache.get(islands);
+  if (!ports) {
+    ports = portsOf(islands);
+    portCache.set(islands, ports);
+  }
+  return ports;
 }
 
 /** The ports of the game's sea. */

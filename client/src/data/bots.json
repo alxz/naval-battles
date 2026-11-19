@@ -61,5 +61,19 @@
   "ramMassShare": 0.8,
   "ramChance": 0.2,
   "ramSeconds": 15,
-  "ramMemorySeconds": 30
+  "ramMemorySeconds": 30,
+  "wearBelowMpsSquare": 6,
+  "shoreTackSeconds": 6,
+  "routeSkipM": 20,
+  "routeReplanSeconds": 4,
+  "routeGoalMoveM": 60,
+  "routeReachM": 30,
+  "quietCloseSeconds": 25,
+  "shotTurnDeg": 25,
+  "rammerRamChance": 0.5,
+  "rammerMemorySeconds": 12,
+  "rammerRangeM": 100,
+  "rammerGrapeM": 80,
+  "rammerChainShare": 0.95,
+  "harbourLengthShare": 0.7
 }

@@ -11,7 +11,7 @@ import { clamp } from './math';
 import { polarShare } from './polar';
 import type { DamageParams, Island, ShipParams, ShipState, Tuning, WindNow, World } from './types';
 import { DEFAULT_TUNING } from './types';
-import { stepPortRepair } from './port';
+import { inHarbour, portsCached, stepPortRepair } from './port';
 import { driftWind } from './wind';
 
 /** One simulation step is 1/30 of a second. */
@@ -86,8 +86,10 @@ export function steerShare(ship: ShipState, params: ShipParams, tuning: Tuning =
  *     `minSteerShare` of the turn rate is left; from half of top speed it steers fully.
  *  3. The ship moves along its heading.
  */
-export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt: number, tuning: Tuning = DEFAULT_TUNING): void {
-  const target = targetSpeed(ship, params, wind, tuning);
+export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt: number, tuning: Tuning = DEFAULT_TUNING, towMps = 0): void {
+  // In a harbour (M3 step 6c) the harbour boats tow a ship that has any sail set: never slower than towMps.
+  const sailing = targetSpeed(ship, params, wind, tuning);
+  const target = ship.sailLevel > 0.05 ? Math.max(sailing, towMps) : sailing;
   ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / params.speedTimeConstant));
 
   // Aground, the crew warps the ship round with boats and anchors: it turns at the full rate.
@@ -148,7 +150,8 @@ export function stepWorld(
     const params = SHIP_CLASSES[ship.shipClass];
     if (!params || ship.sunk) continue; // a wreck does not sail
     const before = { x: ship.x, y: ship.y, headingRad: ship.headingRad };
-    stepShip(ship, params, world.wind, dt, tuning);
+    const tow = inHarbour(ship.x, ship.y, portsCached(islands)) ? DAMAGE.port.towMps : 0;
+    stepShip(ship, params, world.wind, dt, tuning, tow);
     if (touchesLand(ship, params, islands)) {
       ship.x = before.x;
       ship.y = before.y;

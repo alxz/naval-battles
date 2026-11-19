@@ -36,10 +36,12 @@ describe('interceptBearing', () => {
 
 describe('rudderFor: wearing instead of tacking', () => {
   const wind = { fromRad: -Math.PI / 2, strength: 0.7 }; // from the north
-  it('a square rig on starboard tack (heading north-east) told to go north-west turns the long way, through downwind', () => {
-    const ship = at(1, 0, 0, -Math.PI / 4 + 0.3, 6, 'frigate');
+  it('a slow square rig on starboard tack (heading north-east) told to go north-west turns the long way, through downwind', () => {
+    const ship = at(1, 0, 0, -Math.PI / 4 + 0.3, 4, 'frigate');
     const goal = (-3 * Math.PI) / 4 - 0.3;
     expect(rudderFor(ship, frigate, goal, wind)).toBeGreaterThan(0); // clockwise: away from the wind
+    // M3 step 6c: with good way on (wearBelowMpsSquare or faster) a square rig goes about through the wind.
+    expect(rudderFor({ ...ship, speed: BOTS.wearBelowMpsSquare + 1 }, frigate, goal, wind)).toBeLessThan(0);
     // A sloop just tacks (anticlockwise, through the wind).
     expect(rudderFor({ ...ship, shipClass: 'sloop' }, sloop, goal, wind)).toBeLessThan(0);
     // A brigantine tacks when it has way on, wears when slow.

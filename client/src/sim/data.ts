@@ -30,6 +30,9 @@ export const WIND = windJson;
 /** The edges of the sea. */
 export const WORLD: WorldBounds = worldJson;
 
+/** How many bots fight you in a battle when the panel says "random" (M3 step 6c: 3 to 5). */
+export const ENEMIES = { min: worldJson.enemiesMin, max: worldJson.enemiesMax };
+
 /**
  * The reef that closes the sea: four long strips of "land" along the edges.
  * Because a reef is just land, ships ground on it, bots steer clear of it and the chart

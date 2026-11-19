@@ -1,25 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { combatCameraCentre, nearest, smoothToward } from './combatCamera';
+import { cameraCircleRadius, circleCamera, nearest, smoothToward } from './combatCamera';
 
-const options = { range: 400, keepInside: 0.8 };
 
-describe('combatCameraCentre', () => {
-  it('looks at your ship when there is no enemy', () => {
-    expect(combatCameraCentre({ x: 5, y: 6 }, null, 320, 180, options)).toEqual({ x: 5, y: 6 });
+describe('circleCamera (D43)', () => {
+  it('stays still while the ship is inside the circle', () => {
+    expect(circleCamera({ x: 0, y: 0 }, { x: 30, y: 40 }, 60)).toEqual({ x: 0, y: 0 });
   });
-
-  it('looks at your ship when the enemy is out of range', () => {
-    expect(combatCameraCentre({ x: 0, y: 0 }, { x: 500, y: 0 }, 320, 180, options)).toEqual({ x: 0, y: 0 });
+  it('is pulled along so the ship stays on the edge', () => {
+    const c = circleCamera({ x: 0, y: 0 }, { x: 0, y: 100 }, 60);
+    expect(c.x).toBeCloseTo(0, 9);
+    expect(c.y).toBeCloseTo(40, 9);
   });
-
-  it('looks halfway between the ships when both fit', () => {
-    expect(combatCameraCentre({ x: 0, y: 0 }, { x: 0, y: 150 }, 320, 180, options)).toEqual({ x: 0, y: 75 });
+  it('radius 0: right on the ship', () => {
+    expect(circleCamera({ x: 5, y: 5 }, { x: 50, y: -20 }, 0)).toEqual({ x: 50, y: -20 });
   });
-
-  it('keeps your ship inside the middle 80% of the screen', () => {
-    // Enemy 300 m south; view half height 120 m -> the camera may move only 96 m.
-    const c = combatCameraCentre({ x: 0, y: 0 }, { x: 0, y: 300 }, 260, 120, options);
-    expect(c.y).toBeCloseTo(96);
+  it('the radius: 2.5 hull lengths, but never more than the given share of the shorter half-view', () => {
+    expect(cameraCircleRadius(36, 300, 200, 2.5, 0.4)).toBeCloseTo(80, 9);
+    expect(cameraCircleRadius(84, 300, 200, 2.5, 0.4)).toBeCloseTo(80, 9); // 210 m would not fit: 40% of 200
   });
 });
 

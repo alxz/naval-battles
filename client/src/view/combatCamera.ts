@@ -1,38 +1,28 @@
-// Pure helper for the combat camera (plan section 4.1). Positions in game metres.
+// Pure helpers for the camera (plan section 4.1, D43). Positions in game metres.
 
 export interface Point {
   x: number;
   y: number;
 }
 
-export interface CombatCameraOptions {
-  range: number; // metres: an enemy closer than this pulls the camera
-  keepInside: number; // 0..1: your ship stays inside this middle share of the screen (0.8 = 80%)
+/**
+ * The camera circle (D43, M3 step 6b): the camera stays where it is while your ship sails inside a
+ * circle of `radiusM` metres round the middle of the screen; when the ship would leave the circle,
+ * the camera is pulled along so the ship stays on its edge. (Until v0.7 the camera slid toward the
+ * nearest enemy, which pulled your own ship away from the middle.) Radius 0: exactly on the ship.
+ */
+export function circleCamera(centre: Point, ship: Point, radiusM: number): Point {
+  const dx = ship.x - centre.x;
+  const dy = ship.y - centre.y;
+  const d = Math.hypot(dx, dy);
+  if (d <= radiusM) return { x: centre.x, y: centre.y };
+  const k = (d - radiusM) / d;
+  return { x: centre.x + dx * k, y: centre.y + dy * k };
 }
 
-/**
- * Where the camera should look.
- *  - No enemy near: at your ship.
- *  - Enemy near: halfway between the two ships, but never so far that your ship
- *    leaves the middle part of the screen.
- * halfWidth, halfHeight: half the view size in metres.
- */
-export function combatCameraCentre(
-  player: Point,
-  enemy: Point | null,
-  halfWidth: number,
-  halfHeight: number,
-  options: CombatCameraOptions,
-): Point {
-  if (!enemy) return { x: player.x, y: player.y };
-  const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-  if (distance > options.range) return { x: player.x, y: player.y };
-
-  const maxDx = halfWidth * options.keepInside;
-  const maxDy = halfHeight * options.keepInside;
-  const dx = Math.max(-maxDx, Math.min(maxDx, (enemy.x - player.x) / 2));
-  const dy = Math.max(-maxDy, Math.min(maxDy, (enemy.y - player.y) / 2));
-  return { x: player.x + dx, y: player.y + dy };
+/** The circle's radius: `hulls` ship lengths, but at most `maxShare` of the shorter half of the view (a phone). */
+export function cameraCircleRadius(lengthM: number, halfWidthM: number, halfHeightM: number, hulls: number, maxShare: number): number {
+  return Math.max(0, Math.min(lengthM * hulls, Math.min(halfWidthM, halfHeightM) * maxShare));
 }
 
 /** The closest point from a list, or null if the list is empty. */

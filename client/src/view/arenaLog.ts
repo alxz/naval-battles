@@ -12,7 +12,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 6a (collisions v2, bot seamanship: cut-off, wearing, spacing, ramming; headless arena), 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 6c (ways round the land, harbour boats, lead aiming, rammers; 3-5 bots, WANTED) + 6b (camera circle, arena flags and bars), 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -111,6 +111,7 @@ export class ArenaLog {
   private ramDecisions = 0;
   private ramTries = 0;
   private ramHits = 0;
+  private rammers = 0;
   private onLandWarned = new Set<number>();
   private nextWatch = 0;
   private lastWind: { fromRad: number; strength: number } | null = null;
@@ -211,6 +212,9 @@ export class ArenaLog {
         this.ramDecisions++;
         if (e.go) this.ramTries++;
         this.add(now, `RAM? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} at ${Math.round(e.distance)} m -> ${e.go ? 'RAMS' : 'keeps firing'}`);
+      } else if (e.type === 'rammerLearned') {
+        this.rammers++;
+        this.add(now, `${who(world, e.shipId)} rammed ${who(world, e.enemyId)} on purpose: it is a RAMMER now (chain, grape, ram)`);
       } else if (e.type === 'berthWait') {
         this.berthWaits++;
         this.add(now, `${who(world, e.shipId)} finds the berths of ${e.port} full (${e.occupied}/${e.berths}): waits off the port`);
@@ -336,7 +340,7 @@ export class ArenaLog {
     }
     out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${Math.round(this.menLost)}, sail points torn ${Math.round(this.sailsTorn)}`);
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
-    out.push(`   rams: tried ${this.ramTries} of ${this.ramDecisions} chances, ${this.ramHits} collisions while ramming`);
+    out.push(`   rams: tried ${this.ramTries} of ${this.ramDecisions} chances, ${this.ramHits} collisions while ramming, ${this.rammers} bots became rammers`);
     out.push(`   finishing attacks in safe water: ${this.finishAttacks} of ${this.finishDecisions} chances, ${this.finishKills} sank their enemy; waits for a berth: ${this.berthWaits}`);
     return out;
   }

@@ -107,7 +107,8 @@ export type SimEvent =
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
-  | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number };
+  | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number }
+  | { type: 'rammerLearned'; shipId: number; enemyId: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -303,6 +304,10 @@ export interface BotState {
   waitingBerth?: boolean; // sailing to a port whose berths are full: waiting off the anchorage
   ramLeft?: number; // M3 step 6: seconds left of a deliberate ram (mode 'ram')
   ramMemory?: number; // seconds before it may weigh another ram
+  // --- M3 step 6c ---
+  route?: { goalX: number; goalY: number; points: { x: number; y: number }[]; ageSeconds: number }; // its way round the land (sim/path.ts)
+  quietSeconds?: number; // seconds in a fight without firing a broadside (then it closes in)
+  rammer?: boolean; // it has rammed an enemy on purpose and hit: now it likes the tactic (chain, grape, ram)
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -367,6 +372,21 @@ export interface BotParams {
   ramChance: number; // ...and then tried with this chance (a personal roll; it is not always wise)
   ramSeconds: number; // a ram lasts at most this long
   ramMemorySeconds: number; // before it weighs another ram
+  // M3 step 6c
+  wearBelowMpsSquare: number; // a square rig wears when slower than this, and tacks (bow through the wind) when faster
+  shoreTackSeconds: number; // beating along a shore: it goes about early (after this long on a tack) when land is ahead
+  routeSkipM: number; // the straight-line check ignores this much at both ends (a ship close to a shore, a goal in a harbour)
+  routeReplanSeconds: number; // it plans its way round the land again after this long...
+  routeGoalMoveM: number; // ...or when the goal has moved this far
+  routeReachM: number; // a turning point of the way counts as reached this close
+  quietCloseSeconds: number; // this long in a fight without a broadside: it closes in on the enemy
+  shotTurnDeg: number; // a loaded side whose aim point is within this angle of the beam: it turns to put it on the beam
+  rammerRamChance: number; // a rammer's chance to ram when the chance comes (others: ramChance)
+  rammerMemorySeconds: number; // ... and how soon it weighs the next one
+  rammerRangeM: number; // a rammer fights closer (its preferred range at most this)
+  rammerGrapeM: number; // a rammer loads grape closer than this
+  harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
+  rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach
 }
 
 /** Live tuning numbers (lil-gui sliders). Not game rules: they help us find the right feel. */
@@ -440,6 +460,8 @@ export interface DamageParams {
     crewPerSecond: number; // sailors who join per second in port (until the tavern comes in M5)
     berths: number; // ships that can lie at the anchorage at once (M3 step 5)...
     berthsInlet: number; // ...fewer in a small harbour up an inlet
+    towMps: number; // M3 step 6c: in a harbour, boats tow a ship with any sail set at least this fast (even into the wind)
+    towPathM: number; // ...up an inlet: within this many metres of its middle line
     /** Port law (D40): firing in safe water is allowed but punished. */
     law: {
       shooterHullShare: number; // a broadside fired unlawfully in safe water costs the shooter this share of its full hull

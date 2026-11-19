@@ -243,14 +243,43 @@ def shore_gun(pen, land: np.ndarray, x: float, y: float, toward: tuple[float, fl
         else:
             print(f"  shore gun at ({x}, {y}) is not on land: left out")
             return
-    pen.rectangle((x - 4, y - 3, x + 5, y + 4), fill=(96, 92, 88, 255))  # shadow
-    pen.rectangle((x - 5, y - 4, x + 4, y + 3), fill=(168, 164, 154, 255))  # stone platform
-    pen.rectangle((x - 4, y - 3, x + 3, y + 2), fill=(196, 192, 180, 255))
+    # M3 step 6b (your test: the guns were hard to see): a bigger stone bastion with a dark rim,
+    # a gun on a brown carriage with two wheels, and a long black barrel with a muzzle ring.
+    pen.rectangle((x - 6, y - 5, x + 8, y + 7), fill=(70, 66, 62, 255))  # shadow
+    pen.rectangle((x - 7, y - 6, x + 6, y + 5), fill=(52, 50, 48, 255))  # rim
+    pen.rectangle((x - 6, y - 5, x + 5, y + 4), fill=(178, 172, 160, 255))  # stone platform
+    pen.rectangle((x - 5, y - 4, x + 4, y + 1), fill=(204, 198, 184, 255))
     dx, dy = toward[0] - x, toward[1] - y
     n = math.hypot(dx, dy) or 1.0
-    pen.line((x, y, x + dx / n * 6, y + dy / n * 6), fill=(34, 34, 40, 255), width=2)  # the barrel
-    pen.rectangle((x - 1, y - 1, x + 1, y + 1), fill=(92, 62, 40, 255))  # the carriage
+    ux, uy = dx / n, dy / n
+    pen.line((x - ux * 2, y - uy * 2, x + ux * 9, y + uy * 9), fill=(20, 20, 24, 255), width=3)  # the barrel
+    pen.ellipse((x + ux * 9 - 2, y + uy * 9 - 2, x + ux * 9 + 2, y + uy * 9 + 2), fill=(20, 20, 24, 255))  # the muzzle
+    px, py = -uy, ux  # across the barrel: the wheels
+    pen.rectangle((x - 2, y - 2, x + 2, y + 2), fill=(110, 72, 40, 255))  # the carriage
+    for side in (-1, 1):
+        wx, wy = x + px * 3 * side, y + py * 3 * side
+        pen.rectangle((wx - 1, wy - 1, wx + 1, wy + 1), fill=(60, 38, 22, 255))
     SHORE_GUNS.append({"x": float(min_x + x), "y": float(min_y + y)})
+
+
+def spanish_flag(pen, fx: int, fy: int) -> None:
+    """The port flag (M3 step 6b, your choice): the Cross of Burgundy, Spain's flag at sea and in
+    its colonies (about 1506-1785): a red ragged saltire on white. A pole of 18 px, the flag 13 x 9 px,
+    its lower left corner at the pole's top, fx, fy - 9. Drawn without random numbers."""
+    pen.line((fx, fy - 18, fx, fy), fill=(60, 42, 28, 255))
+    pen.point((fx, fy - 19), fill=(233, 196, 106, 255))  # the gilt knob
+    x0, y0, x1, y1 = fx + 1, fy - 18, fx + 13, fy - 10
+    pen.rectangle((x0, y0, x1, y1), fill=(244, 240, 228, 255))
+    red = (186, 28, 36, 255)
+    pen.line((x0, y0, x1, y1), fill=red, width=2)
+    pen.line((x0, y1, x1, y0), fill=red, width=2)
+    # The "ragged" knots along the arms (cut branches).
+    for t in (0.25, 0.75):
+        for ax, ay, bx, by in ((x0, y0, x1, y1), (x0, y1, x1, y0)):
+            kx, ky = round(ax + (bx - ax) * t), round(ay + (by - ay) * t)
+            pen.point((kx, ky - 2), fill=red)
+            pen.point((kx, ky + 2), fill=red)
+    pen.rectangle((x0, y0, x1, y1), outline=(150, 140, 120, 255))
 
 
 def paint(
@@ -431,7 +460,7 @@ def paint(
 
     if harbour:
         # A small river port round the far side of the harbour: a quay on the shore (on land, so
-        # ships cannot run onto it), warehouses, houses, and the same invented flag.
+        # ships cannot run onto it), warehouses, houses, and the Spanish flag.
         hx, hy, direction = harbour[0] - min_x, harbour[1] - min_y, harbour[2]
         r = HARBOUR_RADIUS
         for k in range(-40, 41):
@@ -450,12 +479,7 @@ def paint(
             pen.line((x0, y0 + 5, x0 + size, y0 + 5), fill=(*WALL, 255))
         a = direction + math.pi
         fx, fy = int(hx + math.cos(a) * (r + 10)), int(hy + math.sin(a) * (r + 10))
-        pen.line((fx, fy - 16, fx, fy), fill=(60, 42, 28, 255))
-        pen.rectangle((fx + 1, fy - 16, fx + 10, fy - 13), fill=(42, 157, 143, 255))
-        pen.rectangle((fx + 1, fy - 12, fx + 10, fy - 10), fill=(233, 196, 106, 255))
-        pen.rectangle((fx + 1, fy - 16, fx + 3, fy - 10), fill=(192, 57, 43, 255))
-        for py in (fy - 14, fy - 13, fy - 12):
-            pen.point((fx + 2, py), fill=(255, 255, 255, 255))
+        spanish_flag(pen, fx, fy)
         # Three shore guns round the harbour (port law): one each side of the town, one behind it.
         for a_deg, d in ((-72, 12), (72, 12), (-20, 58)):
             a = direction + math.pi + math.radians(a_deg)
@@ -533,16 +557,9 @@ def paint(
             pen.rectangle((wx, wy, wx + length, wy + 7), fill=(*ROOF, 255))
             pen.rectangle((wx, wy + 4, wx + length, wy + 7), fill=(*ROOF_SHADE, 255))
             pen.line((wx, wy + 8, wx + length, wy + 8), fill=(*WALL, 255))
-        # A flag of our own invention on a tall pole by the main pier:
-        # teal over gold, with a white anchor-cross in the red hoist.
+        # The port flag on a tall pole by the main pier: Spain (the Cross of Burgundy).
         fx, fy = vx + 5, shore_y(vx + 5) - 3
-        pen.line((fx, fy - 16, fx, fy), fill=post)
-        pen.rectangle((fx + 1, fy - 16, fx + 10, fy - 13), fill=(42, 157, 143, 255))
-        pen.rectangle((fx + 1, fy - 12, fx + 10, fy - 10), fill=(233, 196, 106, 255))
-        pen.rectangle((fx + 1, fy - 16, fx + 3, fy - 10), fill=(192, 57, 43, 255))
-        pen.point((fx + 2, fy - 14), fill=(255, 255, 255, 255))
-        pen.point((fx + 2, fy - 12), fill=(255, 255, 255, 255))
-        pen.point((fx + 2, fy - 13), fill=(255, 255, 255, 255))
+        spanish_flag(pen, fx, fy)
         # Three shore guns (port law): one at each end of the quay, one on the rise behind the town.
         for gx, gy in ((vx - 60, shore_y(vx - 60) - 8), (vx + 62, shore_y(vx + 62) - 8), (vx, vy - 36)):
             shore_gun(pen, land, gx, gy, (gx if gy != vy - 36 else vx, h), min_x, min_y)

@@ -7,6 +7,10 @@ import { Fog } from './Fog';
 import { Spyglass } from './Spyglass';
 import { PortMarks } from './PortMarks';
 import { ShipBars } from './ShipBars';
+import type { ShipLabel } from './ShipBars';
+import { battleName, isWanted, shipLabel } from '../view/wanted';
+import { nationFor } from '../view/flags';
+import type { Nation } from '../view/flags';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
@@ -20,12 +24,12 @@ import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
 import { predictLanding, reloadLeft } from '../sim/guns';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
-import { createWorld } from '../sim/world';
+import { createWorld, enemiesFor } from '../sim/world';
 import { autoZoom } from '../view/autoZoom';
 import { discover, newChart, updateSightings } from '../view/chart';
 import { hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
-import { combatCameraCentre, nearest, smoothToward } from '../view/combatCamera';
+import { cameraCircleRadius, circleCamera, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
 import { Cannonballs } from './Cannonballs';
@@ -131,6 +135,7 @@ export class SeaScene extends Phaser.Scene {
   private touch: TouchControls | null = null;
   private lastRudder = 0;
   private cameraCentre: Point | null = null; // metres
+  private arenaSeed = 1; // the arena's seed: it also picks the bots' flags (view/flags.ts)
   private spyglassLeft = 0; // seconds of looking through the spyglass left (0 = not looking)
   private spyglass!: Spyglass;
   private zoomGoal = 1; // the whole zoom step we are heading for
@@ -252,6 +257,7 @@ export class SeaScene extends Phaser.Scene {
         this.leaveArena();
       },
       () => this.arenaResults.hide(),
+      () => this.downloadLog(),
     );
 
     // Integer pixel scaling: measure the screen now and after every resize.
@@ -280,7 +286,7 @@ export class SeaScene extends Phaser.Scene {
         minimap: true,
         fog: true,
         shipBars: true,
-        enemyCount: 3,
+        enemyCount: 0,
         sound: true,
         volume: 0.7,
         screenShake: true,
@@ -373,7 +379,16 @@ export class SeaScene extends Phaser.Scene {
     });
 
     // Hull bars over the ships; in a duel your own ship has its panel, in the arena every ship gets one.
-    this.shipBars.update(this.sim.world.ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex);
+    const ships = this.sim.world.ships;
+    // A battle against bots: "WANTED: ..." in red over an offender of a port's peace, you included (M3 step 6c).
+    // (The arena draws its own names, with the same WANTED rule, in ArenaHud.)
+    const wanted = (i: number): ShipLabel => {
+      const sh = ships[i];
+      return !this.arena && sh && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
+    };
+    // The arena (D47): sails and crew bars and a (random) flag over every ship.
+    const flag = (i: number): Nation | null => (this.arena && ships[i] ? nationFor(this.arenaSeed, ships[i]!.id) : null);
+    this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag);
     this.islands.update(s);
     const watched = this.sim.world.ships[this.focusIndex];
     this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);
@@ -412,21 +427,24 @@ export class SeaScene extends Phaser.Scene {
     const myParams = SHIP_CLASSES[myShip.shipClass];
     if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
 
-    // 4. The camera: at your ship, or pulled toward the nearest enemy (combat camera).
-    // Enemies: every other ship that is still afloat.
-    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk);
-    const goal = v.combatCamera
-      ? combatCameraCentre(me, nearest(me, enemies), halfW, halfH, {
-          range: viewJson.combatCameraRange,
-          keepInside: viewJson.combatCameraKeepInside,
-        })
-      : { x: me.x, y: me.y };
+    // 4. The camera circle (D43): your ship (or the watched bot) sails freely inside a circle round the
+    // middle of the screen; the camera follows only when it would leave it. The spyglass (or the
+    // panel's "camera circle" off) centres the view on the ship, smoothly.
+    const spyglassOn = this.spyglassLeft > 0;
+    const radius =
+      v.combatCamera && !spyglassOn
+        ? cameraCircleRadius(SHIP_CLASSES[myShip.shipClass]?.length ?? 36, halfW, halfH, viewJson.cameraCircleHulls, viewJson.cameraCircleMaxShare)
+        : 0;
     if (this.freeView) {
       // The arena's free view: W A S D / arrows move it too.
       this.cameraCentre = this.freeView;
-    } else this.cameraCentre = this.cameraCentre
-      ? smoothToward(this.cameraCentre, goal, seconds, viewJson.combatCameraSmoothing)
-      : goal;
+    } else if (!this.cameraCentre) {
+      this.cameraCentre = { x: me.x, y: me.y };
+    } else {
+      // Pulled along by the circle; then smoothly toward the ship if it is still outside (a new circle size, the spyglass).
+      const pulled = circleCamera(this.cameraCentre, me, radius + viewJson.cameraCircleSlackM);
+      this.cameraCentre = smoothToward(pulled, circleCamera(pulled, me, radius), seconds, viewJson.combatCameraSmoothing);
+    }
     cam.centerOn(this.cameraCentre.x * s, this.cameraCentre.y * s);
 
     // The water slides under the camera. Whole zoom steps keep the water pixels even.
@@ -448,6 +466,7 @@ export class SeaScene extends Phaser.Scene {
 
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
+    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk);
     for (const p of enemies) {
       const distance = Math.hypot(p.x - me.x, p.y - me.y);
       if (distance > viewJson.sightingRange) continue;
@@ -471,6 +490,7 @@ export class SeaScene extends Phaser.Scene {
     const shipsOnScreen = poses.map((p) => ({ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }));
     const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
     this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
+    this.hud.setDebugBelow(this.arena ? this.arenaHud.bottom() : 0);
     this.hud.update({
       soundOn: v.sound,
       autoZoomOn: v.autoZoom,
@@ -506,7 +526,7 @@ export class SeaScene extends Phaser.Scene {
         : null,
       debug: v.debugText,
       debugLines: v.debugText
-        ? debugLines({
+        ? (this.arena ? ['SPACE next ship  T speed  L log', 'H hide this', ''] : []).concat(debugLines({
             ship: myShip,
             sailing,
             wind,
@@ -521,7 +541,10 @@ export class SeaScene extends Phaser.Scene {
             logicalWidth: layout.width,
             logicalHeight: layout.height,
             pixelScale: layout.pixelScale,
-          }).concat(this.botLine())
+          })
+            // In the arena you do not steer: the arena keys instead of the ship keys (a shorter box, M3 step 6b).
+            .slice(this.arena ? 6 : 0))
+            .concat(this.botLine())
         : [],
     });
 
@@ -556,7 +579,6 @@ export class SeaScene extends Phaser.Scene {
       widthPx: cam.width,
       heightPx: cam.height,
       pixelsPerMetre: v.pixelsPerMetre,
-      keepInside: viewJson.combatCameraKeepInside,
       marginPx: viewJson.autoZoomMarginPx,
       spareToZoomInPx: viewJson.autoZoomSpareInPx,
       closeFightRange: v.closeFightRange,
@@ -798,7 +820,7 @@ export class SeaScene extends Phaser.Scene {
     const last = this.started ? this.ship(PLAYER_ID) : undefined;
     const botMode = v.targetBehaviour === 'bot';
     const seed = (Date.now() & 0x7fffffff) || 1;
-    this.sim = new Simulation(createWorld(seed, botMode ? v.enemyCount : 1));
+    this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
     this.sim.tuning.speedScale = v.speedScale;
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(v.windFromBearingDeg), strength: v.windStrength });
@@ -936,6 +958,7 @@ export class SeaScene extends Phaser.Scene {
   private startArena(): void {
     const v = this.panel.values;
     const seed = (Date.now() & 0x7fffffff) || 1;
+    this.arenaSeed = seed;
     this.sim = new Simulation(createArenaWorld(seed));
     this.sim.tuning.speedScale = v.speedScale;
     this.sim.tuning.windDrift = v.windDrift;

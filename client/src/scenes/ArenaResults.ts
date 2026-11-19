@@ -12,7 +12,9 @@ const PLACE_COLOURS = ['#ffd84a', '#d8dde3', '#d9935a']; // gold, silver, bronze
  * The arena's results (M3 step 4c): opened by LEAVE (and once when the arena reaches peace).
  * The best three bots side by side, each with a picture of its ship, its place (I, II, III),
  * name, class, wins and losses and how well it shot; the others in a short table below.
- * Buttons: EXIT (back to a normal battle) and BACK (keep watching).
+ * Buttons: EXIT (back to a normal battle), SAVE LOG (download the log, M3 step 6b) and BACK (keep watching).
+ * Every text sits on whole pixels with its top left corner (centred by hand): a text centred on
+ * a half pixel shimmered while the sea moved behind it (your test, 18 Nov).
  */
 export class ArenaResults {
   private readonly g: Phaser.GameObjects.Graphics;
@@ -24,18 +26,19 @@ export class ArenaResults {
   private readonly rest: Phaser.GameObjects.Text;
   private readonly exit: Phaser.GameObjects.Text;
   private readonly back: Phaser.GameObjects.Text;
+  private readonly save: Phaser.GameObjects.Text;
   private readonly blocker: Phaser.GameObjects.Zone;
   private shown = false;
   private width = 640;
   private height = 360;
 
-  constructor(scene: Phaser.Scene, onExit: () => void, onBack: () => void) {
+  constructor(scene: Phaser.Scene, onExit: () => void, onBack: () => void, onSave: () => void) {
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(140);
     // Catches taps on the dim background, so they do not reach the sea or the arena buttons.
     this.blocker = scene.add.zone(0, 0, 10, 10).setOrigin(0, 0).setScrollFactor(0).setDepth(140).setInteractive();
     this.blocker.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => e.stopPropagation());
     const text = (kind: TextKind, colour: string): Phaser.GameObjects.Text =>
-      scene.add.text(0, 0, '', textStyle(kind, colour)).setOrigin(0.5, 0).setScrollFactor(0).setDepth(142);
+      scene.add.text(0, 0, '', textStyle(kind, colour)).setOrigin(0, 0).setScrollFactor(0).setDepth(142);
     this.title = text('big', '#ffe066').setText('ARENA RESULTS');
     this.sub = text('small', '#cfe6f7');
     for (let i = 0; i < PODIUM; i++) {
@@ -43,11 +46,11 @@ export class ArenaResults {
       this.names.push(text('small', '#ffffff').setAlign('center'));
       this.ships.push(scene.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(141));
     }
-    this.rest = text('small', '#cfe6f7').setAlign('left').setOrigin(0.5, 0);
+    this.rest = text('small', '#cfe6f7').setAlign('left');
     const button = (label: string, action: () => void): Phaser.GameObjects.Text => {
       const t = scene.add
         .text(0, 0, label, { ...textStyle('main', '#1b1b1b'), backgroundColor: '#ffe066', padding: { x: 6, y: 4 } })
-        .setOrigin(0.5, 0)
+        .setOrigin(0, 0)
         .setScrollFactor(0)
         .setDepth(143)
         .setInteractive();
@@ -59,6 +62,7 @@ export class ArenaResults {
     };
     this.exit = button('EXIT', onExit);
     this.back = button('BACK', onBack);
+    this.save = button('SAVE LOG', onSave);
     this.hide();
   }
 
@@ -73,7 +77,7 @@ export class ArenaResults {
 
   hide(): void {
     this.shown = false;
-    for (const o of [this.g, this.title, this.sub, this.rest, this.exit, this.back, ...this.places, ...this.names, ...this.ships]) o.setVisible(false);
+    for (const o of [this.g, this.title, this.sub, this.rest, this.exit, this.back, this.save, ...this.places, ...this.names, ...this.ships]) o.setVisible(false);
     this.blocker.setVisible(false).disableInteractive();
   }
 
@@ -96,8 +100,8 @@ export class ArenaResults {
     this.g.strokeRoundedRect(px + 0.5, py + 0.5, panelW - 1, panelH - 1, 8);
     this.blocker.setPosition(0, 0).setSize(w, h).setVisible(true).setInteractive();
 
-    this.title.setVisible(true).setStyle(textStyle(compact ? 'main' : 'big', '#ffe066')).setPosition(w / 2, py + 8);
-    this.sub.setVisible(true).setText(line).setPosition(w / 2, py + (compact ? 22 : 32));
+    centre(this.title.setVisible(true).setStyle(textStyle(compact ? 'main' : 'big', '#ffe066')), w / 2, py + 8);
+    centre(this.sub.setVisible(true).setText(line), w / 2, py + (compact ? 22 : 32));
 
     // The podium: second, first, third from left to right (the winner in the middle, a little higher).
     const colW = Math.floor(panelW / PODIUM);
@@ -116,23 +120,31 @@ export class ArenaResults {
         image?.setVisible(false);
         return;
       }
-      place.setVisible(true).setText(row.roman).setStyle(textStyle(compact ? 'main' : 'big', PLACE_COLOURS[rank] ?? '#fff')).setPosition(cx, py + (compact ? 36 : 52) - lift);
+      centre(place.setVisible(true).setText(row.roman).setStyle(textStyle(compact ? 'main' : 'big', PLACE_COLOURS[rank] ?? '#fff')), cx, py + (compact ? 36 : 52) - lift);
       // The ship seen from a little above, bow to the lower right; the winner yellow, the others red.
       showShip(image, row.shipClass, rank === 0 ? 'player' : 'enemy', art, true, 0, 0, Math.PI / 4, compact ? 0.7 : 1);
       image.setVisible(true).setPosition(Math.round(cx), Math.round(shipY - lift));
       const shot = `${Math.round(row.hitsPerBall * 100)}%`;
-      name
-        .setVisible(true)
-        .setText(`#${row.number} ${row.name}\n${row.shipClass}\n${row.wins} wins  ${row.losses} lost\nhits ${shot}`)
-        .setPosition(cx, shipY + (compact ? 30 : 46));
+      centre(name.setVisible(true).setText(`#${row.number} ${row.name}\n${row.shipClass}\n${row.wins} wins  ${row.losses} lost\nhits ${shot}`), cx, shipY + (compact ? 30 : 46));
     });
 
     // The others: one short line each.
     const others = rows.slice(PODIUM).map((r) => `${r.roman.padEnd(3)} #${r.number} ${r.name.padEnd(12)} ${r.wins} / ${r.losses}`);
-    this.rest.setVisible(others.length > 0 && !compact).setText(others.join('\n')).setPosition(w / 2, shipY + 104);
+    centre(this.rest.setVisible(others.length > 0 && !compact).setText(others.join('\n')), w / 2, shipY + 104);
 
+    // EXIT, SAVE LOG, BACK in a row, centred.
     const by = py + panelH - (compact ? 22 : 28);
-    this.exit.setVisible(true).setPosition(w / 2 - 40, by);
-    this.back.setVisible(true).setPosition(w / 2 + 40, by);
+    const row = [this.exit, this.save, this.back];
+    const gap = 12;
+    let bx = Math.round(w / 2 - (row.reduce((sum, b) => sum + b.width, 0) + gap * (row.length - 1)) / 2);
+    for (const b of row) {
+      b.setVisible(true).setPosition(bx, Math.round(by));
+      bx += Math.round(b.width) + gap;
+    }
   }
+}
+
+/** Put a text (origin top left) centred on x, on whole pixels. */
+function centre(t: Phaser.GameObjects.Text, x: number, y: number): void {
+  t.setPosition(Math.round(x - t.width / 2), Math.round(y));
 }

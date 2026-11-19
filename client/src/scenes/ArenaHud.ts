@@ -3,6 +3,8 @@ import { SHIP_CLASSES } from '../sim/data';
 import type { Pose } from '../sim/simulation';
 import type { World } from '../sim/types';
 import { textStyle } from './text';
+import { shipLabel } from '../view/wanted';
+import { shipBar } from '../view/shipBar';
 import { panelCovers, overlaps } from '../view/hudLayout';
 import type { Rect } from '../view/hudLayout';
 
@@ -47,13 +49,14 @@ export class ArenaHud {
 
   private height = 0;
   private fade = 1;
+  private bottomY = 0;
 
   constructor(scene: Phaser.Scene, touch: boolean, actions: ArenaButtons) {
     this.touch = touch;
     this.plate = scene.add.graphics().setScrollFactor(0).setDepth(100);
     // Names over the ships: in the world (they scroll with the sea), above the ships (depth 2).
     for (let i = 0; i < MAX_SHIPS; i++) {
-      this.labels.push(scene.add.text(0, 0, '', textStyle('small')).setOrigin(0.5, 1).setDepth(3).setVisible(false));
+      this.labels.push(scene.add.text(0, 0, '', textStyle('small')).setDepth(3).setVisible(false));
     }
     this.board = scene.add.text(0, 0, '', textStyle('small', '#e8f1f7')).setScrollFactor(0).setDepth(104).setVisible(false);
     const button = (label: string, action: () => void): Phaser.GameObjects.Text => {
@@ -89,6 +92,11 @@ export class ArenaHud {
     if (!on) for (const l of this.labels) l.setVisible(false);
   }
 
+  /** The bottom of the table and its buttons (screen y), so the help text (H) can go below; 0 when hidden. */
+  bottom(): number {
+    return this.shown ? this.bottomY : 0;
+  }
+
   /** Is this screen point on one of the arena buttons? (Then a drag there does not move the view.) */
   onButton(x: number, y: number): boolean {
     return this.shown && this.buttons.some((b) => b.getBounds().contains(x, y));
@@ -106,12 +114,16 @@ export class ArenaHud {
         label.setVisible(false);
         return;
       }
-      const length = SHIP_CLASSES[ship.shipClass]?.length ?? 30;
+      const params = SHIP_CLASSES[ship.shipClass];
+      // An offender of a port's peace: "WANTED: ..." in red until it is pardoned (M3 step 6c).
+      const look = shipLabel(ship, `#${pilot.number} ${pilot.name} ${pilot.wins}`, ship.id === focusId ? '#ffe066' : '#ffffff');
       label
         .setVisible(true)
-        .setText(`#${pilot.number} ${pilot.name} ${pilot.wins}`)
-        .setColor(ship.id === focusId ? '#ffe066' : '#ffffff')
-        .setPosition(Math.round(pose.x * s), Math.round((pose.y - length * 0.75) * s));
+        .setText(look.text)
+        .setColor(look.colour);
+      // Above the ship's bars (whole pixels: a text centred on a half pixel shimmers).
+      const top = params ? shipBar(params, pose.x, pose.y, pose.headingRad, 1, s).y - 3 : Math.round(pose.y * s) - 30;
+      label.setPosition(Math.round(pose.x * s - label.width / 2), Math.round(top - label.height));
     });
 
     // The score table.
@@ -159,6 +171,7 @@ export class ArenaHud {
     }
     // The buttons fade too when a ship is under them (they still work).
     const buttonsRect = { x, y: by, w: bx - x, h: this.buttons[0]?.height ?? 16 };
+    this.bottomY = this.touch ? y + b.height + 12 : by + buttonsRect.h + 8;
     const buttonAlpha = panelCovers(buttonsRect, screen.ships) ? 0.45 : 1;
     for (const button of this.buttons) button.setAlpha(buttonAlpha);
   }

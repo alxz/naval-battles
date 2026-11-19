@@ -20,7 +20,7 @@ export class RangeRings {
       scene.add
         .text(0, 0, `${r} m`, textStyle('small', '#d8ecff'))
         .setOrigin(1, 1)
-        .setAlpha(0.8)
+        .setAlpha(viewJson.rangeRingLabelAlpha)
         // Above the ships. (Text drawn right after a Graphics and before a ship broke the
         // ship's picture in our headless test with Phaser 4.2.1, so we keep this order.)
         .setDepth(3),
@@ -41,7 +41,7 @@ export class RangeRings {
 
     // Broadside arcs, port and starboard.
     const arc = (viewJson.fireArcPreviewDeg * Math.PI) / 180;
-    g.fillStyle(0xffe08a, 0.1);
+    g.fillStyle(0xffe08a, viewJson.fireArcAlpha);
     for (const side of [Math.PI / 2, -Math.PI / 2]) {
       const centre = headingRad + side;
       g.beginPath();
@@ -50,7 +50,8 @@ export class RangeRings {
     }
 
     // The rings, with their distance written at the upper left (the top centre holds the target card).
-    g.lineStyle(1, 0xd8ecff, 0.45);
+    // Fainter since M3 step 6b (your test: the rings were too strong over the ships).
+    g.lineStyle(1, 0xd8ecff, viewJson.rangeRingAlpha);
     const diag = Math.SQRT1_2;
     rings.forEach((r, i) => {
       g.strokeCircle(px, py, r * s);
