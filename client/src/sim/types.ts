@@ -385,6 +385,7 @@ export interface BotParams {
   rammerMemorySeconds: number; // ... and how soon it weighs the next one
   rammerRangeM: number; // a rammer fights closer (its preferred range at most this)
   rammerGrapeM: number; // a rammer loads grape closer than this
+  harbourSpeedMps: number; // M3 step 6d: in a harbour a bot sets its sails for at most this speed
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
   rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach
 }

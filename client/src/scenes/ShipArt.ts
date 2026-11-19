@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { assetUrl } from '../assets';
 import artJson from '../data/shipArt.json';
 import { SHIP_CLASSES } from '../sim/data';
 import { directionFrame } from '../view/shipFrame';
@@ -35,7 +36,7 @@ export function loadShipSheets(scene: Phaser.Scene): void {
         for (const detail of artJson.details) {
           const key = sheetKey(shipClass, owner as Owner, directions, detail);
           const size = frameSize(shipClass) * detail;
-          scene.load.spritesheet(key, `assets/ships/${key}.png`, { frameWidth: size, frameHeight: size });
+          scene.load.spritesheet(key, assetUrl(`assets/ships/${key}.png`), { frameWidth: size, frameHeight: size });
         }
       }
     }

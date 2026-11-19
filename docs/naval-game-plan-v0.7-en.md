@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) `dev-log-en.md` (what was done, problems and fixes, in detail) and `world-ideas-en.md` (ideas for the world, not yet scheduled). This plan keeps the decisions and the checklists short; the dev log has the details. The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); step 6a built (collisions and ramming v2, bot seamanship part 2, headless arena); 6b + 6c built 19 Nov (camera circle, arena flags and bars, Spanish flag; ways round the land, harbour boats, lead aiming, rammers, WANTED, 3–5 bots); next: ship variety and class balance · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
+**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); step 6a built (collisions and ramming v2, bot seamanship part 2, headless arena); 6b + 6c + 6d built 19 Nov (camera circle, arena flags and bars, Spanish flag; ways round the land, harbour boats, lead aiming, rammers, WANTED, 3–5 bots; wrecks run for port, lee shores; `npm run build:test`); next: ship variety and class balance · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
 
 ---
 
@@ -661,6 +661,7 @@ The backend comes late, so these small scripts give you Python practice early:
 | `tools/validate_data.py` | M3 | Checks all JSON data files with Pydantic |
 | `tools/build_map.py` | M3b (D48) | Turns a small land/sea mask image into the Tiled map (auto-tiling) and the bots' navigation grid |
 | `tools/plot_economy.py` | M5 | Reads the CSV of the 1,000-day headless economy run and draws prices and stocks |
+| `npm run build:test` (TypeScript, Vite) | M3 step 6d | One HTML file for testers (`client/dist-test/`): everything inside, opens from the disk, no tuning panel, version shown. The code is minified, not hidden |
 | `npm run headless-arena` (TypeScript, Node) | M3 (D46) | Runs the bot arena without a browser and writes logs to `arena-logs/`; a small page lists them for download |
 
 `hit_table.py` copies the gun formulas from TypeScript, so a Vitest test compares a few of its results with the real code. The economy run itself uses the real `sim/` code; Python only reads its output.
@@ -807,6 +808,7 @@ Next — **step 6** (your test of 18 Nov):
 - [x] **6a, 19 Nov — headless arena (D46):** `npm run headless-arena` (Vite bundles `headless/arena.ts` for Node), logs in `client/arena-logs/`, page on port 4180; on Linux `bash scripts/run-linux.sh arena`. Headless 4 × 60 min: 22.8 wins an hour; accidental collisions mostly gone; 40 rams tried in 226 chances, 11 hit.
 - [x] **6b, 19 Nov — pictures:** port flag of Spain (the Cross of Burgundy) and bigger shore guns with a rim, carriage and long barrel (`make_islands.py`; shapes unchanged; the port stays neutral, D29).
 - [x] **6c, 19 Nov — your test of 6a (D49–D51):** ways round the land (`sim/path.ts`), harbour boats, small harbours for small ships, going about early along a shore, square rigs tack at ≥ 6 m/s; lead aiming and closing in; rammers; WANTED labels; 3–5 bots. Headless 4 × 60 min: "works free" 45/19/79/58 → 28/30/5/23, aground down by a third, Isla Verde stuck 0–11 an hour (was up to 24); pace about 28 wins an hour (better gunnery).
+- [x] **6d, 19 Nov — your test of 6c:** a badly hit bot always runs for a port it can use (no more running along the edge of the sea), and its run is land-aware; a big ship does not follow its enemy into a small harbour and no bot sails into a harbour unless it goes to port there; no wearing on a lee shore; in a harbour bots sail at most 4 m/s; "up the inlet" only with the inlet in sight; hard by a shore no "turn round" onto the bank. Headless 6 × 60 min: aground 9–40 an hour (was 50–260), works free 10–27, Isla Verde 0–4. **Test build** `npm run build:test`: one HTML file (≈6.4 MB) with code, pictures, sounds and fonts inside, opens from the disk without a server; no tuning panel; version in a corner.
 
 Then:
 - [ ] Ship variety (a small random speed factor ±3–5% per ship; crew fatigue).

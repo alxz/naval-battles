@@ -4,6 +4,35 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (night) — M3 step 6d: your test of 6c; a test build for testers
+
+### Your test and log (2057, 4 h 12 min)
+
+116 wins (27.6 an hour); the merchantman 0 wins, 30 losses. "Works free" 46 times in mode port, 38 at the West reef. Your observation: a wreck runs to the edge of the sea, twitching by 5–10°. Causes found: (1) a badly hit bot ran for a port only within 2,500 m; the merchantman (since 6c only Empty Barrel Land is its port) fled into the open, and when out of reach it "repaired" by drifting straight away from the enemy, onto the reef, where `avoidLand` turned it back and forth; (2) a brigantine sailing for port against an east wind lay against the West reef: slow, it tried to wear, and the long turn put its bow on the reef again and again (a lee shore); (3) in the headless arena a merchantman broke off straight into the Isla Verde inlet and stuck in the harbour; (4) a sloop beside the inlet, behind its bank, counted as "up the inlet" (within 90 m of its middle line) and steered straight at it across the land; (5) hard by a shore the "fat" land test found land on every heading, and `avoidLand` then turned the ship round, onto the bank.
+
+### Changes
+
+- A badly hit bot (flee or repair) goes to a port it can use, at any distance (`portSeekRange` 7000); running and drifting look 150 m ahead for land and pick the fastest open course (up to 90° off).
+- `onLeeShore`: land close downwind → no wearing, tack instead.
+- `avoidHarbour`: outside a harbour, a bot not going to port there does not sail into one; a big ship waits off a small harbour its enemy is in (`enemyInSmallHarbour`).
+- `harbourSails`: at most 4 m/s in a harbour (the boats still tow).
+- "Up the inlet" only when the next point of the inlet is in plain sight.
+- `avoidLand`: when every heading looks blocked, a slim test (the hull, 30 m); never "turn round" onto the bank.
+
+### Test build (`npm run build:test`)
+
+One HTML file in `client/dist-test/` (`naval-battles-test-<date>.html`, about 6.4 MB): the code, the pictures, the sounds and the fonts are inside as data URLs (`vite-plugin-singlefile`; `src/assets.ts` swaps every asset path for its data URL in this build). It opens with a double click, no web server, Node or Python. No tuning panel (so no arena either); "TEST BUILD M3 step 6d · date" in the lower right corner. The code is minified (no comments, no types, short names, no source maps), not hidden.
+
+### Checks
+
+378 tests (new: `botStep6d.test.ts`, `assets.test.ts`); build; headless browser computer and iPhone; the test file opened from the disk in headless Chrome on computer and iPhone: game, ship pictures and fonts load, no panel, version shown, no errors. Headless arena 6 × 60 min: aground 13/13/40/15/9/12 (6c: 50–260), works free 20/10/27/12/15/11, Isla Verde 0–4, nobody flees to the edge any more (all go to port); 22–31 sinkings an hour.
+
+### WANTED and rammers
+
+Both are rare by design: bots become offenders only by a stray ball, and rammers only after a ram that struck (your log: 16 rammers in 4 h, see the "is a RAMMER now" lines). To see WANTED yourself: fire a broadside inside a port's safe water.
+
+---
+
 ## 19 Nov 2026 (evening) — M3 steps 6c and 6b: your test of 6a; camera circle, arena flags
 
 ### Your logs (18 Nov, 1928 local and 1945 Linux)

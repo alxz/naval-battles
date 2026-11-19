@@ -13,7 +13,7 @@
 import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
 import { gunsManned, sailShare } from './condition';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
-import { berthWaitSpot, berthsTaken, nearestPort, portWaypoint, portsOf } from './port';
+import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
@@ -224,15 +224,22 @@ export function avoidLand(ship: ShipState, params: ShipParams, islands: readonly
     const h = normalizeAngle(headingRad + degToRad(turn));
     if (!blocked(h)) return h;
   }
-  return normalizeAngle(headingRad + Math.PI); // boxed in: turn round
+  // M3 step 6d: hard by a shore the "fat" test finds land on every heading (a sloop turned round onto
+  // the bank again and again). Then a slim test (the hull itself, 30 m ahead): the wanted heading first.
+  const slim = (h: number): boolean => landAhead(ship, params, islands, h, Math.min(look, 30), 0);
+  for (const turn of [0, 45, -45, 90, -90, 135, -135, 180]) {
+    const h = normalizeAngle(headingRad + degToRad(turn));
+    if (!slim(h)) return h;
+  }
+  return headingRad; // boxed in: keep the wanted heading (working free takes over if it does not get anywhere)
 }
 
 /**
  * Is there land within `lookM` metres on this heading? Tests a "fat" copy of the ship
  * (LAND_CLEARANCE_M wider and longer) at a quarter, half and all of the way.
  */
-export function landAhead(ship: ShipState, params: ShipParams, islands: readonly Island[], headingRad: number, lookM: number): boolean {
-  const fat: ShipParams = { ...params, length: params.length + 2 * LAND_CLEARANCE_M, beam: params.beam + 2 * LAND_CLEARANCE_M };
+export function landAhead(ship: ShipState, params: ShipParams, islands: readonly Island[], headingRad: number, lookM: number, clearanceM = LAND_CLEARANCE_M): boolean {
+  const fat: ShipParams = { ...params, length: params.length + 2 * clearanceM, beam: params.beam + 2 * clearanceM };
   return [0.25, 0.5, 1].some((share) =>
     touchesLand({ ...ship, headingRad, x: ship.x + Math.cos(headingRad) * lookM * share, y: ship.y + Math.sin(headingRad) * lookM * share }, fat, islands),
   );
@@ -295,21 +302,35 @@ function interpolate(points: readonly number[][], x: number): number {
  * The fastest way to run: straight away from the enemy, or up to 40 degrees to either side
  * of that if the wind makes such a course faster (a ship running dead before the wind or
  * into it is slower than one on a reach).
+ * M3 step 6d (your test: a wreck ran at the edge of the sea, twitching by 5-10 degrees): a course
+ * with land within FLEE_LAND_LOOK_M ahead is not taken; then up to 90 degrees off "away" is tried,
+ * and with no open course at all, the most open one along the shore.
  */
-export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, bearingToEnemy: number): number {
+export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, bearingToEnemy: number, islands: readonly Island[] = []): number {
   const away = normalizeAngle(bearingToEnemy + Math.PI);
+  const look = Math.max(FLEE_LAND_LOOK_M, ship.speed * 12);
+  const open = (h: number): boolean => islands.length === 0 || !landAhead(ship, params, islands, h, look);
   let best = away;
   let bestSpeed = -1;
   for (const offDeg of [0, 20, -20, 40, -40]) {
     const heading = normalizeAngle(away + degToRad(offDeg));
+    if (!open(heading)) continue;
     const speed = targetSpeed({ ...ship, headingRad: heading, sailLevel: 1 }, params, wind);
     if (speed > bestSpeed + 0.2) {
       best = heading;
       bestSpeed = speed;
     }
   }
-  return best;
+  if (bestSpeed >= 0) return best;
+  for (const offDeg of [60, -60, 90, -90]) {
+    const heading = normalizeAngle(away + degToRad(offDeg));
+    if (open(heading)) return heading;
+  }
+  return unstickHeading(ship, params, islands, wind);
 }
+
+/** A running ship looks this far ahead for land (more when fast). */
+const FLEE_LAND_LOOK_M = 150;
 
 /**
  * Is another ship close ahead? Then a heading that turns away from it (to the side it is not on).
@@ -362,10 +383,11 @@ export function interceptBearing(ship: ShipState, enemy: ShipState, p: BotParams
  * slow) does not tack: when the short turn would take its bow through the wind, it turns the
  * long way round, through downwind ("wearing ship"), which never stops it in irons.
  */
-export function rudderFor(ship: ShipState, params: ShipParams, headingRad: number, wind: WindNow, p: BotParams = BOTS): number {
+export function rudderFor(ship: ShipState, params: ShipParams, headingRad: number, wind: WindNow, p: BotParams = BOTS, leeShore = false): number {
   let diff = normalizeAngle(headingRad - ship.headingRad);
   // M3 step 6c: a square rig with good way on goes about too (it keeps enough speed through the turn).
-  const wears = (params.rig === 'square' && ship.speed < p.wearBelowMpsSquare) || (params.rig === 'mixed' && ship.speed < p.wearBelowMps);
+  // M3 step 6d: never wear with land close downwind (a lee shore): the long turn would put the bow on it.
+  const wears = !leeShore && ((params.rig === 'square' && ship.speed < p.wearBelowMpsSquare) || (params.rig === 'mixed' && ship.speed < p.wearBelowMps));
   if (wears && Math.abs(diff) > degToRad(20)) {
     const w = normalizeAngle(wind.fromRad - ship.headingRad); // where the wind comes from, off the bow
     if (Math.sign(w) === Math.sign(diff) && Math.abs(w) < Math.abs(diff)) diff -= Math.sign(diff) * 2 * Math.PI;
@@ -412,6 +434,48 @@ export function landBetween(ship: ShipState, islands: readonly Island[], goal: P
  */
 export function portsFor(ports: readonly Port[], params: ShipParams, p: BotParams = BOTS): Port[] {
   return ports.filter((port) => port.harbourR === undefined || params.length <= port.harbourR * p.harbourLengthShare);
+}
+
+/**
+ * The sails for a ship in a harbour (M3 step 6d): at most what gives harbourSpeedMps there (the
+ * harbour boats still tow it at towMps, so it never stops). Outside a harbour: `sails` unchanged.
+ */
+export function harbourSails(ship: ShipState, params: ShipParams, wind: WindNow, islands: readonly Island[], sails: number, p: BotParams = BOTS): number {
+  if (sails <= 0 || islands.length === 0 || !inHarbour(ship.x, ship.y, portsCached(islands))) return sails;
+  return Math.min(sails, Math.max(0.1, sailsForSpeed(ship, params, wind, p.harbourSpeedMps, 0.1)));
+}
+
+/**
+ * A ship outside every harbour whose course would take it into one within HARBOUR_LOOK_M: the first
+ * heading of +-45, +-90, +-135 degrees that does not (null: no change; a ship already inside may go on).
+ */
+export function avoidHarbour(ship: ShipState, islands: readonly Island[], headingRad: number): number | null {
+  if (islands.length === 0) return null;
+  const ports = portsCached(islands);
+  if (ports.length === 0 || inHarbour(ship.x, ship.y, ports)) return null;
+  const enters = (h: number): boolean =>
+    [0.5, 1].some((k) => inHarbour(ship.x + Math.cos(h) * HARBOUR_LOOK_M * k, ship.y + Math.sin(h) * HARBOUR_LOOK_M * k, ports));
+  if (!enters(headingRad)) return null;
+  for (const turn of [45, -45, 90, -90, 135, -135]) {
+    const h = normalizeAngle(headingRad + degToRad(turn));
+    if (!enters(h)) return h;
+  }
+  return null;
+}
+
+/** How far ahead a bot looks for a harbour it should not enter, metres. */
+const HARBOUR_LOOK_M = 100;
+
+/** Is the enemy up an inlet or in the harbour of a port this ship is too big to use? */
+export function enemyInSmallHarbour(enemy: ShipState, params: ShipParams, ports: readonly Port[], p: BotParams = BOTS): boolean {
+  const usable = portsFor(ports, params, p);
+  const small = ports.filter((port) => !usable.includes(port));
+  return small.length > 0 && inHarbour(enemy.x, enemy.y, small);
+}
+
+/** Is there land close downwind of this ship (a lee shore, where it must not wear)? */
+export function onLeeShore(ship: ShipState, params: ShipParams, islands: readonly Island[], wind: WindNow): boolean {
+  return islands.length > 0 && landAhead(ship, params, islands, wind.fromRad + Math.PI, Math.max(60, params.length * 1.5));
 }
 
 /** The other ship of a recent collision (within avoidSeconds, sim/collide.ts), if any. */
@@ -519,7 +583,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     if (bot.mode === 'finish') bot.mode = 'chase';
     updateMode(bot, distance, thinkSeconds, p, hullShare);
     // Badly hurt and a port is within reach: run for the port instead of the open sea.
-    if (bot.mode === 'flee' && port && port.distance <= p.portSeekRange) bot.mode = 'port';
+    if ((bot.mode === 'flee' || bot.mode === 'repair') && port && port.distance <= p.portSeekRange) bot.mode = 'port';
   }
   if (bot.mode !== 'port') bot.waitingBerth = false;
   // A rammer (M3 step 6c) fights closer: chain shot to slow the enemy, grape to clear its deck, then the ram.
@@ -541,8 +605,14 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.mode = 'finish';
     } else bot.finishMemory = { enemyId: enemy.id, seconds: p.finishMemorySeconds };
   }
-  const waiting = enemySafe && !goIn && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff');
-  if (waiting) bot.mode = 'idle';
+  // M3 step 6d: a big ship does not follow its enemy into a harbour too small for it (it would
+  // stick there, as the merchantman did at Isla Verde): it waits off the harbour like for a protected ship.
+  const tooSmall = enemyInSmallHarbour(enemy, params, ports, p);
+  const waiting = (enemySafe || tooSmall) && !goIn && (bot.mode === 'chase' || bot.mode === 'engage' || bot.mode === 'breakOff' || bot.mode === 'ram');
+  if (waiting) {
+    bot.mode = 'idle';
+    delete bot.ramLeft;
+  }
   // M3 step 6 (D45): ram on purpose when it pays: close, at least nearly as heavy (or the enemy is
   // crippled), faster than the enemy (or it is nearly stopped), our own hull sound; then a roll.
   if (!ramming && !waiting && !goIn && bot.ramMemory === undefined && (bot.mode === 'engage' || bot.mode === 'chase') && distance <= p.ramRangeM) {
@@ -600,15 +670,15 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     sails = 1;
   } else if (bot.mode === 'breakOff') {
     bot.side = null;
-    goal = normalizeAngle(bearing + Math.PI); // away from the enemy
+    goal = fleeHeading(ship, params, world.wind, bearing, islands); // away from the enemy (not onto a shore, M3 step 6d)
     sails = sailsForSpeed(ship, params, world.wind, p.fightSpeed, p.minSails);
   } else if (bot.mode === 'flee') {
     bot.side = null;
-    goal = fleeHeading(ship, params, world.wind, bearing);
+    goal = fleeHeading(ship, params, world.wind, bearing, islands);
     sails = 1;
   } else if (bot.mode === 'repair') {
     bot.side = null;
-    goal = normalizeAngle(bearing + Math.PI); // keep drifting away, almost stopped, while the crew works
+    goal = fleeHeading(ship, params, world.wind, bearing, islands); // keep drifting away (not onto a shore), almost stopped, while the crew works
     sails = DAMAGE.repair.maxSails;
   } else {
     bot.quietSeconds = (bot.quietSeconds ?? 0) + thinkSeconds;
@@ -684,8 +754,16 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // On a planned way round the land the way itself keeps clear of the shore: look only a short way ahead.
   const away = nearPort ? null : avoidLand(ship, params, islands, steer, routed ? ROUTE_LOOK : p);
   if (away !== null) steer = away;
-  const rudder = rudderFor(ship, params, steer, world.wind, p);
+  // M3 step 6d: a harbour is no place to fight or to run to: unless it is going to port (or finishing
+  // an enemy there), a bot outside a harbour does not sail into one (the merchantman broke off into the inlet).
+  if (bot.mode !== 'port' && !finishing && !ramming) {
+    const keepOut = avoidHarbour(ship, islands, steer);
+    if (keepOut !== null) steer = keepOut;
+  }
+  const rudder = rudderFor(ship, params, steer, world.wind, p, onLeeShore(ship, params, islands, world.wind));
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: id, value: rudder });
+  // In a harbour (M3 step 6d, your test: bots circling in the Isla Verde harbour): no faster than harbourSpeedMps.
+  if (!ramming && !finishing) sails = harbourSails(ship, params, world.wind, islands, sails, p);
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: id, value: sails });
 
   // --- Guns: aim with the side that faces the enemy, fire when it is in the arc. ---
@@ -765,9 +843,10 @@ function leavePort(world: World, bot: BotState, ship: ShipState, params: ShipPar
   const away = avoidLand(ship, params, islands, steer, bot.route ? ROUTE_LOOK : p);
   if (away !== null) steer = away;
   const commands: Command[] = [];
-  const rudder = rudderFor(ship, params, steer, world.wind, p);
+  const rudder = rudderFor(ship, params, steer, world.wind, p, onLeeShore(ship, params, islands, world.wind));
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
-  if (ship.sailLevel < 0.99) commands.push({ type: 'setSails', shipId: ship.id, value: 1 });
+  const sails = harbourSails(ship, params, world.wind, islands, 1, p);
+  if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;
 }
 
@@ -807,7 +886,7 @@ function sailToPort(
   if (away !== null) steer = away;
   const sails = course.sails;
   const commands: Command[] = [];
-  const rudder = rudderFor(ship, params, steer, world.wind, p);
+  const rudder = rudderFor(ship, params, steer, world.wind, p, onLeeShore(ship, params, islands, world.wind));
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;
@@ -839,12 +918,15 @@ function portCourse(
   }
   bot.waitingBerth = false;
   const way = portWaypoint(ship.x, ship.y, port.port);
-  if (way.inside) delete bot.route;
+  // "Up the inlet" only when the next point of its middle line is in plain sight (M3 step 6d: a ship
+  // beside the inlet, behind its bank, steered straight at it across the land and stuck there).
+  const upInlet = way.inside && !landBetween(ship, islands, way, p);
+  if (upInlet) delete bot.route;
   return {
     // M3 step 6c: on the way to the inlet's mouth (or a port behind an island), round the land.
-    goal: way.inside ? Math.atan2(way.y - ship.y, way.x - ship.x) : headingVia(bot, ship, islands, way, p),
+    goal: upInlet ? Math.atan2(way.y - ship.y, way.x - ship.x) : headingVia(bot, ship, islands, way, p),
     // Close to the anchorage, or on the way up an inlet: the way itself keeps clear of the land.
-    nearPort: port.distance < 2 * dock || way.inside,
+    nearPort: port.distance < 2 * dock || upInlet,
     sails: port.distance < dock * 0.5 ? 0 : port.distance < 3 * dock ? p.minSails : 1,
   };
 }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { assetUrl } from '../assets';
 
 /** The placeholder sounds made by tools/make_sounds.py (client/public/assets/sounds/). */
 /** The same sound is not started again within this many milliseconds. */
@@ -11,7 +12,7 @@ export type SoundKey = (typeof SOUND_KEYS)[number];
 const HALF_VOLUME_DISTANCE = 220;
 
 export function loadSounds(scene: Phaser.Scene): void {
-  for (const key of SOUND_KEYS) scene.load.audio(key, `assets/sounds/${key}.wav`);
+  for (const key of SOUND_KEYS) scene.load.audio(key, assetUrl(`assets/sounds/${key}.wav`));
 }
 
 /**

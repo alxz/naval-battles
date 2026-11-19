@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { assetUrl } from '../assets';
 import { ISLANDS } from '../sim/data';
 import { bounds } from '../sim/geometry';
 import type { Island } from '../sim/types';
@@ -9,7 +10,7 @@ const REEF_TILE = 60; // pixels: one square of reef picture, repeated along the 
 /** Load the pictures of the generated islands (tools/make_islands.py). Call in preload. */
 export function loadIslandPictures(scene: Phaser.Scene): void {
   for (const island of ISLANDS) {
-    if (island.picture) scene.load.image(pictureKey(island), `assets/islands/${island.picture.file}`);
+    if (island.picture) scene.load.image(pictureKey(island), assetUrl(`assets/islands/${island.picture.file}`));
   }
 }
 

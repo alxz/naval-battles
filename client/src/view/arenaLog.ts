@@ -12,7 +12,7 @@ import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 6c (ways round the land, harbour boats, lead aiming, rammers; 3-5 bots, WANTED) + 6b (camera circle, arena flags and bars), 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 6d (wrecks run for port, harbours, lee shores, test build) after 6c + 6b, 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */

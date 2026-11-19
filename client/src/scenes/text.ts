@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { assetUrl } from '../assets';
 
 // Text in a pixel-art game (M2 UI review, 15 Nov).
 //
@@ -47,7 +48,7 @@ const FONT_FILES: [family: string, file: string][] = [
  */
 export async function loadFonts(): Promise<void> {
   try {
-    const faces = await Promise.all(FONT_FILES.map(([family, file]) => new FontFace(family, `url(${file})`).load()));
+    const faces = await Promise.all(FONT_FILES.map(([family, file]) => new FontFace(family, `url(${assetUrl(file)})`).load()));
     for (const face of faces) document.fonts.add(face);
     await document.fonts.ready;
     // Belt and braces: wait (at most 3 s) until both fonts answer "yes, I can draw this".

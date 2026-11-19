@@ -1,4 +1,5 @@
 import GUI from 'lil-gui';
+import { TEST_BUILD } from '../assets';
 import { GUNS, SHIP_CLASSES } from '../sim/data';
 
 /** What the second ship does: lie still, sail round a circle, or fight you (the bot, M2 step 4). */
@@ -85,6 +86,8 @@ export class TuningPanel {
     this.values = { ...start };
     const v = this.values;
     this.gui = new GUI({ title: 'Tuning' });
+    // The single-file test build for testers (npm run build:test): no tuning panel.
+    if (TEST_BUILD) this.gui.hide();
     if (startClosed) {
       // Touch screens: when closed, the panel is a small gear button in the corner, so it covers
       // nothing; opened, it is the full panel (it scrolls when it is taller than the screen).

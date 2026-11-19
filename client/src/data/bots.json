@@ -27,7 +27,7 @@
   "fleeHullShare": 0.3,
   "shipAvoidM": 130,
   "shipAvoidTurnDeg": 70,
-  "portSeekRange": 2500,
+  "portSeekRange": 7000,
   "grapeRangeM": 70,
   "grapeLeaveM": 90,
   "chainSpeedGap": 1.0,
@@ -75,5 +75,6 @@
   "rammerRangeM": 100,
   "rammerGrapeM": 80,
   "rammerChainShare": 0.95,
-  "harbourLengthShare": 0.7
+  "harbourLengthShare": 0.7,
+  "harbourSpeedMps": 4
 }
