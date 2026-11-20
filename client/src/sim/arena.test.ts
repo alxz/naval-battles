@@ -90,10 +90,10 @@ describe('stepArena', () => {
 });
 
 describe('arena scenario (headless)', () => {
-  it('six bots on their own: within 12 minutes they fight, sink ships and the sunk come back', () => {
+  it('six bots on their own: within 18 minutes they fight, sink ships and the sunk come back (7b: traders run, fights take longer)', () => {
     const sim = new Simulation(createArenaWorld(2026));
     let respawns = 0;
-    for (let t = 0; t < 12 * 60 * 30; t++) {
+    for (let t = 0; t < 18 * 60 * 30; t++) {
       sim.update(STEP_SECONDS);
       respawns += sim.takeEvents().filter((e) => e.type === 'respawn').length;
     }
@@ -101,7 +101,7 @@ describe('arena scenario (headless)', () => {
     expect(arena.pilots.reduce((n, p) => n + p.balls, 0)).toBeGreaterThan(100);
     expect(arena.totalWins).toBeGreaterThanOrEqual(1);
     expect(respawns).toBeGreaterThanOrEqual(1);
-  }, 60000);
+  }, 90000);
 });
 
 describe('arena spawn on a sea that is almost all land', () => {

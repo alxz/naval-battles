@@ -1,5 +1,8 @@
 import { bearingDegToHeadingRad } from './angles';
 import { ENEMIES, ISLANDS, SHIP_CLASSES, WIND } from './data';
+import { nationFor } from './nation';
+import { nextRandom } from './random';
+import worldJson from '../data/world.json';
 import { openWaterSpot } from './spawn';
 import type { World } from './types';
 
@@ -36,6 +39,29 @@ const SPAWN_MAX_M = 800;
 export function enemiesFor(seed: number, chosen: number): number {
   if (chosen > 0) return chosen;
   return ENEMIES.min + (Math.abs(Math.floor(seed)) % (ENEMIES.max - ENEMIES.min + 1));
+}
+
+/** M3 step 7d: how often each class turns up in a battle against bots ("mix"), from data/world.json. */
+export const ENEMY_CLASS_WEIGHTS: Readonly<Record<string, number>> = worldJson.enemyClassWeights;
+
+/**
+ * The classes of the bots of a new battle (M3 step 7d, your request): `choice` is a class name
+ * (all bots of that class) or 'mix' (each one drawn by ENEMY_CLASS_WEIGHTS: sloops most often,
+ * a frigate now and then, traders among them). The same seed gives the same lineup.
+ */
+export function battleClasses(seed: number, count: number, choice: string, weights: Readonly<Record<string, number>> = ENEMY_CLASS_WEIGHTS): string[] {
+  if (choice !== 'mix' && SHIP_CLASSES[choice]) return Array.from({ length: count }, () => choice);
+  const kinds = Object.keys(weights).filter((k) => SHIP_CLASSES[k] && (weights[k] ?? 0) > 0);
+  const total = kinds.reduce((a, k) => a + (weights[k] ?? 0), 0);
+  const rng = { rngState: (Math.floor(seed) ^ 0x5bd1e995) >>> 0 || 1 };
+  return Array.from({ length: count }, () => {
+    let r = nextRandom(rng) * total;
+    for (const k of kinds) {
+      r -= weights[k] ?? 0;
+      if (r <= 0) return k;
+    }
+    return kinds[kinds.length - 1] ?? 'sloop';
+  });
 }
 
 /**
@@ -86,5 +112,7 @@ export function createWorld(seed: number = DEFAULT_SEED, enemies = 1): World {
       headingRad: Math.atan2(me.y - spot.y, me.x - spot.x), // bow toward you
     });
   }
+  // M3 step 7d: flags. You are a pirate (D29); the bots sail under random flags of this battle.
+  for (const ship of world.ships) ship.nation = ship.id === 1 ? 'pirates' : nationFor(seed, ship.id);
   return world;
 }

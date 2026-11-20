@@ -174,6 +174,6 @@ export function stepWorld(
   stepPortRepair(world, dt); // a port does it faster and better
   stepLaw(world, dt); // port law: offenders that stayed away long enough are pardoned
   stepShore(world, dt); // the shore guns fire at offenders
-  stepGunsAndBalls(world, dt);
+  stepGunsAndBalls(world, dt, undefined, islands);
   world.tick += 1;
 }

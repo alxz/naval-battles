@@ -11,13 +11,15 @@
 // Its memory (BotState) lives in the world state, so a save or a test repeats exactly.
 
 import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
-import { gunsManned, sailShare } from './condition';
+import { crewShare, gunsManned, sailShare } from './condition';
+import { courageOf, nextTradeStop, odds, tradeStops } from './morale';
+import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
 import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
-import { degToRad, normalizeAngle, twaDeg } from './angles';
+import { degToRad, normalizeAngle, radToDeg, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, WORLD } from './data';
-import { predictLanding, reloadLeft, sideAngleRad } from './guns';
+import { gunsOn, predictLanding, reloadLeft, sideAngleRad } from './guns';
 import { touchesLand } from './land';
 import { clamp } from './math';
 import { nextGaussian } from './random';
@@ -206,7 +208,7 @@ const reachTables = new Map<string, Float64Array>();
  * muzzle speed and top elevation.
  */
 export function reachTable(ship: ShipState, params: ShipParams, side: Side, maxDeg: number, g: GunParams): Float64Array {
-  const key = `${params.beam}|${g.muzzleSpeed}|${g.gravity}|${maxDeg}`;
+  const key = `${side === 'stern' ? `stern ${params.length}` : params.beam}|${g.muzzleSpeed}|${g.gravity}|${maxDeg}`;
   let table = reachTables.get(key);
   if (!table) {
     table = new Float64Array(REACH_STEPS + 1);
@@ -598,6 +600,20 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const ports = portsOf(islands);
   const nearest = nearestPort(ship.x, ship.y, ports); // any port (to keep clear of it while waiting)
   const port = nearestPort(ship.x, ship.y, portsFor(ports, params, p)); // a port this ship can use for repairs
+  // --- M3 step 7b: crew spirit. Fear fades (faster out of the fight); now and then (every 3-6 s,
+  // at random moments) the bot weighs its chances. ---
+  const courage = courageOf(bot, params, world, p);
+  if (bot.fear !== undefined) {
+    const calm = distance > DAMAGE.repair.safeRange ? 4 : 1;
+    bot.fear = Math.max(0, bot.fear - p.fearDecayPerSecond * calm * thinkSeconds);
+    if (bot.fear === 0) delete bot.fear;
+  }
+  bot.weighLeft = (bot.weighLeft ?? 0) - thinkSeconds;
+  let weighNow = false;
+  if (bot.weighLeft <= 0) {
+    bot.weighLeft = p.weighMinSeconds + (p.weighMaxSeconds - p.weighMinSeconds) * nextRandom(world);
+    weighNow = true;
+  }
   // A deliberate ram (D45) runs until it hits, times out or the enemy gets away.
   if (bot.ramMemory !== undefined) {
     bot.ramMemory -= thinkSeconds;
@@ -617,7 +633,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.mode = 'engage';
     }
   }
-  const ramming = bot.mode === 'ram';
+  let ramming = bot.mode === 'ram';
   if (finishing) {
     bot.mode = 'finish';
   } else if (ramming) {
@@ -625,6 +641,12 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   } else if (bot.mode === 'port') {
     // In port (or on the way): stay until the port has done all it can, then hunt again.
     if (!port || hullShare >= DAMAGE.port.maxShare - 1e-6) startChase(bot, distance);
+  } else if (params.trader) {
+    // M3 step 7b: a trader sails its trade run; an enemy close by makes it decide: run (most do) or fight.
+    // Running, it keeps running until the enemy is traderSafeM away; then it mends (at sea or in a
+    // port, if hurt) or goes back to its run.
+    traderMode(world, bot, ship, enemy, distance, hullShare, courage, ports, p);
+    if ((bot.mode === 'flee' || bot.mode === 'repair') && port && port.distance <= p.portSeekRange && hullShare < DAMAGE.port.maxShare - 1e-6) bot.mode = 'port';
   } else {
     if (bot.mode === 'finish') bot.mode = 'chase';
     updateMode(bot, distance, thinkSeconds, p, hullShare);
@@ -679,6 +701,37 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     }
   }
 
+  // --- M3 step 7b: weigh the chances (every 3-6 s). ---
+  if (weighNow && !finishing && !waiting && !goIn) {
+    const o = odds(ship, enemy);
+    const fear = bot.fear ?? 0;
+    const running = bot.mode === 'flee' || bot.mode === 'repair' || bot.mode === 'breakOff' || (bot.mode === 'port' && distance < p.engageRange);
+    if ((bot.mode === 'engage' || bot.mode === 'chase') && distance < 1.5 * p.chaseAgainRange) {
+      // Fear above courage: it leaves. Hurt and outmatched: it may leave too (a roll).
+      const hurt = hullShare < 0.85 || crewShare(ship) < 0.85;
+      const reason = fear > courage ? 'fear' : hurt && o < p.leaveOdds && nextRandom(world) < p.leaveChance ? 'odds' : null;
+      if (reason) {
+        bot.mode = 'flee';
+        bot.side = null;
+        world.events.push({ type: 'botLeaves', shipId: id, enemyId: enemy.id, reason, fear, odds: o });
+      }
+    } else if (
+      running && !enemySafe && distance < p.desperateRangeM && enemy.speed > ship.speed + 0.5 && huntedBy(ship, enemy, distance, bot.weighDistance) &&
+      (hullShare < p.desperateHullShare || crewShare(ship) < p.desperateHullShare) && nextRandom(world) < p.desperateChance
+    ) {
+      // Caught: the enemy is faster and close, the ship is badly hurt. Running is hopeless: turn and ram.
+      bot.mode = 'ram';
+      bot.ramLeft = p.ramSeconds;
+      ramming = true;
+      world.events.push({ type: 'ramDecision', shipId: id, enemyId: enemy.id, go: true, distance, desperate: true });
+    }
+    // A running trader the enemy gains on throws its cargo over the side (faster without it).
+    if (params.trader && running && (ship.cargo ?? 0) > p.jettisonMinCargo && bot.weighDistance !== undefined && distance < bot.weighDistance - 5 && nextRandom(world) < p.jettisonChance) {
+      commands.push({ type: 'jettison', shipId: id });
+    }
+    bot.weighDistance = distance;
+  }
+
   // --- Course and sails. ---
   let goal: number;
   let sails: number;
@@ -699,6 +752,16 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     sails = course.sails;
     nearPort = course.nearPort;
     routed = bot.route !== undefined;
+  } else if (bot.mode === 'trade') {
+    // M3 step 7b: a trader's run from stop to stop (ports and big islands), at a cruising sail.
+    bot.side = null;
+    if (!bot.tradeTo || Math.hypot(bot.tradeTo.x - ship.x, bot.tradeTo.y - ship.y) < p.traderArriveM) {
+      const next = nextTradeStop(world, ship, tradeStopsFor(ship.shipClass, params, islands, p), p);
+      if (next) bot.tradeTo = next;
+      else delete bot.tradeTo;
+    }
+    goal = bot.tradeTo ? via(bot.tradeTo) : ship.headingRad;
+    sails = p.traderCruiseSails;
   } else if (bot.mode === 'idle') {
     // The enemy is in safe water: keep clear of the port and wait almost stopped.
     // (Out of a harbour up an inlet: out through the inlet, not straight at the shore.)
@@ -776,6 +839,12 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       sails = 1;
     }
   }
+  // M3 step 7b (headless arena: a sloop that had escaped into the Isla Verde harbour ground along the
+  // inlet's bank for minutes on its way out): inside a harbour up an inlet, whatever it is after, a
+  // bot first sails out through the inlet's mouth.
+  if (bot.mode !== 'port' && bot.mode !== 'idle' && !finishing && !ramming && nearest?.port.path && inHarbour(ship.x, ship.y, [nearest.port])) {
+    goal = via(portExit(nearest.port, ship, 150));
+  }
   if (!routed) delete bot.route; // a way planned earlier (for another goal) is not kept in the world state
   let steer = steerWithTacks(goal, params, world.wind, bot, p);
   // Beating along a shore (M3 step 6c): go about early when land is ahead on this tack.
@@ -817,12 +886,17 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // unless an offender is there to be shot at.
   // Ammunition (M3 step 4): grape at close range, chain at a faster enemy whose sails still draw,
   // round shot for everything else. Takes effect from the next think (the aim uses the loaded kind).
+  // A trader on its run (M3 step 7b) does not start a fight: its guns are for defence.
+  if (bot.mode === 'trade') return commands;
   const ammo = chooseAmmo(ship, params, enemy, distance, p, bot.rammer === true);
   if (ammo !== ammoOf(ship)) commands.push({ type: 'setAmmo', shipId: id, ammo });
   if (enemySafe && !goIn) return commands;
   const myPort = safePortIndex(ship.x, ship.y, ports);
   if (!goIn && myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
-  const side: Side = Math.abs(normalizeAngle(bearing - sideAngleRad(ship.headingRad, 'port'))) < Math.PI / 2 ? 'port' : 'starboard';
+  // The battery that faces the enemy best: a broadside, or (M3 step 7b) the stern chasers of a trader.
+  const batteries: Side[] = gunsOn(params, 'stern') > 0 ? ['port', 'starboard', 'stern'] : ['port', 'starboard'];
+  const facing = (s: Side): number => Math.cos(normalizeAngle(bearing - sideAngleRad(ship.headingRad, s)));
+  const side: Side = batteries.reduce((a, b) => (facing(b) > facing(a) ? b : a));
   const flight = predictLanding(ship, params, side, STEP_SECONDS).seconds;
   const target = aimPoint(ship, enemy, flight);
   // The enemy will be in safe water when the balls come down (it is just slipping into port):
@@ -842,15 +916,99 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     // The guns fire straight abeam, so fire only when the aim point lies close to that line.
     const offBeam = normalizeAngle(Math.atan2(target.y - ship.y, target.x - ship.x) - sideAngleRad(ship.headingRad, side));
     const ready = reloadLeft(ship, side) <= 0;
-    const inArc = Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
+    // The stern chasers can be trained a little: they fire at anything within sternArcDeg of dead astern.
+    const inArc = side === 'stern' ? Math.abs(offBeam) <= degToRad(p.sternArcDeg) : Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
     const onElevation = Math.abs(next - goalDeg) <= p.aimToleranceDeg;
-    if (ready && inArc && onElevation) {
-      commands.push({ type: 'fire', shipId: id, side });
+    // M3 step 7b: no shot into a hill or a cliff (the balls would stick in the land).
+    const clear = ready && inArc && onElevation ? shotClear(ship, target, next, islands) : true;
+    if (ready && inArc && onElevation && clear) {
+      commands.push(side === 'stern' ? { type: 'fire', shipId: id, side, trainDeg: radToDeg(offBeam) } : { type: 'fire', shipId: id, side });
       bot.quietSeconds = 0;
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }
   }
   return commands;
+}
+
+/**
+ * M3 step 7b: is this enemy hunting us? It is getting closer (since the last weighing) and its bow
+ * points at us (within 45 degrees). What any captain could see from his deck.
+ */
+function huntedBy(ship: ShipState, enemy: ShipState, distance: number, lastDistance: number | undefined): boolean {
+  if (lastDistance === undefined || distance > lastDistance - 3) return false;
+  const toUs = Math.atan2(ship.y - enemy.y, ship.x - enemy.x);
+  return Math.abs(normalizeAngle(toUs - enemy.headingRad)) < Math.PI / 4;
+}
+
+/**
+ * M3 step 7b: a trader's mode. With no enemy near (traderThreatM) it sails its trade run. An
+ * enemy near (another trader only if it has already frightened us): with courage enough and the
+ * odds in its favour it fights (a brave caravel), otherwise it runs. Badly hurt: it runs anyway.
+ */
+function traderMode(world: World, bot: BotState, ship: ShipState, enemy: ShipState, distance: number, hullShare: number, courage: number, ports: readonly Port[], p: BotParams): void {
+  if (bot.mode === 'flee' || bot.mode === 'repair') {
+    if (distance < p.traderSafeM) bot.mode = 'flee';
+    else if (hullShare < DAMAGE.repair.seaMaxShare - 1e-6) bot.mode = 'repair';
+    else bot.mode = 'trade';
+    return;
+  }
+  const ep = SHIP_CLASSES[enemy.shipClass];
+  const threat = distance < p.traderThreatM && !protectedByPort(enemy, ports) && !(ep?.trader && (bot.fear ?? 0) < 0.05);
+  if (!threat) {
+    bot.mode = 'trade';
+    return;
+  }
+  if (hullShare < p.fleeHullShare) {
+    bot.mode = 'flee';
+    bot.side = null;
+    return;
+  }
+  if (bot.mode === 'engage' || bot.mode === 'ram') return; // it has decided to fight
+  const o = odds(ship, enemy);
+  if (courage >= p.traderFightCourage && o >= 1) {
+    bot.mode = 'engage';
+    return;
+  }
+  bot.mode = 'flee';
+  bot.side = null;
+  world.events.push({ type: 'botLeaves', shipId: ship.id, enemyId: enemy.id, reason: 'trader', fear: bot.fear ?? 0, odds: o });
+}
+
+const tradeStopCache = new WeakMap<readonly Island[], Map<string, { x: number; y: number }[]>>();
+
+/** The stops of a trade run for this class on these islands (made once). */
+function tradeStopsFor(shipClass: string, params: ShipParams, islands: readonly Island[], p: BotParams): { x: number; y: number }[] {
+  let byClass = tradeStopCache.get(islands);
+  if (!byClass) {
+    byClass = new Map();
+    tradeStopCache.set(islands, byClass);
+  }
+  let stops = byClass.get(shipClass);
+  if (!stops) {
+    stops = tradeStops(params, islands, portsFor(portsCached(islands), params, p), p);
+    byClass.set(shipClass, stops);
+  }
+  return stops;
+}
+
+/**
+ * M3 step 7b: does a shot at this elevation clear the land on its way to `to`? The ball's path is
+ * taken as an arc from the gun (3 m) over the top (a quarter of the distance x tan(elevation))
+ * down to the water: a hill or a cliff higher than that on the way stops the shot.
+ */
+export function shotClear(ship: ShipState, to: Point, elevationDeg: number, islands: readonly Island[]): boolean {
+  const t = terrainFor(islands);
+  const dist = Math.hypot(to.x - ship.x, to.y - ship.y);
+  const apex = (dist * Math.tan(degToRad(elevationDeg))) / 4;
+  const steps = Math.max(1, Math.ceil(dist / (t.cellM / 2)));
+  for (let k = 1; k < steps; k++) {
+    const f = k / steps;
+    const z = GUNS.gunHeight * (1 - f) + 4 * apex * f * (1 - f);
+    const x = ship.x + (to.x - ship.x) * f;
+    const y = ship.y + (to.y - ship.y) * f;
+    if (ballBlocked(t, { x, y, z }, { x, y, z })) return false;
+  }
+  return true;
 }
 
 /**

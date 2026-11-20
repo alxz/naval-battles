@@ -25,7 +25,14 @@ import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
 import { predictLanding, reloadLeft } from '../sim/guns';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
-import { createWorld, enemiesFor } from '../sim/world';
+import { battleClasses, createWorld, enemiesFor } from '../sim/world';
+import worldJson from '../data/world.json';
+
+/** M3 step 7d: a trader this far from you has got away (the battle can end without it). */
+const TRADER_GONE_M = 1500;
+
+/** M3 step 7d (D41 numbers): how far you can tell a ship's flag and its state in a battle. */
+const SIGHT = { flagSightM: worldJson.flagSightM, detailFullM: worldJson.detailFullM, detailHullM: worldJson.detailHullM };
 import { autoZoom } from '../view/autoZoom';
 import { discover, newChart, updateSightings } from '../view/chart';
 import { hudLayout, touchButtonRects } from '../view/hudLayout';
@@ -56,7 +63,7 @@ import { TurnDevice } from './TurnDevice';
 import { isPortraitTouch } from '../view/pixelLayout';
 import { arenaResults } from '../view/arenaResults';
 import { createArenaWorld } from '../sim/arena';
-import { ArenaLog, clock, headerLines, placeText } from '../view/arenaLog';
+import { ArenaLog, clock, headerLines, placeText, who } from '../view/arenaLog';
 
 const PLAYER_ID = 1;
 const TARGET_ID = 2;
@@ -69,6 +76,7 @@ type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' |
 const ARENA_SPEEDS = [1, 2, 4, 8];
 const FREE_VIEW_PX_PER_SECOND = 500;
 const ARENA_LOG_KEY = 'naval-arena-log';
+const BATTLE_LOG_KEY = 'naval-battle-log';
 /** The arena: the pointer must move this far (logical px) before the view leaves the ships. */
 const DRAG_START_PX = 8;
 
@@ -158,6 +166,9 @@ export class SeaScene extends Phaser.Scene {
   private arenaHud!: ArenaHud;
   private arenaLog = new ArenaLog();
   private arenaStartedAt = '';
+  private battleLog = new ArenaLog(); // M3 step 7d: the log of a battle against bots
+  private battleStartedAt = '';
+  private battleModes = new Map<number, string>();
   private arenaModes = new Map<number, string>(); // the last bot mode written to the log
   private logSaveSeconds = 0;
 
@@ -250,7 +261,7 @@ export class SeaScene extends Phaser.Scene {
     });
     this.chart = new Chart(this, isTouch, () => this.chart.setOpen(false));
     this.minimap = new Minimap(this, isTouch, () => this.chart.setOpen(!this.chart.isOpen()));
-    this.banner = new Banner(this, () => this.restart()); // last: drawn on top of everything
+    this.banner = new Banner(this, () => this.restart(), () => this.downloadLog()); // last: drawn on top of everything
     this.turnDevice = new TurnDevice(this);
     this.arenaResults = new ArenaResults(
       this,
@@ -289,6 +300,7 @@ export class SeaScene extends Phaser.Scene {
         fog: true,
         shipBars: true,
         enemyCount: 0,
+        botClasses: 'mix',
         sound: true,
         volume: 0.7,
         screenShake: true,
@@ -390,15 +402,26 @@ export class SeaScene extends Phaser.Scene {
       const sh = ships[i];
       return !this.arena && sh && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
     };
-    // The arena (D47): sails and crew bars and a (random) flag over every ship.
-    const flag = (i: number): Nation | null => (this.arena && ships[i] ? nationFor(this.arenaSeed, ships[i]!.id) : null);
-    this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag);
+    // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41
+    // numbers): the flag up to flagSightM from your ship, the hull bar up to detailHullM, sails and
+    // crew up to detailFullM; farther than that you cannot tell.
+    const viewer = ships[this.focusIndex];
+    const range = (i: number): number => (viewer && ships[i] ? Math.hypot(ships[i]!.x - viewer.x, ships[i]!.y - viewer.y) : Infinity);
+    const nationOf = (i: number): Nation => (ships[i]!.nation as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
+    const flag = (i: number): Nation | null => (!ships[i] ? null : this.arena || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
+    const detail = (i: number): 0 | 1 | 2 => {
+      if (this.arena) return 2;
+      const d = range(i);
+      return d <= SIGHT.detailFullM ? 2 : d <= SIGHT.detailHullM ? 1 : 0;
+    };
+    this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag, detail);
     this.islands.update(s);
     const watched = this.sim.world.ships[this.focusIndex];
     this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);
     this.fog.update(seconds, this.sim.world.wind, s, v.fog);
     const events = this.sim.takeEvents();
     if (this.arena) this.recordArena(events, seconds);
+    else if (this.started) this.recordBattle(events);
     for (const e of events) {
       if (this.arena) break; // the battle counters are for your own ship only
       if (e.type === 'gunFired' && e.shipId === PLAYER_ID) this.ballsFired++;
@@ -564,8 +587,12 @@ export class SeaScene extends Phaser.Scene {
     }
     const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
     if (myShip.sunk) this.banner.request('lose', this.sunkBy < 0 ? 'Sunk by the shore guns' : `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
-    else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk)) {
-      this.banner.request('win', foes.length === 1 ? `Enemy ${foes[0]?.shipClass ?? 'ship'} sunk` : `All ${foes.length} enemies sunk`, this.duelStats());
+    else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk || this.traderGone(sh, myShip))) {
+      // M3 step 7d: a trader that got clean away (beyond TRADER_GONE_M) does not keep the battle going.
+      const sunk = foes.filter((sh) => sh.sunk).length;
+      const gone = foes.length - sunk;
+      const line = gone > 0 ? `${sunk} sunk, ${gone} trader${gone > 1 ? 's' : ''} got away` : foes.length === 1 ? `Enemy ${foes[0]?.shipClass ?? 'ship'} sunk` : `All ${foes.length} enemies sunk`;
+      this.banner.request('win', line, this.duelStats());
     }
     this.banner.update(seconds, this.touch !== null);
     if (this.banner.isShown() && Phaser.Input.Keyboard.JustDown(this.enterKey)) this.restart();
@@ -621,6 +648,8 @@ export class SeaScene extends Phaser.Scene {
 
     // H shows or hides the debug text (keys and all the numbers).
     if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
+    // L saves the battle log (M3 step 7d), as in the arena.
+    if (Phaser.Input.Keyboard.JustDown(this.keys.L)) this.downloadLog();
 
     // Zoom is only about the picture, so it does not go through the simulation.
     if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.stepManualZoom(1);
@@ -751,6 +780,9 @@ export class SeaScene extends Phaser.Scene {
         case 'splash':
           this.sounds.play('splash', e.x, e.y, ear, halfWidthM, 0.35, 250);
           break;
+        case 'landHit':
+          this.sounds.play('hit_wood', e.x, e.y, ear, halfWidthM, 0.3, 250);
+          break;
         case 'hit': {
           // Hits on your own ship are right under your ear, so they are played softer (your feedback, 15 Nov).
           const own = e.shipId === me?.id ? 0.55 : 1;
@@ -825,7 +857,10 @@ export class SeaScene extends Phaser.Scene {
     const last = this.started ? this.ship(PLAYER_ID) : undefined;
     const botMode = v.targetBehaviour === 'bot';
     const seed = (Date.now() & 0x7fffffff) || 1;
+    this.storeBattleLog(); // the battle that just ended stays downloadable (L) until the next one ends
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
+    // M3 step 7d: the classes of the bots (the panel's "bot classes": a mix, or one class for all).
+    const classes = battleClasses(seed, this.sim.world.ships.length - 1, botMode ? v.botClasses : v.targetClass);
     this.sim.tuning.speedScale = v.speedScale;
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(v.windFromBearingDeg), strength: v.windStrength });
@@ -840,8 +875,8 @@ export class SeaScene extends Phaser.Scene {
       const here = last ?? me;
       if (botMode) {
         const placed: ShipState[] = [{ ...me, x: here.x, y: here.y }];
-        for (const bot of world.ships.slice(1)) {
-          const shipClass = bot.id === TARGET_ID ? v.targetClass : 'sloop';
+        for (const [k, bot] of world.ships.slice(1).entries()) {
+          const shipClass = classes[k] ?? 'sloop';
           const spot = openWaterSpot(world, ISLANDS, here, BOT_SPAWN_MIN, BOT_SPAWN_MAX, SHIP_CLASSES[shipClass] ?? sloop, placed);
           if (!spot) continue;
           placed.push({ ...bot, x: spot.x, y: spot.y });
@@ -866,6 +901,46 @@ export class SeaScene extends Phaser.Scene {
     this.banner.hide();
     this.hitFlash = [];
     this.chartState.sightings = []; // a new duel: the islands you know stay on the chart, the old ship marks go
+    this.startBattleLog(seed);
+  }
+
+  /** M3 step 7d: a trader that ran farther than TRADER_GONE_M from you is out of the battle. */
+  private traderGone(ship: ShipState, me: ShipState): boolean {
+    return SHIP_CLASSES[ship.shipClass]?.trader === true && Math.hypot(ship.x - me.x, ship.y - me.y) > TRADER_GONE_M;
+  }
+
+  /** M3 step 7d: a new battle log (you against bots), like the arena's. */
+  private startBattleLog(seed: number): void {
+    this.battleLog = new ArenaLog();
+    this.battleStartedAt = new Date().toLocaleString();
+    this.battleModes.clear();
+    const world = this.sim.world;
+    for (const line of headerLines(world, seed)) this.battleLog.add(0, line);
+    this.battleLog.add(0, `battle with ${world.ships.length - 1} bots (seed ${seed}); you sail under the black flag:`);
+    for (const ship of world.ships) {
+      this.battleLog.add(0, `   ${who(world, ship.id)}${ship.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship.x, ship.y)}`);
+    }
+  }
+
+  /** Keep the last battle's log in the browser (it can come back empty: private windows, cleared data). */
+  private storeBattleLog(): void {
+    if (!this.started || this.battleLog.size === 0) return;
+    try {
+      localStorage.setItem(BATTLE_LOG_KEY, this.battleLog.text(this.sim.world, this.battleStartedAt));
+    } catch {
+      // no storage here: the download still works while the battle lasts
+    }
+  }
+
+  /** M3 step 7d: this frame's battle events into the battle log, and a line when a bot changes its mind. */
+  private recordBattle(events: readonly SimEvent[]): void {
+    const world = this.sim.world;
+    this.battleLog.record(world, events);
+    for (const bot of world.bots) {
+      if (this.battleModes.get(bot.shipId) === bot.mode) continue;
+      this.battleModes.set(bot.shipId, bot.mode);
+      this.battleLog.modeChanged(world, bot.shipId, bot.mode);
+    }
   }
 
   /** One picture per ship of the world (the number of ships can change between duels). */
@@ -1088,10 +1163,12 @@ export class SeaScene extends Phaser.Scene {
   /** The log as a text file: naval-arena-log-2026-11-16-1830.txt */
   private downloadLog(): void {
     const world = this.sim.world;
-    const text = world.arena ? this.arenaLog.text(world, this.arenaStartedAt) : (safeRead(ARENA_LOG_KEY) ?? 'No arena log yet: start the auto-bot arena first.\n');
+    // M3 step 7d: in a battle against bots, the battle's own log.
+    const battle = !world.arena;
+    const text = !battle ? this.arenaLog.text(world, this.arenaStartedAt) : this.battleLog.size > 0 ? this.battleLog.text(world, this.battleStartedAt) : (safeRead(BATTLE_LOG_KEY) ?? 'No battle log yet.\n');
     const d = new Date();
     const two = (n: number): string => String(n).padStart(2, '0');
-    const name = `naval-arena-log-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}.txt`;
+    const name = `naval-${battle ? 'battle' : 'arena'}-log-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}.txt`;
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
     const a = document.createElement('a');
     a.href = url;

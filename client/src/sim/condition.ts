@@ -137,4 +137,5 @@ export function refitShip(ship: ShipState): void {
   delete ship.ammo;
   delete ship.ammoLeft;
   delete ship.cargo; // a new ship comes with a new load (the arena rolls it again)
+  delete ship.reloadStern;
 }

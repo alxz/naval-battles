@@ -46,7 +46,7 @@
     "speedTimeConstant": 7,
     "turnRate": 0.55,
     "minSteerShare": 0.3,
-    "gunsPerSide": 4,
+    "gunsPerSide": 2,
     "reloadSeconds": 16,
     "hullPoints": 400,
     "hullHeight": 9.0,
@@ -57,7 +57,9 @@
     "sailPoints": 130,
     "cargoMin": 0.2,
     "cargoMax": 0.6,
-    "ladenSlowdown": 0.1
+    "ladenSlowdown": 0.1,
+    "sternGuns": 2,
+    "trader": true
   },
   "fluyt": {
     "name": "Fluyt",
@@ -80,7 +82,9 @@
     "sailPoints": 170,
     "cargoMin": 0.3,
     "cargoMax": 1.0,
-    "ladenSlowdown": 0.15
+    "ladenSlowdown": 0.15,
+    "sternGuns": 2,
+    "trader": true
   },
   "frigate": {
     "name": "Frigate",

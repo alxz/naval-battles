@@ -20,12 +20,14 @@ export class Banner {
   private readonly stats: Phaser.GameObjects.Text;
   private readonly button: Phaser.GameObjects.Text;
   private readonly hit: Phaser.GameObjects.Zone;
+  private readonly logButton: Phaser.GameObjects.Text; // M3 step 7d: save the battle log
+  private readonly logHit: Phaser.GameObjects.Zone;
   private kind: BannerKind | null = null;
   private wait = 0;
   private width = 640;
   private height = 360;
 
-  constructor(scene: Phaser.Scene, onAgain: () => void) {
+  constructor(scene: Phaser.Scene, onAgain: () => void, onLog: () => void = () => {}) {
     // Drawn above the HUD; text after the plate (see the note about Text after Graphics in RangeRings.ts).
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(130);
     const text = (kind: TextKind, colour: string): Phaser.GameObjects.Text =>
@@ -37,6 +39,11 @@ export class Banner {
     this.hit = scene.add.zone(0, 0, 10, 10).setScrollFactor(0).setDepth(132).setInteractive();
     this.hit.on('pointerdown', () => {
       if (this.isShown()) onAgain();
+    });
+    this.logButton = text('main', '#1b1b1b').setText('SAVE LOG');
+    this.logHit = scene.add.zone(0, 0, 10, 10).setScrollFactor(0).setDepth(132).setInteractive();
+    this.logHit.on('pointerdown', () => {
+      if (this.isShown()) onLog();
     });
     this.hide();
   }
@@ -60,8 +67,9 @@ export class Banner {
   hide(): void {
     this.kind = null;
     this.g.clear();
-    for (const o of [this.title, this.line, this.stats, this.button]) o.setVisible(false);
+    for (const o of [this.title, this.line, this.stats, this.button, this.logButton]) o.setVisible(false);
     this.hit.disableInteractive();
+    this.logHit.disableInteractive();
   }
 
   isShown(): boolean {
@@ -82,19 +90,29 @@ export class Banner {
     g.fillRoundedRect(x, y, w, h, 10);
     g.lineStyle(1, this.kind === 'win' ? 0xffe066 : 0xff8070, 0.8);
     g.strokeRoundedRect(x + 0.5, y + 0.5, w - 1, h - 1, 10);
+    // Two buttons side by side: SAIL AGAIN and (M3 step 7d) SAVE LOG.
     const bw = 168;
+    const lw = 96;
+    const gap = 8;
     const bh = 20;
-    const bx = Math.round(this.width / 2 - bw / 2);
+    const bx = Math.round(this.width / 2 - (bw + gap + lw) / 2);
+    const lx = bx + bw + gap;
     const by = y + h - bh - 12;
     g.fillStyle(0xffe066, 1);
     g.fillRoundedRect(bx, by, bw, bh, 6);
+    g.fillStyle(0xcfe6f7, 1);
+    g.fillRoundedRect(lx, by, lw, bh, 6);
     const cx = Math.round(this.width / 2);
     this.title.setPosition(cx, y + 14).setVisible(true);
     this.line.setPosition(cx, y + 42).setVisible(true);
     this.stats.setPosition(cx, y + 58).setVisible(true);
-    this.button.setText(touch ? 'SAIL AGAIN' : 'SAIL AGAIN (Enter)').setPosition(cx, by + 6).setVisible(true);
+    this.button.setText(touch ? 'SAIL AGAIN' : 'SAIL AGAIN (Enter)').setPosition(bx + bw / 2, by + 6).setVisible(true);
     this.hit.setPosition(bx + bw / 2, by + bh / 2).setSize(bw, bh);
     if (!this.hit.input?.enabled) this.hit.setInteractive();
     this.hit.input?.hitArea.setTo(0, 0, bw, bh);
+    this.logButton.setPosition(lx + lw / 2, by + 6).setVisible(true);
+    this.logHit.setPosition(lx + lw / 2, by + bh / 2).setSize(lw, bh);
+    if (!this.logHit.input?.enabled) this.logHit.setInteractive();
+    this.logHit.input?.hitArea.setTo(0, 0, lw, bh);
   }
 }

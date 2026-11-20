@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
 import { GUNS } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
-import type { ShipState, Side, Wind } from '../sim/types';
+import type { ShipState, Wind } from '../sim/types';
 import { HUD_MARGIN, TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
 import type { HudLayout, Rect } from '../view/hudLayout';
 import { Compass } from './Compass';
@@ -99,7 +99,7 @@ export class Hud {
   private readonly targetText: Phaser.GameObjects.Text;
   private readonly elevation: Phaser.GameObjects.Text;
   private readonly range: Phaser.GameObjects.Text;
-  private readonly sideText: Record<Side, Phaser.GameObjects.Text>;
+  private readonly sideText: Record<'port' | 'starboard', Phaser.GameObjects.Text>;
   private readonly keyHints: Phaser.GameObjects.Text[] = [];
   private readonly gunIcons: Phaser.GameObjects.Image[] = [];
   private readonly soundIcon: Phaser.GameObjects.Image;
@@ -434,7 +434,7 @@ export class Hud {
    * One broadside: a yellow disc with the key when loaded; while reloading, a dark disc
    * whose grey pie fills up, with the seconds left.
    */
-  private side(g: Phaser.GameObjects.Graphics, side: Side, x: number, y: number, left: number, d: HudData): void {
+  private side(g: Phaser.GameObjects.Graphics, side: 'port' | 'starboard', x: number, y: number, left: number, d: HudData): void {
     const r = 12;
     const text = this.sideText[side];
     const key = this.touch ? (side === 'port' ? 'L' : 'R') : side === 'port' ? 'Q' : 'E';

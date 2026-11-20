@@ -5,5 +5,22 @@
   "maxY": 2000,
   "reefWidth": 60,
   "enemiesMin": 3,
-  "enemiesMax": 5
+  "enemiesMax": 5,
+  "enemyClassWeights": {
+    "sloop": 3,
+    "brigantine": 2,
+    "caravel": 2,
+    "fluyt": 2,
+    "frigate": 1
+  },
+  "detailFullM": 200,
+  "detailHullM": 450,
+  "flagSightM": 400,
+  "terrain": {
+    "cellM": 10,
+    "slope": 0.3,
+    "maxM": 40,
+    "beachM": 2,
+    "lowM": 1.5
+  }
 }

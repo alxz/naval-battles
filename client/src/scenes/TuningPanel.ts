@@ -29,6 +29,7 @@ export interface TuningValues {
   fog: boolean; // drifting fog banks
   shipBars: boolean; // a small hull bar over every ship
   enemyCount: number; // how many bots fight you (1-5; 0 = random 3-5); used when a battle starts
+  botClasses: string; // M3 step 7d: the classes of the next battle's bots: 'mix' or one class for all
   sound: boolean; // sound effects on / off (M on a computer)
   volume: number; // 0..1
   screenShake: boolean; // shake the view when your ship is hit or fires
@@ -158,10 +159,11 @@ export class TuningPanel {
       .name('behaviour')
       .onChange(() => callbacks.onTargetBehaviour());
     target.add(v, 'enemyCount', 0, 5, 1).name('bots (0 = 3-5 random)');
+    target.add(v, 'botClasses', ['mix', ...Object.keys(SHIP_CLASSES)]).name('bot classes (next battle)');
     target.add({ restart: () => callbacks.onRestart() }, 'restart').name('restart battle');
     target
       .add(v, 'targetClass', Object.keys(SHIP_CLASSES))
-      .name('class')
+      .name('class of ship 2 (now)')
       .onChange(() => callbacks.onTargetClass());
     const place = {
       at100: () => callbacks.onPlaceTarget(100),

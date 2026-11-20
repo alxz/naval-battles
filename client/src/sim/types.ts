@@ -26,6 +26,8 @@ export interface ShipParams {
   cargoMin?: number; // M3 step 7a, traders: the hold is this full (0..1) at the least when she comes to sea ...
   cargoMax?: number; // ... and at the most
   ladenSlowdown?: number; // a full hold takes this share off her speed (0.15 = 15%)
+  sternGuns?: number; // M3 step 7b: stern chasers firing astern (absent = none)
+  trader?: boolean; // M3 step 7b: a merchant: sails a trade run, runs from enemies, gets more for reaching port alive
 }
 
 /** Gun and ball numbers for every ship. Loaded from `data/guns.json` (plan 4.4). */
@@ -63,7 +65,8 @@ export interface AmmoParams {
 }
 
 /** Port = left side looking forward, starboard = right side. */
-export type Side = 'port' | 'starboard';
+/** A battery: the two broadsides, and (M3 step 7b) the stern chasers that fire astern. */
+export type Side = 'port' | 'starboard' | 'stern';
 
 /** A cannonball in flight. z is the height above the water. */
 export interface Ball {
@@ -90,6 +93,7 @@ export interface PendingShot {
   tick: number; // fires at the start of this step
   salvoErrorDeg: number; // the roll error of this broadside: the same for every gun in it
   ammo: AmmoType; // what the broadside was loaded with when it was ordered
+  trainDeg?: number; // M3 step 7b: the stern chasers trained this far off dead astern (+ = clockwise)
 }
 
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
@@ -107,13 +111,16 @@ export type SimEvent =
   // The auto-bot arena (sim/arena.ts):
   | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
   | { type: 'respawn'; shipId: number; x: number; y: number }
-  | { type: 'escaped'; shipId: number; byShipId: number; how: 'port' | 'away' } // M3 step 7a (arena): hurt, and got away alive
+  | { type: 'escaped'; shipId: number; byShipId: number; how: 'port' | 'away'; points?: number } // M3 step 7a (arena): hurt, and got away alive; 7b: the points it earned
+  | { type: 'botLeaves'; shipId: number; enemyId: number; reason: 'fear' | 'odds' | 'trader'; fear: number; odds: number } // M3 step 7b: a bot leaves a fight early
+  | { type: 'jettison'; shipId: number; cargo: number } // M3 step 7b: cargo over the side
+  | { type: 'landHit'; x: number; y: number; z: number } // M3 step 7b: a ball struck the land (a hill, a cliff)
   | { type: 'peace'; totalWins: number }
   // Bots (M3 step 4c / 5): for the arena log.
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
-  | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number }
+  | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
@@ -143,6 +150,8 @@ export interface ShipState {
   elevationDeg: number; // gun elevation, 0 .. maxElevationDeg
   reloadPort: number; // seconds until the port battery is ready (0 = ready)
   reloadStarboard: number;
+  reloadStern?: number; // M3 step 7b: seconds until the stern chasers are ready (absent = ready)
+  nation?: string; // M3 step 7b: the flag it sails under (view/flags.ts nations); 'pirates' frightens traders more
   hull: number; // hull points left
   sunk: boolean; // a sunk ship stays in the list (for the picture) but takes no part any more
   battleSkill: number; // the captain's Battle skill 0..10 (plan 4.4 and 4.7); 4 for everyone until captains come (M6)
@@ -267,6 +276,7 @@ export interface Pilot {
   hullHits: number; // balls of its own that hit an enemy hull
   sinceSeconds: number; // how long its present ship has been afloat
   escapes?: number; // M3 step 7a: times it was shot at, hurt, and got away alive (half a win each)
+  escapePoints?: number; // M3 step 7b: what those escapes are worth (traders: 1 into port, 0.25 at sea)
 }
 
 export interface ArenaState {
@@ -282,13 +292,14 @@ export interface ArenaState {
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
-export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish' | 'ram';
+export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish' | 'ram' | 'trade';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
 export interface BotPersonality {
   preferredRange: number; // metres it likes for a broadside fight
   patienceSeconds: number; // how long it chases without gaining before it gives up
   aimErrorSigmaDeg: number; // how well it judges the elevation (smaller = better gunner)
+  courage?: number; // M3 step 7b: 0..1; it leaves a fight when its fear grows above this (absent = 0.7)
 }
 
 /**
@@ -320,6 +331,11 @@ export interface BotState {
   route?: { goalX: number; goalY: number; points: { x: number; y: number }[]; ageSeconds: number }; // its way round the land (sim/path.ts)
   quietSeconds?: number; // seconds in a fight without firing a broadside (then it closes in)
   rammer?: boolean; // it has rammed an enemy on purpose and hit: now it likes the tactic (chain, grape, ram)
+  // --- M3 step 7b: crew spirit and running ---
+  fear?: number; // grows with hits, men lost and near misses (more under a black flag), fades slowly
+  weighLeft?: number; // seconds until it weighs its chances again (3-6 s, random)
+  weighDistance?: number; // the enemy's distance at the last weighing (is it gaining on us?)
+  tradeTo?: { x: number; y: number }; // a trader's next stop on its trade run
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -398,6 +414,34 @@ export interface BotParams {
   rammerRangeM: number; // a rammer fights closer (its preferred range at most this)
   rammerGrapeM: number; // a rammer loads grape closer than this
   harbourSpeedMps: number; // M3 step 6d: in a harbour a bot sets its sails for at most this speed
+  // --- M3 step 7b: crew spirit and running ---
+  courageMin: number; // a warship's courage is drawn between these ...
+  courageMax: number;
+  traderCourageMin: number; // ... a trader's between these (much lower)
+  traderCourageMax: number;
+  fearPerHullShare: number; // fear from a hit: x the share of the full hull it took
+  fearPerCrewShare: number; // fear from men lost: x the share of the full crew
+  fearNearMiss: number; // fear from a ball splashing within nearMissM (a warning shot does the same)
+  nearMissM: number;
+  fearNearMissWarship: number; // ... a warship's crew is used to it: much less
+  traderSafeM: number; // a running trader keeps running until the enemy is this far
+  blackFlagFear: number; // fear from a pirate (black flag) is multiplied by this
+  fearDecayPerSecond: number; // fear fades this much a second
+  weighMinSeconds: number; // it weighs its chances every weighMin..weighMax seconds (random)
+  weighMaxSeconds: number;
+  leaveOdds: number; // our strength / theirs below this: it may leave the fight ...
+  leaveChance: number; // ... with this chance at each weighing
+  desperateRangeM: number; // running, caught (the enemy is faster) and this close: ...
+  desperateChance: number; // ... it may turn and ram in despair (chance per weighing) ...
+  desperateHullShare: number; // ... when its hull or crew is below this share
+  jettisonChance: number; // a running trader the enemy gains on throws its cargo over the side (chance per weighing)
+  jettisonMinCargo: number;
+  traderThreatM: number; // an enemy this close makes a trader decide: run (most) or fight
+  traderFightCourage: number; // a trader fights only with at least this courage and the odds in its favour
+  traderArriveM: number; // a stop of the trade run is reached this close
+  traderCruiseSails: number; // sails set on the trade run
+  traderIslandOffsetM: number; // a stop off a big island lies this far off its shore
+  sternArcDeg: number; // the stern chasers fire at an enemy within this angle of dead astern
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
   rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach
 }
@@ -419,7 +463,8 @@ export type Command =
   // Test setup now (lil-gui); later sea events can change the wind the same way.
   | { type: 'setWind'; fromRad: number; strength: number }
   | { type: 'setElevation'; shipId: number; valueDeg: number }
-  | { type: 'fire'; shipId: number; side: Side }
+  | { type: 'fire'; shipId: number; side: Side; trainDeg?: number } // trainDeg: stern chasers only (M3 step 7b)
+  | { type: 'jettison'; shipId: number } // M3 step 7b: throw the cargo over the side (faster)
   // Load the next broadsides with this kind of ammunition (keys 1 / 2 / 3).
   | { type: 'setAmmo'; shipId: number; ammo: AmmoType }
   // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).

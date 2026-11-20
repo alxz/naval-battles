@@ -425,6 +425,11 @@ What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b),
 - **M6:** skills that grow with time, for bots as for you.
 - History notes behind D52: Atlantic merchant ships of the late 17th century were mostly small; pirates carried 2–3 times more men per ton than merchants; a fluyt could be sailed by 10–12 men; caravels had mostly gone out of use by our period (we keep one as an old-fashioned trader); merchant crews often surrendered without a fight, and an English law of 1721 punished those who did not defend their ship.
 
+## 13. Ideas of 19 Nov (late): fire, islands
+
+- **Setting a ship on fire** (developer's idea). History: heated shot (balls heated red in a furnace, mostly from shore batteries), fire pots and fireships (an old ship filled with tar and powder, sailed into an enemy fleet). First version, simple: a hit has a small chance to start a fire (more for heated shot from shore guns); a fire burns hull and sails each second until the crew puts it out (the more men, the faster); a fire near the powder can blow the ship up. Bots fear a burning ship nearby. Later: fireships as a tactic; fire spreads to ships alongside. Suggested: after M4 (it needs crew work and morale), a small step of its own.
+- **Islands with more objects** (developer's idea): rocks, cliffs, forts, villages, wrecks on the shore, lighthouses, palm groves; tall ones (cliffs, forts, a church) as terrain heights that stop balls (D56). Suggested: with the new map in M3b, where islands are drawn from the mockup.
+
 ## History
 
 | Date | What |
@@ -433,3 +438,4 @@ What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b),
 | 17 Nov 2026 (late) | The developer's answers: a 12-minute day (D42), perception as M4b (D41), item 10 (surrender, breaking a contract); detailed plans for M4b and day and night (sections 8–10) |
 | 18 Nov 2026 | Ideas from the test of step 4 (section 11): finishing shot, port capacity, detail by distance, flags, damage pictures, island placement |
 | 19 Nov 2026 | Section 12: traders, fear, squadrons, skills; staged by D52–D54 |
+| 19 Nov 2026 (late) | Section 13: fire, island objects |

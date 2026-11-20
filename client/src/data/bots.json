@@ -40,11 +40,26 @@
   "stuckMoveM": 15,
   "unstickSeconds": 8,
   "finishHitChance": [
-    [50, 0.8],
-    [100, 0.45],
-    [150, 0.3],
-    [200, 0.22],
-    [250, 0.1]
+    [
+      50,
+      0.8
+    ],
+    [
+      100,
+      0.45
+    ],
+    [
+      150,
+      0.3
+    ],
+    [
+      200,
+      0.22
+    ],
+    [
+      250,
+      0.1
+    ]
   ],
   "finishMargin": 1.0,
   "finishChance": 0.7,
@@ -76,5 +91,32 @@
   "rammerGrapeM": 80,
   "rammerChainShare": 0.95,
   "harbourLengthShare": 0.7,
-  "harbourSpeedMps": 4
+  "harbourSpeedMps": 4,
+  "courageMin": 0.45,
+  "courageMax": 0.95,
+  "traderCourageMin": 0.1,
+  "traderCourageMax": 0.6,
+  "fearPerHullShare": 1.2,
+  "fearPerCrewShare": 1.0,
+  "fearNearMiss": 0.02,
+  "nearMissM": 40,
+  "blackFlagFear": 1.5,
+  "fearDecayPerSecond": 0.006,
+  "weighMinSeconds": 3,
+  "weighMaxSeconds": 6,
+  "leaveOdds": 0.45,
+  "leaveChance": 0.35,
+  "desperateRangeM": 200,
+  "desperateChance": 0.15,
+  "desperateHullShare": 0.4,
+  "jettisonChance": 0.5,
+  "jettisonMinCargo": 0.05,
+  "traderThreatM": 700,
+  "traderFightCourage": 0.5,
+  "traderArriveM": 300,
+  "traderCruiseSails": 0.85,
+  "traderIslandOffsetM": 250,
+  "sternArcDeg": 30,
+  "fearNearMissWarship": 0.004,
+  "traderSafeM": 900
 }

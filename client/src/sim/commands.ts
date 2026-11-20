@@ -1,6 +1,7 @@
 import { onBroadsideFired } from './law';
 import { normalizeAngle } from './angles';
-import { refitShip } from './condition';
+import { refitShip, rollCargo } from './condition';
+import { nextRandom } from './random';
 import { AMMO, GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { newBot } from './bot';
 import { orderBroadside } from './guns';
@@ -58,6 +59,9 @@ export function applyCommand(world: World, command: Command): void {
       ship.sunk = false;
       ship.offender = undefined;
       refitShip(ship);
+      // A trader (M3 step 7b) comes with a load in its hold.
+      const load = SHIP_CLASSES[ship.shipClass]?.cargoMax !== undefined ? rollCargo(SHIP_CLASSES[ship.shipClass]!, nextRandom(world)) : undefined;
+      if (load !== undefined) ship.cargo = load;
       break;
     }
     case 'setElevation':
@@ -68,7 +72,14 @@ export function applyCommand(world: World, command: Command): void {
       break;
     case 'fire':
       // Port law (D40): firing in a port's safe water is allowed, but it has its price (sim/law.ts).
-      if (orderBroadside(world, ship, command.side, STEP_SECONDS)) onBroadsideFired(world, ship);
+      if (orderBroadside(world, ship, command.side, STEP_SECONDS, undefined, command.trainDeg ?? 0)) onBroadsideFired(world, ship);
+      break;
+    case 'jettison':
+      // M3 step 7b: a trader throws its cargo over the side to run faster (the hold is empty afterwards).
+      if ((ship.cargo ?? 0) > 0) {
+        world.events.push({ type: 'jettison', shipId: ship.id, cargo: ship.cargo ?? 0 });
+        ship.cargo = 0;
+      }
       break;
   }
 }

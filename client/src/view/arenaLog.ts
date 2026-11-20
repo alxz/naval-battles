@@ -10,9 +10,13 @@ import { BOTS, DAMAGE, GUNS, ISLANDS, SHIP_CLASSES, SHORE, WIND, WORLD } from '.
 import { distanceToLand, touchesLand } from '../sim/land';
 import { nearestPort, PORTS } from '../sim/port';
 import type { ArenaState, ShipState, SimEvent, World } from '../sim/types';
+import { battleName } from './wanted';
+
+/** Your ship in a battle against bots (the log names it YOU). */
+export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 7a (fluyt and caravel, sailing crew, cargo, half a win for getting away) after 6e, 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 7b (crew spirit, traders run, stern chasers, land stops balls) + 7d (battle: classes, bars, flags, log) after 7a, 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -82,7 +86,10 @@ export function who(world: World, shipId: number): string {
   if (shipId < 0) return `the shore guns of ${PORTS[-shipId - 1]?.name ?? 'a port'}`;
   const pilot = world.arena?.pilots.find((p) => p.shipId === shipId);
   const ship = world.ships.find((s) => s.id === shipId);
-  return pilot ? `#${pilot.number} ${pilot.name} (${ship?.shipClass ?? '?'})` : `ship ${shipId}`;
+  if (pilot) return `#${pilot.number} ${pilot.name} (${ship?.shipClass ?? '?'})`;
+  // M3 step 7d: a battle against bots has no names: YOU, or the class and number.
+  if (!world.arena && ship) return ship.id === BATTLE_PLAYER_ID ? `YOU (${ship.shipClass})` : `${battleName(ship, BATTLE_PLAYER_ID)}${ship.nation ? ` [${ship.nation}]` : ''}`;
+  return `ship ${shipId}`;
 }
 
 /** The score table, best first. */
@@ -123,6 +130,16 @@ export class ArenaLog {
   private sailsTorn = 0;
   private collisionDamage = 0;
   private warnings = 0;
+  // M3 step 7b
+  private leaves: Record<string, number> = { fear: 0, odds: 0, trader: 0 };
+  private jettisons = 0;
+  private desperateRams = 0;
+  private sternSalvos = 0;
+  private landHits = 0;
+  private escapePoints = 0;
+  // M3 step 7d (a battle against bots): balls and hull hits per ship, and the result
+  private shots = new Map<number, { balls: number; hits: number; hullLost: number }>();
+  private sunkShips: string[] = [];
 
 
   constructor(max = LOG_MAX_LINES) {
@@ -161,20 +178,31 @@ export class ArenaLog {
   record(world: World, events: readonly SimEvent[]): void {
     const now = world.tick * (1 / 30);
     const arena = world.arena;
-    if (!arena) return;
     for (const e of events) {
       if (e.type === 'hit') {
         this.ammoHits[e.ammo] = (this.ammoHits[e.ammo] ?? 0) + 1;
         this.menLost += e.crewLost;
         this.sailsTorn += e.sailsLost;
+        if (e.zone === 'hull') this.shotsOf(e.byShipId).hits++;
+        this.shotsOf(e.shipId).hullLost += e.hullLost;
       }
-      if (e.type === 'targetChosen') this.add(now, `${who(world, e.shipId)} goes after ${who(world, e.targetId)}, ${Math.round(e.distance)} m away`);
+      if (e.type === 'gunFired') {
+        this.shotsOf(e.shipId).balls += e.balls ?? 1;
+        if (e.side === 'stern') this.sternSalvos++;
+      }
+      if (e.type === 'landHit') this.landHits++;
+      if (e.type === 'targetChosen') {
+        // A trader (M3 step 7b) does not hunt: it keeps an eye on the nearest danger.
+        const trader = SHIP_CLASSES[world.ships.find((x) => x.id === e.shipId)?.shipClass ?? '']?.trader === true;
+        this.add(now, `${who(world, e.shipId)} ${trader ? 'keeps an eye on' : 'goes after'} ${who(world, e.targetId)}, ${Math.round(e.distance)} m away`);
+      }
       else if (e.type === 'sunk') {
-        const winner = arena.pilots.find((p) => p.shipId === e.byShipId);
+        const winner = arena?.pilots.find((p) => p.shipId === e.byShipId);
         const by = world.ships.find((s) => s.id === e.byShipId);
         const full = by ? hullOf(world, by.id) : 0;
         const left = by && full > 0 ? ` with ${Math.round((100 * by.hull) / full)}% of its hull left` : '';
-        const wins = e.byShipId < 0 ? `Nobody's win, ${arena.totalWins} in all` : `Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`;
+        const wins = !arena ? '' : e.byShipId < 0 ? `Nobody's win, ${arena.totalWins} in all` : `Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`;
+        if (!arena) this.sunkShips.push(`${clock(now)} ${who(world, e.shipId)} by ${who(world, e.byShipId)}`);
         // M3 step 7a fix: the killer is often already an offender ('outlaw') when its last ball lands
         // (the port law marks it in the same step), so the attack is remembered from its decision.
         const going = this.finishGoing.get(e.byShipId);
@@ -184,7 +212,7 @@ export class ArenaLog {
         this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}${finished ? ' (a finishing attack in safe water)' : ''}. ${wins}`);
         this.lines.push(`            ${this.sinkDetails(world, e)}`);
         const loser = world.ships.find((x) => x.id === e.shipId);
-        const pilot = arena.pilots.find((x) => x.shipId === e.shipId);
+        const pilot = arena?.pilots.find((x) => x.shipId === e.shipId);
         if (loser) {
           const t = this.tally(loser.shipClass);
           t.losses++;
@@ -206,7 +234,8 @@ export class ArenaLog {
         this.escapes++;
         const ship = world.ships.find((x) => x.id === e.shipId);
         if (ship) this.tally(ship.shipClass).escapes++;
-        this.add(now, `ESCAPED: ${who(world, e.shipId)} got away from ${who(world, e.byShipId)} ${e.how === 'port' ? 'into safe water' : 'out of reach'} (half a win)${ship ? ` [${conditionText(ship)}]` : ''}`);
+        this.escapePoints += e.points ?? 0.5;
+        this.add(now, `ESCAPED: ${who(world, e.shipId)} got away from ${who(world, e.byShipId)} ${e.how === 'port' ? 'into safe water' : 'out of reach'} (+${e.points ?? 0.5} of a win)${ship ? ` [${conditionText(ship)}]` : ''}`);
       } else if (e.type === 'peace') this.add(now, `PEACE after ${e.totalWins} wins: nobody attacks any more; hurt ships sail to port`);
       // Bots (M3 step 4c / 5).
       else if (e.type === 'botUnstick') {
@@ -225,10 +254,19 @@ export class ArenaLog {
       } else if (e.type === 'ramDecision') {
         this.ramDecisions++;
         if (e.go) this.ramTries++;
-        this.add(now, `RAM? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} at ${Math.round(e.distance)} m -> ${e.go ? 'RAMS' : 'keeps firing'}`);
+        if (e.desperate) this.desperateRams++;
+        this.add(now, e.desperate ? `RAM! ${who(world, e.shipId)} cannot get away from ${who(world, e.enemyId)} (${Math.round(e.distance)} m): turns and rams in despair` : `RAM? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} at ${Math.round(e.distance)} m -> ${e.go ? 'RAMS' : 'keeps firing'}`);
       } else if (e.type === 'rammerLearned') {
         this.rammers++;
         this.add(now, `${who(world, e.shipId)} rammed ${who(world, e.enemyId)} on purpose: it is a RAMMER now (chain, grape, ram)`);
+      } else if (e.type === 'botLeaves') {
+        this.leaves[e.reason] = (this.leaves[e.reason] ?? 0) + 1;
+        const why = e.reason === 'fear' ? `its crew is afraid (fear ${e.fear.toFixed(2)})` : e.reason === 'odds' ? `the odds are poor (${e.odds.toFixed(2)})` : `a trader does not fight (odds ${e.odds.toFixed(2)})`;
+        const ship = world.ships.find((x) => x.id === e.shipId);
+        this.add(now, `LEAVES: ${who(world, e.shipId)} turns away from ${who(world, e.enemyId)}: ${why}${ship ? ` [${conditionText(ship)}]` : ''}`);
+      } else if (e.type === 'jettison') {
+        this.jettisons++;
+        this.add(now, `${who(world, e.shipId)} throws its cargo over the side (${Math.round(e.cargo * 100)}% of the hold) to run faster`);
       } else if (e.type === 'berthWait') {
         this.berthWaits++;
         this.add(now, `${who(world, e.shipId)} finds the berths of ${e.port} full (${e.occupied}/${e.berths}): waits off the port`);
@@ -241,7 +279,7 @@ export class ArenaLog {
       }
     }
     this.watch(world, now);
-    if (now >= this.nextStandings) {
+    if (arena && now >= this.nextStandings) {
       this.nextStandings += STANDINGS_EVERY_SECONDS;
       this.add(now, `standings (wins so far: ${arena.totalWins}):`);
       for (const row of standings(arena, world)) this.lines.push(row);
@@ -321,7 +359,7 @@ export class ArenaLog {
     const now = world.tick * (1 / 30);
     const ship = world.ships.find((s) => s.id === shipId);
     const state = ship ? ` [${conditionText(ship)}]` : '';
-    if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees${state}`);
+    if (mode === 'flee') this.add(now, `${who(world, shipId)} flees${state}`);
     else if (mode === 'finish') this.add(now, `${who(world, shipId)} goes into safe water to finish its enemy${state}`);
     else if (mode === 'ram') this.add(now, `${who(world, shipId)} turns to ram its enemy${state}`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs${state}`);
@@ -353,6 +391,7 @@ export class ArenaLog {
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
     out.push(`   rams: tried ${this.ramTries} of ${this.ramDecisions} chances, ${this.ramHits} collisions while ramming, ${this.rammers} bots became rammers`);
     out.push(`   finishing attacks in safe water: ${this.finishAttacks} of ${this.finishDecisions} chances, ${this.finishKills} sank their enemy; waits for a berth: ${this.berthWaits}`);
+    out.push(`   spirit: left a fight ${this.leaves['fear'] ?? 0}x from fear, ${this.leaves['odds'] ?? 0}x on poor odds, traders ran ${this.leaves['trader'] ?? 0}x; desperate rams ${this.desperateRams}; cargo thrown over the side ${this.jettisons}x; stern salvos ${this.sternSalvos}; balls stopped by the land ${this.landHits}; escape points ${this.escapePoints.toFixed(2)}`);
     return out;
   }
 
@@ -360,13 +399,36 @@ export class ArenaLog {
   text(world: World, startedAt: string): string {
     const arena = world.arena;
     const head = [
-      'Naval Battles — auto-bot arena log',
+      arena ? 'Naval Battles — auto-bot arena log' : 'Naval Battles — battle log (you against bots)',
       `started ${startedAt}, game time now ${clock(world.tick / 30)}`,
       this.dropped > 0 ? `(the oldest ${this.dropped} lines were dropped: the log keeps the last ${this.max})` : '',
       '',
     ].filter((l, i) => l !== '' || i === 3);
-    const tail = arena ? ['', `standings now (wins so far: ${arena.totalWins}${arena.peace ? ', PEACE' : ''}):`, ...standings(arena, world), '', ...this.classSummary(world)] : [];
+    const tail = arena ? ['', `standings now (wins so far: ${arena.totalWins}${arena.peace ? ', PEACE' : ''}):`, ...standings(arena, world), '', ...this.classSummary(world)] : ['', ...this.battleSummary(world)];
     return [...head, ...this.lines, ...tail].join('\n') + '\n';
+  }
+
+  private shotsOf(shipId: number): { balls: number; hits: number; hullLost: number } {
+    let s = this.shots.get(shipId);
+    if (!s) {
+      s = { balls: 0, hits: 0, hullLost: 0 };
+      this.shots.set(shipId, s);
+    }
+    return s;
+  }
+
+  /** M3 step 7d: the end of a battle log: every ship, what it fired and hit, what it lost, who sank. */
+  battleSummary(world: World): string[] {
+    const out = ['battle summary:'];
+    for (const ship of world.ships) {
+      const s = this.shotsOf(ship.id);
+      const bot = world.bots.find((b) => b.shipId === ship.id);
+      const mode = bot ? `, mode ${bot.mode}${bot.fear ? `, fear ${bot.fear.toFixed(2)}` : ''}${bot.personality.courage !== undefined ? `, courage ${bot.personality.courage.toFixed(2)}` : ''}` : '';
+      out.push(`   ${who(world, ship.id).padEnd(30)} ${ship.sunk ? 'SUNK' : 'afloat'}  balls ${String(s.balls).padStart(4)}  hull hits ${String(s.hits).padStart(3)}  hits/ball ${s.balls > 0 ? (s.hits / s.balls).toFixed(2) : '-'}  hull lost ${Math.round(s.hullLost)}  [${conditionText(ship)}${mode}]`);
+    }
+    out.push(`   sunk: ${this.sunkShips.length > 0 ? this.sunkShips.join('; ') : 'none'}`);
+    out.push(...this.classSummary(world).slice(-3));
+    return out;
   }
 
   /** For storing in the browser between visits. */

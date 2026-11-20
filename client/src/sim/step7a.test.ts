@@ -12,12 +12,14 @@ const caravel = SHIP_CLASSES['caravel']!;
 const sloop = SHIP_CLASSES['sloop']!;
 
 describe('the two traders (M3 step 7a)', () => {
-  it('fluyt: 0.7 of a sloop, one gun a side, a small crew; caravel: 0.8, sloop guns, higher and stronger sides', () => {
+  it('fluyt: 0.7 of a sloop, one gun a side, a small crew; caravel: 0.8, 2 guns a side (7b), higher and stronger sides', () => {
     expect(fluyt.maxSpeed / sloop.maxSpeed).toBeCloseTo(0.7, 2);
     expect(fluyt.gunsPerSide).toBe(1);
     expect(fluyt.crew).toBeLessThan(sloop.crew / 2);
     expect(caravel.maxSpeed / sloop.maxSpeed).toBeCloseTo(0.8, 2);
-    expect(caravel.gunsPerSide).toBe(sloop.gunsPerSide);
+    expect(caravel.gunsPerSide).toBe(2);
+    expect(caravel.sternGuns).toBe(2);
+    expect(fluyt.sternGuns).toBe(2);
     expect(caravel.hullHeight).toBeGreaterThan(sloop.hullHeight);
     expect(caravel.hullPoints).toBeGreaterThan(sloop.hullPoints);
     for (const p of Object.values(SHIP_CLASSES)) expect(p.sailCrew).toBeLessThanOrEqual(p.crew);

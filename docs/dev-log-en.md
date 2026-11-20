@@ -4,6 +4,33 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (late) — M3 steps 7b and 7d: crew spirit, traders that run, the land stops balls; a battle against bots
+
+### Your test of 7a and the 1949 log (4 h)
+
+Fluyt 2 wins / 0 escapes / 31 losses, caravel 11 / 4 / 17; escapes were almost all "into safe water" (31 of 32). In a battle against bots nothing had changed (all sloops, no bars, no flags), and the "class" option did not work for a new battle. Your wishes: more guns and stern chasers for the traders, more for a trader that reaches port alive, a quarter for one that only gets away at sea; balls must not fly through hills; fire as a future mechanic; more objects on islands.
+
+### Four new ideas in the code
+
+- **Courage and fear** (`sim/morale.ts`): each bot draws its courage once; hits, men lost and near misses add fear (a black flag 1.5x), fear fades. Every 3–6 s (a random moment) the bot weighs its chances: fear above courage, or hurt with odds below 0.45 and a roll, and it leaves the fight; running, caught by a faster enemy that comes at it bow first, badly hurt: a desperate ram (a roll).
+- **The trader's life:** a trade run between the usable ports and places off the big islands, chosen at random; an enemy within 700 m: run (a brave trader with the odds on its side fights); running until the enemy is 900 m away, then mend or go back to the run; hurt: to port; the enemy gaining: cargo over the side (`jettison` command). A trader on its run does not fire.
+- **Stern chasers** (`Side` 'stern'): 2 on each trader, fire astern and can be trained ± 30°; bots pick the battery that faces the enemy best.
+- **Heights of the land** (`sim/terrain.ts`): a grid of heights, built once like the water grid; a ball whose step goes below the land stops (`landHit`, a dust puff); bots check the arc before firing (`shotClear`).
+
+### Battle against bots (7d)
+
+Panel → Target → "bot classes (next battle)": mix (sloop 3, brigantine 2, caravel 2, fluyt 2, frigate 1) or one class; "class of ship 2 (now)" swaps ship 2 at once. You sail under the black flag; bots under random flags. From your ship: the flag up to 400 m, the hull bar up to 450 m, sails and crew up to 200 m. A battle log like the arena's (`battle log (you against bots)`, battle summary per ship: balls, hits, hull lost, mode, fear, courage); SAVE LOG on the banner and key L; the last battle's log is kept in the browser. Victory when every warship is sunk and every trader sunk or more than 1.5 km away.
+
+### Results
+
+Headless 4 × 60 min: 8–14 sinkings an hour (about 30 before: the traders run and the hunters chase them); by class over 4 h: sloop 21 wins / 16 escapes / 12 losses, brigantine 7 / 8 / 8, frigate 15 / 4 / 4, caravel 0 / 2 / 4, fluyt 0 / 1 / 15. An hour: left a fight on fear 2–15, on poor odds 6–15, traders ran 12–20, cargo over the side 4–7, stern salvos 72–128, desperate rams 1–6, balls into the land 2–24. A sloop that had escaped into the Isla Verde harbour ground along the inlet's bank (108 times aground in one run): bots in a harbour up an inlet now sail out through the mouth first. 412 tests; build and test build; browser computer and iPhone (battle with mixed classes, flags and bars, banner with SAVE LOG; arena 40 s at × 8), no errors.
+
+### Next
+
+7c bot skills (seamanship with speed × 0.85–1.2, gunnery, courage, loner or pack). Then M4b (D54).
+
+---
+
 ## 19 Nov 2026 (evening) — M3 step 7a: the fluyt and the caravel
 
 ### Why

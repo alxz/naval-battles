@@ -57,6 +57,8 @@ export class Cannonballs {
     const drift = SMOKE_DRIFT * wind.strength;
     for (const e of events) {
       if (e.type === 'splash') this.addFading('splash', e.x, e.y, s, SPLASH_SECONDS, 2.5);
+      // M3 step 7b: a ball that struck a hill or a cliff throws up dust and earth.
+      if (e.type === 'landHit') this.addFading('dust', e.x, e.y - e.z * HEIGHT_SCALE, s, SPLASH_SECONDS * 1.5, 2);
       if (e.type === 'gunFired') {
         this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
         // The smoke leaves the gun port outward (a blast), then the wind carries it away.
@@ -209,6 +211,12 @@ export class Cannonballs {
     g.fillStyle(0x6b3f1d, 1);
     for (const [x, y] of [[0, 2], [3, 0], [6, 3], [2, 6], [5, 6], [3, 3]]) g.fillRect(x!, y!, 2, 2);
     g.generateTexture('splinters', 8, 8);
+    g.clear();
+    g.fillStyle(0x9a7b52, 1);
+    g.fillCircle(4, 4, 3);
+    g.fillStyle(0x5e4426, 1);
+    for (const [x, y] of [[1, 1], [6, 2], [2, 6], [6, 6]]) g.fillRect(x!, y!, 1, 1);
+    g.generateTexture('dust', 8, 8);
     g.clear();
     g.fillStyle(0xf5f0e0, 1);
     g.fillCircle(4, 4, 3);

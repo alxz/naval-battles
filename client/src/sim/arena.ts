@@ -4,6 +4,7 @@
 // Pure rules, no Phaser: the screen (SeaScene, view/arenaLog.ts) only shows and logs it.
 
 import { crewShare, refitShip, rollCargo, sailShare } from './condition';
+import { nationFor } from './nation';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { BOTS, ISLANDS, SHIP_CLASSES } from './data';
@@ -19,8 +20,19 @@ export type ArenaParams = typeof arenaJson;
 export const ARENA: ArenaParams = arenaJson;
 
 /** M3 step 7a: the arena score: a win counts 1, getting away alive (hurt) counts half (your rule). */
-export function pilotScore(p: Pick<Pilot, 'wins' | 'escapes'>): number {
-  return p.wins + 0.5 * (p.escapes ?? 0);
+export function pilotScore(p: Pick<Pilot, 'wins' | 'escapes' | 'escapePoints'>): number {
+  return p.wins + (p.escapePoints ?? 0.5 * (p.escapes ?? 0));
+}
+
+/**
+ * What getting away is worth (M3 step 7b, your rule): a warship half a win; a trader a whole win
+ * when it reaches a port's safe water, a quarter when it only got out of reach at sea.
+ */
+export function escapeWorth(shipClass: string, how: 'port' | 'away', p: ArenaParams = ARENA): number {
+  const trader = SHIP_CLASSES[shipClass]?.trader === true;
+  const e = p.escapePoints;
+  if (trader) return how === 'port' ? e.traderPort : e.traderAway;
+  return how === 'port' ? e.warshipPort : e.warshipAway;
 }
 
 /** A trader comes to sea with a random load in her hold (M3 step 7a); a warship with none. */
@@ -72,9 +84,13 @@ export function stepEscapes(world: World, dt: number, p: ArenaParams = ARENA): v
     else if (hurt && t.quietSeconds >= p.escapeQuietSeconds && Math.hypot(enemy.x - ship.x, enemy.y - ship.y) > p.escapeRangeM) how = 'away';
     if (how) {
       const pilot = arena.pilots.find((x) => x.shipId === ship.id);
-      if (pilot) pilot.escapes = (pilot.escapes ?? 0) + 1;
+      const points = escapeWorth(ship.shipClass, how, p);
+      if (pilot) {
+        pilot.escapes = (pilot.escapes ?? 0) + 1;
+        pilot.escapePoints = (pilot.escapePoints ?? 0) + points;
+      }
       arena.escapedFrom!.push({ shipId: ship.id, byShipId: enemy.id });
-      world.events.push({ type: 'escaped', shipId: ship.id, byShipId: enemy.id, how });
+      world.events.push({ type: 'escaped', shipId: ship.id, byShipId: enemy.id, how, points });
       continue;
     }
     if (t.quietSeconds < p.escapeForgetSeconds) keep.push(t);
@@ -134,6 +150,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
       battleSkill: START_BATTLE_SKILL,
       team: id, // everybody for himself
       repairing: false,
+      nation: nationFor(seed, id), // M3 step 7b: the flag is in the rules now (a black flag frightens traders)
     });
     loadCargo(world, world.ships[world.ships.length - 1]!);
     world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, balls: 0, hullHits: 0, sinceSeconds: 0 });

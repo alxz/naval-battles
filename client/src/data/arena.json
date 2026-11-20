@@ -29,6 +29,12 @@
   "spawnTries": 40,
   "escapeQuietSeconds": 60,
   "escapeRangeM": 1500,
+  "escapeForgetSeconds": 180,
   "escapeHurtShare": 0.7,
-  "escapeForgetSeconds": 180
+  "escapePoints": {
+    "warshipPort": 0.5,
+    "warshipAway": 0.5,
+    "traderPort": 1.0,
+    "traderAway": 0.25
+  }
 }

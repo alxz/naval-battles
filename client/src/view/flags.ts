@@ -3,9 +3,10 @@
 // real nations with their own ships and ports come with the world (M5).
 // Pure: rows of letters (one letter = one screen pixel); scenes/ShipBars.ts draws them.
 
-export type Nation = 'england' | 'spain' | 'france' | 'netherlands' | 'pirates';
-
-export const NATIONS: readonly Nation[] = ['england', 'spain', 'france', 'netherlands', 'pirates'];
+// M3 step 7b: the nations live in the rules now (sim/nation.ts: a black flag frightens traders).
+export { NATIONS, nationFor } from '../sim/nation';
+export type { Nation } from '../sim/nation';
+import type { Nation } from '../sim/nation';
 
 /** The colours of the letters ('.' = nothing). */
 export const FLAG_COLOURS: Readonly<Record<string, number>> = {
@@ -36,15 +37,3 @@ export const FLAGS: Readonly<Record<Nation, readonly string[]>> = {
   // Pirates: black, a white skull over crossed bones.
   pirates: ['KKKKKKKKKKKK', 'KKKKWWWWKKKK', 'KKKWKWWKWKKK', 'KKKWWWWWWKKK', 'KKKKWKKWKKKK', 'KKWWKKKKWWKK', 'KKKKWWWWKKKK', 'KKWWKKKKWWKK'],
 };
-
-/**
- * A nation for a bot of the arena: random, but the same for the same arena (seed) and ship,
- * so a flag does not change while you watch (a sunk bot comes back under its old flag).
- */
-export function nationFor(seed: number, shipId: number): Nation {
-  let h = (Math.floor(seed) ^ Math.imul(shipId + 1, 0x9e3779b1)) >>> 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
-  h = (h ^ (h >>> 16)) >>> 0;
-  return NATIONS[h % NATIONS.length]!;
-}
