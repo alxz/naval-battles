@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Island, ShipState } from '../sim/types';
-import { chartFit, discover, fromChart, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
+import { chartFit, discover, forget, fromChart, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
 
 const square = (name: string, x: number, y: number, kind?: string): Island => ({
   name,
@@ -79,5 +79,16 @@ describe('viewFrame (M3 step 4b)', () => {
   it('clipped at the edge of the sea, never smaller than 2 x 2', () => {
     expect(viewFrame(fit, world, { x: -3000, y: -2000 }, 500, 300)).toEqual({ x: 0, y: 0, w: 10, h: 6 });
     expect(viewFrame(fit, world, { x: 0, y: 0 }, 10, 10)).toMatchObject({ w: 2, h: 2 });
+  });
+});
+
+describe('forget', () => {
+  it('drops the marks of the given ships and keeps the rest', () => {
+    const chart = newChart();
+    updateSightings(chart, [ship(2, 100, 100, true), ship(3, 200, 200)], view);
+    forget(chart, [2]);
+    expect(chart.sightings.map((x) => x.shipId)).toEqual([3]);
+    forget(chart, []);
+    expect(chart.sightings).toHaveLength(1);
   });
 });

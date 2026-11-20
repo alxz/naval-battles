@@ -78,6 +78,11 @@ export function updateSightings(state: ChartState, others: readonly ShipState[],
   }
 }
 
+/** Forget the marks of these ships (wrecks that have melted away). */
+export function forget(state: ChartState, shipIds: readonly number[]): void {
+  if (shipIds.length > 0) state.sightings = state.sightings.filter((s) => !shipIds.includes(s.shipId));
+}
+
 /** How the sea fits into a panel on the screen: metres -> panel pixels, keeping the shape. */
 export interface ChartFit {
   scale: number; // pixels per metre

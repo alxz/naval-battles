@@ -35,7 +35,8 @@ const TRADER_GONE_M = 1500;
 /** M3 step 7d (D41 numbers): how far you can tell a ship's flag and its state in a battle. */
 const SIGHT = { flagSightM: worldJson.flagSightM, detailFullM: worldJson.detailFullM, detailHullM: worldJson.detailHullM };
 import { autoZoom } from '../view/autoZoom';
-import { discover, newChart, updateSightings } from '../view/chart';
+import { discover, forget, newChart, updateSightings } from '../view/chart';
+import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
 import { cameraCircleRadius, circleCamera, nearest, smoothToward } from '../view/combatCamera';
@@ -160,6 +161,7 @@ export class SeaScene extends Phaser.Scene {
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
   private targetCircle: Circle | null = null; // the circle the moving target sails round
   private ballsFired = 0; // your balls since the last reset (for the hit count)
+  private wreckAge: number[] = []; // seconds each sunk ship has been a wreck (0 = afloat)
   private sunkBy = 0; // the ship that sank you (for the banner)
   private enemyBalls = 0; // the enemy's balls this duel (for the banner)
   private enemyHullHits = 0; // its hull hits on you this duel
@@ -327,7 +329,7 @@ export class SeaScene extends Phaser.Scene {
       },
       {
         onLogicalHeight: (h) => this.screenFit.setTargetHeight(h),
-        onSpeedScale: (s) => (this.sim.tuning.speedScale = s),
+        onSpeedScale: (s) => (this.sim.tuning.speedScale = speedScaleFor(s, this.arena, viewJson.soloSpeedScale)),
         onPlaceTarget: (d) => this.placeTarget(d),
         onTargetClass: () => this.placeTarget(this.targetDistance()),
         onWindDrift: (on) => (this.sim.tuning.windDrift = on),
@@ -408,8 +410,11 @@ export class SeaScene extends Phaser.Scene {
       if (!pose || !image) return;
       const owner = i === this.focusIndex ? 'player' : 'enemy';
       showShip(image, ship.shipClass, owner, v.shipArt, v.detailAtZoom, pose.x, pose.y, pose.headingRad, s);
-      // A sunk ship fades into the sea (it stays as a faint wreck); a placed one is solid again.
-      image.setAlpha(ship.sunk ? Math.max(0.2, image.alpha - seconds * 0.3) : 1);
+      // A sunk ship fades into the sea, stays a faint wreck for a while, then the picture goes (view/wreck.ts);
+      // a placed one is solid again.
+      this.wreckAge[i] = ship.sunk ? (this.wreckAge[i] ?? 0) + seconds : 0;
+      const age = this.wreckAge[i] ?? 0;
+      image.setAlpha(ship.sunk ? wreckAlpha(age, viewJson.wreck) : 1).setVisible(!(ship.sunk && wreckGone(age, viewJson.wreck)));
       // A hit ship flashes white for a moment (fill tint), then shows its colours again.
       const flash = (this.hitFlash[i] ?? 0) - seconds;
       this.hitFlash[i] = flash;
@@ -511,7 +516,10 @@ export class SeaScene extends Phaser.Scene {
       maxY: this.cameraCentre.y + halfH,
     };
     discover(this.chartState, ISLANDS, seaView);
-    updateSightings(this.chartState, this.sim.world.ships.filter((_sh, i) => i !== this.focusIndex), seaView);
+    // A wreck that has melted away is off the chart too.
+    const gone = this.sim.world.ships.filter((sh, i) => sh.sunk && wreckGone(this.wreckAge[i] ?? 0, viewJson.wreck)).map((sh) => sh.id);
+    updateSightings(this.chartState, this.sim.world.ships.filter((sh, i) => i !== this.focusIndex && !gone.includes(sh.id)), seaView);
+    forget(this.chartState, gone);
     this.chart.update(this.chartState, myShip, this.sim.world.wind);
 
     // 5. Edge markers for ships within sighting range that are off the screen.
@@ -537,7 +545,8 @@ export class SeaScene extends Phaser.Scene {
     const target = this.nearestEnemy(myShip) ?? this.ship(TARGET_ID);
     const rangeM = params ? gunRange(myShip, params) : 0;
     // Ship centres on the screen: a HUD panel over one of them turns see-through.
-    const shipsOnScreen = poses.map((p) => ({ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }));
+    // A wreck never makes a panel see-through: only ships that float count.
+    const shipsOnScreen = poses.flatMap((p, i) => (this.sim.world.ships[i]?.sunk ? [] : [{ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }]));
     const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
     this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
     this.hud.setDebugBelow(this.arena ? this.arenaHud.bottom() : 0);
@@ -602,7 +611,7 @@ export class SeaScene extends Phaser.Scene {
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
     if (this.arena) {
       this.arenaHud.update(this.sim.world, poses, s, myShip.id, this.freeView === null, this.timeScale, clock(this.sim.world.tick * STEP_SECONDS), {
-        ships: shipsOnScreen.filter((_p, i) => !this.sim.world.ships[i]?.sunk),
+        ships: shipsOnScreen,
         avoid: hudRects.target,
         seconds,
       });
@@ -912,7 +921,7 @@ export class SeaScene extends Phaser.Scene {
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
     // M3 step 7d: the classes of the bots (the panel's "bot classes": a mix, or one class for all).
     const classes = battleClasses(seed, this.sim.world.ships.length - 1, botMode ? v.botClasses : v.targetClass);
-    this.sim.tuning.speedScale = v.speedScale;
+    this.sim.tuning.speedScale = speedScaleFor(v.speedScale, false, viewJson.soloSpeedScale);
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(v.windFromBearingDeg), strength: v.windStrength });
     const world = this.sim.world;
@@ -1151,7 +1160,7 @@ export class SeaScene extends Phaser.Scene {
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.arenaSeed = seed;
     this.sim = new Simulation(createArenaWorld(seed));
-    this.sim.tuning.speedScale = v.speedScale;
+    this.sim.tuning.speedScale = speedScaleFor(v.speedScale, true, viewJson.soloSpeedScale);
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.update(0.05);
     this.rebuildShipImages();

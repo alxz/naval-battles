@@ -4,6 +4,34 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 — M3 step 7c2: your test of 7c; wrecks, solo speed
+
+### Your test (5 logs: PC arena 0853 and 1143, PC battle 1127; iPhone battle 0813 and arena 0823)
+
+All five logs run clean: 0 warnings, no ship on land. Arena (about 2 h 15 min, 6 bots): frigate 14 wins / 2 escapes / 4 losses, sloops 13 / 16 / 9, brigantine 6 / 3 / 7, fluyt 0 / 2 / 8, caravel 0 / 4 / 5. Bow chaser shots 153 / 347 / 147 an hour-run, stern salvos 100 / 155 / 62, desperate rams 6 / 8 / 5. Battles: you sank 3 of 3 (PC, 26 min) and 1 of 3 (iPhone, 9 min); the traders ran and threw their cargo over the side as designed. Skills: wins and losses are still close by level (few lives per level). Your two findings: the swimming speed in a solo battle should be a little higher; a wreck keeps a ghost picture on the screen for ever, and a HUD panel over it turns see-through.
+
+### Causes and changes (D61)
+
+- **See-through panels over wrecks:** the arena already passed only floating ships to the HUD fading; the battle passed every ship, sunk ones too (`ships: shipsOnScreen` in `SeaScene`), and so did the minimap. Now `shipsOnScreen` holds floating ships only, so a wreck never makes a panel see-through (you were right: there is no reason for it).
+- **Wrecks:** the picture fades to 0.2 in the first seconds, stays 30 s, melts away in 5 s and is hidden (`view/wreck.ts`: `wreckAlpha`, `wreckGone`; numbers in `view.json` `wreck`). The chart mark ("sunk") goes with it (`forget` in `view/chart.ts`). The sunk ship itself **stays in the world's list**: the ship numbers (pictures, bars, log, arena respawn) are indexes into that list, and the battle summary, the END GAME verdict and the "sunk by" lines need it. So memory for a wreck is one entry of plain data; only the picture and the marks are removed. I did not delete the list entry: it would shift every index (a risk with no gain).
+- **Solo speed (D61):** `view.json` `soloSpeedScale` 1.15 multiplies the speed of every ship in a battle against bots (you and the bots, so the chase stays as it was); the arena stays at 1.0, so the arena logs remain comparable (`speedScaleFor` in `view/wreck.ts`; the panel's "speed scale" slider still multiplies on top). Change the number to taste; if you want only your ship faster, tell me.
+
+### Seen in the logs, not changed (for the next test)
+
+- Isla Verde inlet: ships still run aground there (sloops 11–13 times per run, the caravel 65–75 times in 1143/0853, mostly at (-1730, 1038) and near (-1904, 1022), with `mode trade`, i.e. a trader running its trade route past the inlet mouth). Caravel and fluyt are not allowed in that harbour (D49) but their route and flight still pass the mouth. A real finding for a small fix (a trade route and flight keep clear of the inlet's mouth) — not done in this step, since it is not in your list.
+- One sloop sunk by the shore guns of Isla Verde as an outlaw (arena 1143, "shore deaths 1"): as designed.
+- "balls stopped by the land" 12 / 59 / 22: working.
+
+### Checks
+
+437 tests (5 new: wreck alpha, wreck gone, solo speed scale, chart `forget`); `tsc`; build; test build; headless browser: a bot sunk next to the ship fades 1 → 0.7 → 0.2, stays, is hidden after 35 s and its chart mark goes; speed scale 1.15 in a battle; no errors.
+
+### Next
+
+Your test of this fix. Then M4b before M4 (D54), then Squadrons.
+
+---
+
 ## 19 Nov 2026 (night) — M3 step 7c: bow chasers, pause, minimap view, bot skills
 
 ### Your test of 7b / 7d (battle log 2056, arena log 2127, 4 h)
