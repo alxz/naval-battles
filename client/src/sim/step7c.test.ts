@@ -36,7 +36,7 @@ describe('bow chasers (M3 step 7c)', () => {
     expect(predictLanding(s, sloop, 'bow', STEP_SECONDS).x).toBeGreaterThan(100);
   });
 
-  it('fires round shot only (chain stays in the locker), reloads on its own, trains up to 30 degrees', () => {
+  it('fires round shot only (chain stays in the locker), reloads on its own, is not trained', () => {
     const w = emptyWorld([shipOf(1, 'sloop', 0, 0, 0)]);
     const me = w.ships[0]!;
     applyCommand(w, { type: 'setAmmo', shipId: 1, ammo: 'chain' });
@@ -44,17 +44,17 @@ describe('bow chasers (M3 step 7c)', () => {
     applyCommand(w, { type: 'fire', shipId: 1, side: 'bow', trainDeg: 50 });
     const shot = w.pendingShots.find((p) => p.side === 'bow');
     expect(shot?.ammo).toBe('round');
-    expect(shot?.trainDeg).toBe(30);
+    expect(shot?.trainDeg).toBeUndefined(); // M3 step 7f: no training
     expect(me.ammoLeft).toBeUndefined(); // no chain spent
     expect(me.reloadBow).toBeGreaterThan(0);
     expect(me.reloadPort).toBe(0); // the broadsides are still loaded
-    // The ball flies 30 degrees to starboard of the bow.
+    // The ball flies dead ahead (perfect guns in this test; the 50 degrees asked for are ignored).
     for (let i = 0; i < 3; i++) {
       w.tick++;
       stepGunsAndBalls(w, STEP_SECONDS, undefined, []);
     }
     const ball = w.balls[0]!;
-    expect((Math.atan2(ball.vy, ball.vx) * 180) / Math.PI).toBeCloseTo(30, 0);
+    expect((Math.atan2(ball.vy, ball.vx) * 180) / Math.PI).toBeCloseTo(0, 0);
     // The reload runs down and the gun is ready again.
     for (let i = 0; i < 30 * 40; i++) stepGunsAndBalls(w, STEP_SECONDS, undefined, []);
     expect(me.reloadBow).toBeUndefined();

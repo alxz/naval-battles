@@ -23,7 +23,7 @@ export interface ArenaScreen {
   seconds: number;
 }
 
-const MAX_SHIPS = 8;
+const MAX_SHIPS = 12; // name labels (the arena has up to 10 bots since M3 step 7e)
 
 export interface ArenaButtons {
   onNext: () => void; // follow the next ship (Space)
@@ -36,7 +36,8 @@ export interface ArenaButtons {
  * What you see in the auto-bot arena (M3 step 2), over the normal HUD of the ship you follow:
  *   - a name over every ship: "#3 Black Gull 12" (number, name, wins); the one you follow in yellow;
  *   - the score table (most wins first), the time and the speed;
- *   - buttons: NEXT (follow the next ship), the speed, LOG (download), LEAVE.
+ *   - buttons: NEXT (follow the next ship), the speed, LOG (download), LEAVE (above the table, M3 step 7f);
+ *   - the table is one line (time, speed, wins); a tap on it opens the full table.
  * Drag the sea (or W A S D / arrows) to look round freely; NEXT or Space follows a ship again.
  */
 export class ArenaHud {
@@ -48,9 +49,11 @@ export class ArenaHud {
   private shown = false;
   private touch: boolean;
 
-  private height = 0;
   private fade = 1;
   private bottomY = 0;
+  private rightX = 0;
+  private topY = 0; // the right edge of the table's plate (the help text H goes to its right, M3 step 7f)
+  private open = false; // the full table is open (a tap on the one-line summary opens / closes it)
 
   constructor(scene: Phaser.Scene, touch: boolean, actions: ArenaButtons) {
     this.touch = touch;
@@ -59,7 +62,12 @@ export class ArenaHud {
     for (let i = 0; i < MAX_SHIPS; i++) {
       this.labels.push(scene.add.text(0, 0, '', textStyle('small')).setDepth(3).setVisible(false));
     }
-    this.board = scene.add.text(0, 0, '', textStyle('small', '#e8f1f7')).setScrollFactor(0).setDepth(104).setVisible(false);
+    this.board = scene.add.text(0, 0, '', textStyle('small', '#e8f1f7')).setScrollFactor(0).setDepth(104).setVisible(false).setInteractive();
+    // M3 step 7f: the table is one line; a tap on it opens the full table, another tap closes it.
+    this.board.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      this.open = !this.open;
+    });
     const button = (label: string, action: () => void): Phaser.GameObjects.Text => {
       const t = scene.add
         .text(0, 0, label, { ...textStyle('main', '#1b1b1b'), backgroundColor: '#ffe066', padding: { x: 5, y: 4 } })
@@ -80,9 +88,8 @@ export class ArenaHud {
     button('LEAVE', actions.onLeave);
   }
 
-  layout(_width: number, height: number): void {
-
-    this.height = height;
+  layout(_width: number, _height: number): void {
+    // (the places are worked out every frame in update)
   }
 
   setShown(on: boolean): void {
@@ -98,9 +105,19 @@ export class ArenaHud {
     return this.shown ? this.bottomY : 0;
   }
 
-  /** Is this screen point on one of the arena buttons? (Then a drag there does not move the view.) */
+  /** The right edge of the table's plate (screen x; 0 when hidden): the help text (H) goes to its right. */
+  right(): number {
+    return this.shown ? this.rightX : 0;
+  }
+
+  /** The top of the table's plate (screen y). */
+  top(): number {
+    return this.shown ? this.topY : 0;
+  }
+
+  /** Is this screen point on one of the arena buttons or the table? (Then a drag there does not move the view.) */
   onButton(x: number, y: number): boolean {
-    return this.shown && this.buttons.some((b) => b.getBounds().contains(x, y));
+    return this.shown && (this.buttons.some((b) => b.getBounds().contains(x, y)) || this.board.getBounds().contains(x, y));
   }
 
   update(world: World, poses: readonly Pose[], s: number, focusId: number, following: boolean, timeScale: number, clockText: string, screen: ArenaScreen): void {
@@ -128,9 +145,11 @@ export class ArenaHud {
     const sorted = [...arena.pilots].sort((a, b) => pilotScore(b) - pilotScore(a) || a.losses - b.losses);
     // A phone has little room: the best three, and the ship you follow if it is not among them.
     const rows = this.touch ? sorted.filter((p, i) => i < 3 || p.shipId === focusId) : sorted;
-    const lines = [
-      `AUTO-BOT  ${arena.peace ? 'PEACE' : 'WAR'}  ${clockText}  x${timeScale}`,
-      `wins ${arena.totalWins}${following ? '' : '   free view: NEXT to follow'}`,
+    // M3 step 7f: one line by default ("+" = tap to open); the full table on a tap.
+    const summary = `ARENA ${clockText}  SPEED x${timeScale}  WINS ${arena.totalWins}${arena.peace ? '  PEACE' : ''}  ${this.open ? '-' : '+'}`;
+    const lines = !this.open ? [summary, ...(following ? [] : ['free view: NEXT to follow'])] : [
+      summary,
+      ...(following ? [] : ['free view: NEXT to follow']),
       `${' '.repeat(23)}  W   E   L`, // wins, escapes (M3 step 7a), losses
       ...rows.map((p) => {
         const ship = world.ships.find((sh) => sh.id === p.shipId);
@@ -139,9 +158,18 @@ export class ArenaHud {
       }),
     ];
     this.board.setText(lines.join('\n'));
-    // Place: computer under the top-left icons; touch under the ship and target panels.
+    // Place: the buttons first (computer under the top-left icons; touch under the ship and target panels),
+    // the table under them (M3 step 7f).
     const x = 8;
-    let y = this.touch ? 96 : 30;
+    this.speedButton.setText(`x${timeScale}`);
+    let bx = x;
+    const by = this.touch ? 66 : 30;
+    for (const button of this.buttons) {
+      button.setPosition(bx, by);
+      bx += button.width + 6;
+    }
+    const buttonsRect = { x, y: by, w: bx - x, h: this.buttons[0]?.height ?? 16 };
+    let y = by + buttonsRect.h + 6;
     this.board.setPosition(x + 4, y + 3);
     let b = this.board.getBounds();
     // A narrow window: the target card at the top right would cover the table, so it goes under the card.
@@ -160,17 +188,9 @@ export class ArenaHud {
     this.plate.setAlpha(this.fade);
     this.board.setAlpha(Math.max(0.35, this.fade));
 
-    // Buttons: in a row under the table (computer) or along the bottom (touch: the ship buttons are hidden).
-    this.speedButton.setText(`x${timeScale}`);
-    let bx = x;
-    const by = this.touch ? this.height - 30 : y + b.height + 12;
-    for (const button of this.buttons) {
-      button.setPosition(bx, by);
-      bx += button.width + 6;
-    }
-    // The buttons fade too when a ship is under them (they still work).
-    const buttonsRect = { x, y: by, w: bx - x, h: this.buttons[0]?.height ?? 16 };
-    this.bottomY = this.touch ? y + b.height + 12 : by + buttonsRect.h + 8;
+    this.topY = y;
+    this.rightX = plateRect.x + plateRect.w;
+    this.bottomY = plateRect.y + plateRect.h + 8;
     const buttonAlpha = panelCovers(buttonsRect, screen.ships) ? 0.45 : 1;
     for (const button of this.buttons) button.setAlpha(buttonAlpha);
   }

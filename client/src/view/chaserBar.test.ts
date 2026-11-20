@@ -9,11 +9,12 @@ describe('chaserBars', () => {
     expect(chaserBars(panel, none, none)).toEqual([]);
     expect(chaserBars(panel, { guns: 1, left: 0, total: 15 }, none).map((b) => b.side)).toEqual(['bow']);
   });
-  it('is half as long as the panel, centred, bow above stern', () => {
+  it('is half as long as the panel, centred; bow at the top, stern at the very bottom', () => {
     const [bow, stern] = chaserBars(panel, { guns: 1, left: 0, total: 15 }, { guns: 2, left: 0, total: 15 });
     expect(bow?.track.w).toBe(105);
     expect(bow?.track.x).toBe(152);
-    expect(stern?.track.y).toBeGreaterThan(bow?.track.y ?? 0);
+    expect(bow?.track.y).toBe(303);
+    expect(stern?.track.y).toBe(340); // 300 + 46 - 3 - 3
   });
   it('fills with the reload and is ready when loaded', () => {
     const [half] = chaserBars(panel, { guns: 1, left: 7.5, total: 15 }, none);

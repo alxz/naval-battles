@@ -116,7 +116,6 @@
   "traderArriveM": 300,
   "traderCruiseSails": 0.85,
   "traderIslandOffsetM": 250,
-  "sternArcDeg": 30,
   "fearNearMissWarship": 0.004,
   "traderSafeM": 900
 }

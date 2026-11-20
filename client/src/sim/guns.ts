@@ -13,8 +13,11 @@ import { gunneryReload } from './skills';
 import type { HitZone } from './hits';
 import type { AmmoType, Ball, GunParams, Island, PendingShot, ShipParams, ShipState, Side, World } from './types';
 
-/** How far the chasers (stern, M3 step 7b; bow, step 7c) can be trained off the centre line, degrees. */
-export const STERN_TRAIN_DEG = 30;
+/**
+ * How far the chasers (stern, M3 step 7b; bow, step 7c) can be trained off the centre line, degrees.
+ * M3 step 7f (developer's wish): 0 = no training, the chasers fire along the centre line; you aim by turning the ship.
+ */
+export const STERN_TRAIN_DEG = 0;
 export const CHASER_TRAIN_DEG = STERN_TRAIN_DEG;
 
 /** The bow and stern chasers: guns on the centre line that can be trained a little (not a broadside). */
@@ -143,7 +146,7 @@ export function orderBroadside(world: World, ship: ShipState, side: Side, stepSe
     const delay = n > 1 ? (gun / (n - 1)) * g.rippleSeconds : 0;
     const shot: PendingShot = { shipId: ship.id, side, gun, tick: world.tick + Math.round(delay / stepSeconds), salvoErrorDeg, ammo };
     // M3 step 7b: the stern chasers can be trained a little to either side (a broadside cannot: the ship turns).
-    if (isChaser(side) && trainDeg !== 0) shot.trainDeg = Math.max(-CHASER_TRAIN_DEG, Math.min(CHASER_TRAIN_DEG, trainDeg));
+    if (isChaser(side) && trainDeg !== 0 && CHASER_TRAIN_DEG > 0) shot.trainDeg = Math.max(-CHASER_TRAIN_DEG, Math.min(CHASER_TRAIN_DEG, trainDeg));
     world.pendingShots.push(shot);
   }
   // A short crew loads slower (plan 4.4).

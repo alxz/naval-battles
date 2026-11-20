@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARENA, chooseTargets, createArenaWorld, stepArena, targetScore } from './arena';
+import { ARENA, arenaLineup, chooseTargets, createArenaWorld, stepArena, targetScore } from './arena';
 import { ISLANDS, reefs, SHIP_CLASSES, WORLD } from './data';
 import { touchesLand } from './land';
 import { Simulation } from './simulation';
@@ -134,14 +134,24 @@ describe('arena spawn on a sea that is almost all land', () => {
   });
 });
 
-describe('arenaClass (M3 step 7e)', () => {
-  it('has 2 random traders and 2 random warships after the fixed bots, the same for the same seed', () => {
+describe('arenaLineup (M3 steps 7e, 7f)', () => {
+  it('the default arena: 6 fixed bots, 2 random traders and 2 random warships, the same for the same seed', () => {
     const a = createArenaWorld(11).ships.map((s) => s.shipClass);
-    const b = createArenaWorld(11).ships.map((s) => s.shipClass);
-    expect(a).toEqual(b);
+    expect(a).toEqual(createArenaWorld(11).ships.map((s) => s.shipClass));
     expect(a).toHaveLength(ARENA.bots);
-    const extra = a.slice(ARENA.fixedBots);
-    expect(extra.slice(0, 2).every((c) => ARENA.traderClasses.includes(c))).toBe(true);
-    expect(extra.slice(2).every((c) => ARENA.warshipClasses.includes(c))).toBe(true);
+    expect(a.slice(0, ARENA.fixedBots)).toEqual(ARENA.classes.slice(0, ARENA.fixedBots));
+    expect(a.slice(6, 8).every((c) => ARENA.traderClasses.includes(c))).toBe(true);
+    expect(a.slice(8).every((c) => ARENA.warshipClasses.includes(c))).toBe(true);
+  });
+  it('any size from 4 to 10 has at least 30% traders; sizes outside are kept inside', () => {
+    for (let n = 1; n <= 14; n++) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const w = createArenaWorld(seed);
+        const line = arenaLineup(w, n);
+        const size = Math.max(4, Math.min(10, n));
+        expect(line).toHaveLength(size);
+        expect(line.filter((c) => ARENA.traderClasses.includes(c)).length).toBeGreaterThanOrEqual(Math.ceil(0.3 * size));
+      }
+    }
   });
 });

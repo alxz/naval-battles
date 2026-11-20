@@ -114,14 +114,24 @@ function anywhere(world: World, islands: readonly Island[], shipClass: string, o
 }
 
 /**
- * The class of bot number i: the first `fixedBots` follow the list, the others are random traders and
- * warships (M3 step 7e: more bots, more data). Seeded, so the same seed gives the same arena.
+ * The classes of an arena of `count` bots (M3 step 7e/7f): the first `fixedBots` follow the list, the others are
+ * random traders and warships (`extraBots`); then, if fewer than minTraderShare of them are traders, the last
+ * warships of the list become random traders. count is kept within minBots..maxBots. Seeded.
  */
-export function arenaClass(world: World, i: number): string {
-  if (i < ARENA.fixedBots) return ARENA.classes[i % ARENA.classes.length] ?? 'sloop';
-  const kind = ARENA.extraBots[(i - ARENA.fixedBots) % ARENA.extraBots.length];
-  const pool = kind === 'trader' ? ARENA.traderClasses : ARENA.warshipClasses;
-  return pool[Math.floor(nextRandom(world) * pool.length) % pool.length] ?? 'sloop';
+export function arenaLineup(world: World, count: number, p: ArenaParams = ARENA): string[] {
+  const n = Math.max(p.minBots, Math.min(p.maxBots, Math.round(count)));
+  const pick = (pool: readonly string[]): string => pool[Math.floor(nextRandom(world) * pool.length) % pool.length] ?? 'sloop';
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    if (i < p.fixedBots) out.push(p.classes[i % p.classes.length] ?? 'sloop');
+    else out.push(pick(p.extraBots[(i - p.fixedBots) % p.extraBots.length] === 'trader' ? p.traderClasses : p.warshipClasses));
+  }
+  const isTrader = (c: string): boolean => p.traderClasses.includes(c);
+  const need = Math.ceil(p.minTraderShare * n - 1e-9);
+  for (let i = n - 1; i >= 0 && out.filter(isTrader).length < need; i--) {
+    if (!isTrader(out[i] ?? '')) out[i] = pick(p.traderClasses);
+  }
+  return out;
 }
 
 /** A new arena: `count` bots of mixed classes at random places, each on its own side. */
@@ -139,9 +149,10 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
     bots: [],
     arena: { pilots: [], totalWins: 0, peace: false, respawns: [], retargetSeconds: 0 },
   };
-  for (let i = 0; i < count; i++) {
+  const lineup = arenaLineup(world, count);
+  for (let i = 0; i < lineup.length; i++) {
     const id = i + 1;
-    const shipClass = arenaClass(world, i);
+    const shipClass = lineup[i] ?? 'sloop';
     const spot = anywhere(world, islands, shipClass, world.ships);
     if (!spot) continue; // no room at all: this bot is left out (the log header lists who came)
     world.ships.push({

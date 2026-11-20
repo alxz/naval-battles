@@ -23,8 +23,8 @@ import { circleRudder } from '../sim/circle';
 import type { Circle } from '../sim/circle';
 import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
-import { CHASER_TRAIN_DEG, gunsOn, predictLanding, reloadLeft } from '../sim/guns';
-import { chaserTrainDeg, turnAbout } from '../view/chaserAim';
+import { gunsOn, predictLanding, reloadLeft } from '../sim/guns';
+import { turnAbout } from '../view/chaserAim';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
 import { battleClasses, createWorld, enemiesFor } from '../sim/world';
 import worldJson from '../data/world.json';
@@ -69,7 +69,7 @@ import type { BattleShipRow } from '../view/pauseStats';
 import { TurnDevice } from './TurnDevice';
 import { isPortraitTouch } from '../view/pixelLayout';
 import { arenaResults } from '../view/arenaResults';
-import { createArenaWorld } from '../sim/arena';
+import { ARENA, createArenaWorld } from '../sim/arena';
 import { ArenaLog, clock, headerLines, placeText, who } from '../view/arenaLog';
 
 const PLAYER_ID = 1;
@@ -334,6 +334,7 @@ export class SeaScene extends Phaser.Scene {
         volume: 0.7,
         screenShake: true,
         arenaSpeed: 1,
+        arenaBots: ARENA.bots,
       },
       {
         onLogicalHeight: (h) => this.screenFit.setTargetHeight(h),
@@ -488,7 +489,7 @@ export class SeaScene extends Phaser.Scene {
     this.touch?.setAmmo(ammoLabel(myShip, true));
     this.rings.update(me.x, me.y, me.headingRad, s);
     const myParams = SHIP_CLASSES[myShip.shipClass];
-    if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds, this.arena ? 0 : this.bowTrainDeg(myShip, myParams));
+    if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
 
     // 4. The camera circle (D43): your ship (or the watched bot) sails freely inside a circle round the
     // middle of the screen; the camera follows only when it would leave it. The spyglass (or the
@@ -557,7 +558,7 @@ export class SeaScene extends Phaser.Scene {
     const shipsOnScreen = poses.flatMap((p, i) => (this.sim.world.ships[i]?.sunk ? [] : [{ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }]));
     const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
     this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
-    this.hud.setDebugBelow(this.arena ? this.arenaHud.bottom() : 0);
+    this.hud.setDebugBeside(this.arena && this.arenaHud.right() > 0 ? { x: this.arenaHud.right() + 10, y: this.arenaHud.top() + 3 } : null);
     this.hud.update({
       soundOn: v.sound,
       autoZoomOn: v.autoZoom,
@@ -809,19 +810,12 @@ export class SeaScene extends Phaser.Scene {
   private firePlayer(side: Side): void {
     const me = this.ship(PLAYER_ID);
     const params = me ? SHIP_CLASSES[me.shipClass] : undefined;
-    // M3 step 7c: the bow chaser's crew trains it on the nearest ship within 30 degrees of the bow.
-    const trainDeg = side === 'bow' && me && params ? this.bowTrainDeg(me, params) : 0;
-    this.sim.queueCommand(trainDeg !== 0 ? { type: 'fire', shipId: PLAYER_ID, side, trainDeg } : { type: 'fire', shipId: PLAYER_ID, side });
+    // M3 step 7f: no training: the bow chaser fires dead ahead, you aim by turning the ship.
+    const trainDeg = 0;
+    this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side });
     if (!me || !params || me.sunk || reloadLeft(me, side) > 0 || gunsOn(params, side) <= 0) return;
     const p = turnAbout(me, predictLanding(me, params, side, STEP_SECONDS), trainDeg);
     this.markers2.addGhost(p.x, p.y, predictLanding(me, params, side, STEP_SECONDS).seconds + 0.8);
-  }
-
-  /** Where the player's bow chaser is trained now (degrees off the bow; 0 = dead ahead). */
-  private bowTrainDeg(me: ShipState, params: ShipParams): number {
-    const longest = predictLanding({ ...me, speed: 0, elevationDeg: GUNS.maxElevationDeg }, params, 'bow', STEP_SECONDS);
-    const rangeM = Math.hypot(longest.x - me.x, longest.y - me.y) * 1.1;
-    return chaserTrainDeg(me, this.sim.world.ships, CHASER_TRAIN_DEG, rangeM);
   }
 
   /**
@@ -1176,7 +1170,7 @@ export class SeaScene extends Phaser.Scene {
     const v = this.panel.values;
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.arenaSeed = seed;
-    this.sim = new Simulation(createArenaWorld(seed));
+    this.sim = new Simulation(createArenaWorld(seed, v.arenaBots));
     this.sim.tuning.speedScale = speedScaleFor(v.speedScale, true, viewJson.soloSpeedScale);
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.update(0.05);

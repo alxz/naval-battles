@@ -4,6 +4,31 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (later) — M3 step 7f: your test of 7e; chasers by hand, arena table in one line, arena size
+
+### Your test (battle logs 1212, 1219)
+
+Clean: no warnings; you sank the sloop; traders ran and threw cargo; 7 bow chaser shots. Wishes done (D63):
+
+- **Chasers are not trained any more** (all ships, the same rule for you and the bots): they fire along the centre line; you aim by turning the ship. Bots fire a chaser only when the aim point lies on its line, like a broadside (`STERN_TRAIN_DEG` 0; `sternArcDeg` removed from `bots.json`). Spread and accuracy unchanged. Headless 60 min: 161 bow chaser shots, 61 stern salvos (they still fire: a hunter points its bow at its prey, a runner its stern at the hunter).
+- **Stern chaser bar at the very bottom** of the guns panel (bow bar stays at the top); the version moved to the panel's bottom right corner.
+- **Arena table in one line:** "ARENA 10:35 SPEED x8 WINS 20 +"; a tap (click) opens the full table, another closes it. NEXT / x8 / LOG / LEAVE above it. The help (H) goes to the right of the table. Fixed on the way: names over ships stopped at 8 bots (`MAX_SHIPS` 12 now).
+- **Arena size** in the tuning panel (Auto-bot → "bots (next arena)", 4–10, default 10): the first 6 from the list, then random traders and warships; at least 30% traders (the last warships become random traders when needed; `arenaLineup`, `arena.json` minBots / maxBots / minTraderShare).
+
+### Proposed, not built: survivors join the winner (D64, for M4)
+
+Your idea: the winner may take 3–5% of the loser's crew if at least 5% was left. It is good and true to the time: pirates took on men from prizes (volunteers and forced men, often carpenters, surgeons, sailors), and men in the water were picked up. It belongs to M4 (boarding, surrender, prisoners), which has not started, so D37 puts it there: a small first version in M4 — after a sinking or a surrender the winner gets up to 5% of the loser's men who were still alive (at most its own full crew), and the log shows it. Waiting for your yes.
+
+### Checks
+
+446 tests; `tsc`; build; test build; headless arena 60 min (10 bots), 0 warnings; browser computer and iPhone (arena line and open table, H to the right, caravel with both bars, 7-bot arena), no errors.
+
+### Next
+
+Your test of 7f. Then the last M3 step: groundings at the Isla Verde inlet mouth and the M3 review; then M4b (D54).
+
+---
+
 ## 20 Nov 2026 (afternoon) — M3 step 7e: your test of 7c2; chaser bars, 10 bots, phone layout, version
 
 ### Your test

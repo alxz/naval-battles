@@ -52,5 +52,8 @@
     "sloop",
     "brigantine",
     "frigate"
-  ]
+  ],
+  "minBots": 4,
+  "maxBots": 10,
+  "minTraderShare": 0.3
 }

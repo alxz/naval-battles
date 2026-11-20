@@ -110,7 +110,7 @@ export class Hud {
   private readonly autoZoomIcon: Phaser.GameObjects.Image;
   private readonly debugText: Phaser.GameObjects.Text;
   private layoutNow = { debugX: 0, debugY: 0 };
-  private debugBelowY = 0;
+  private debugBeside: { x: number; y: number } | null = null;
   private readonly hint: Phaser.GameObjects.Text;
   private readonly versionText: Phaser.GameObjects.Text;
   private readonly ammoCounts: Phaser.GameObjects.Text[] = [];
@@ -228,8 +228,9 @@ export class Hud {
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
     // Computer: the loaded shot just above the guns panel (touch screens have a button for it).
     this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
-    // The version: bottom of the guns panel (computer), bottom middle of the screen (phone).
-    this.versionText.setPosition(this.touch ? Math.round(width / 2) : gn.x + Math.round(gn.w / 2), this.touch ? height - 3 : gn.y + gn.h - 2);
+    // The version: in the guns panel (computer), bottom middle of the screen (phone).
+    // (Computer: the bottom right corner of the guns panel, clear of the stern chaser's bar in the middle.)
+    this.versionText.setOrigin(this.touch ? 0.5 : 1, 1).setPosition(this.touch ? Math.round(width / 2) : gn.x + gn.w - 5, this.touch ? height - 3 : gn.y + gn.h - 2);
     const so = l.sound;
     this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
     this.debugText.setPosition(l.debugX, l.debugY);
@@ -391,8 +392,8 @@ export class Hud {
 
     // --- Debug text (H) ---
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
-    // In the arena the bot table and its buttons fill the top left: the help goes below them (M3 step 6b).
-    if (d.debug) this.debugText.setPosition(this.layoutNow.debugX, Math.max(this.layoutNow.debugY, this.debugBelowY));
+    // In the arena the bot table fills the top left: the help goes to its right (M3 step 7f).
+    if (d.debug) this.debugText.setPosition(this.debugBeside ? this.debugBeside.x : this.layoutNow.debugX, this.debugBeside ? this.debugBeside.y : this.layoutNow.debugY);
     this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
@@ -401,9 +402,9 @@ export class Hud {
     }
   }
 
-  /** Keep the help text (H) below this screen y (the arena table's bottom; 0 = no limit). */
-  setDebugBelow(y: number): void {
-    this.debugBelowY = y;
+  /** Put the help text (H) at this screen place (right of the arena table), or null for its usual place. */
+  setDebugBeside(at: { x: number; y: number } | null): void {
+    this.debugBeside = at;
   }
 
   /** Sails (canvas colour) and crew (blue): two half-width bars on one line, each with its icon in front. */

@@ -55,7 +55,7 @@ describe('stern chasers (M3 step 7b)', () => {
     expect(orderBroadside(w, w.ships[1]!, 'stern', STEP_SECONDS)).toBe(false);
   });
 
-  it('the stern chasers can be trained to one side (trainDeg)', () => {
+  it('the stern chasers are not trained any more (M3 step 7f): they fire dead astern', () => {
     const w = emptyWorld([shipOf(1, 'fluyt', 0, 0, 0)]);
     applyCommand(w, { type: 'fire', shipId: 1, side: 'stern', trainDeg: 20 });
     for (let i = 0; i < 30 && w.balls.length === 0; i++) {
@@ -63,9 +63,9 @@ describe('stern chasers (M3 step 7b)', () => {
       w.tick++;
     }
     const ball = w.balls[0]!;
-    // Astern is -x; trained 20 degrees clockwise (toward -y when pointing at -x... the sign follows the heading rule).
+    // Astern is -x; a trainDeg in the command is ignored (only the gun error is left).
     const dir = Math.atan2(ball.vy, ball.vx);
-    expect(Math.abs(Math.abs(dir) - Math.PI)).toBeGreaterThan(0.2);
+    expect(Math.abs(Math.abs(dir) - Math.PI)).toBeLessThan(0.15);
   });
 });
 

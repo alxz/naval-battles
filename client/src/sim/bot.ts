@@ -17,7 +17,7 @@ import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
 import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
-import { degToRad, normalizeAngle, radToDeg, twaDeg } from './angles';
+import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, SKILLS, WORLD } from './data';
 import { batteryAmmo, gunsOn, isChaser, predictLanding, reloadLeft, sideAngleRad } from './guns';
 import { touchesLand } from './land';
@@ -935,13 +935,13 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     // The guns fire straight abeam, so fire only when the aim point lies close to that line.
     const offBeam = normalizeAngle(Math.atan2(target.y - ship.y, target.x - ship.x) - sideAngleRad(ship.headingRad, side));
     const ready = reloadLeft(ship, side) <= 0;
-    // The chasers can be trained a little: they fire at anything within sternArcDeg of the centre line.
-    const inArc = isChaser(side) ? Math.abs(offBeam) <= degToRad(p.sternArcDeg) : Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
+    // M3 step 7f: the chasers are not trained any more; like a broadside they fire only when the aim point lies on their line.
+    const inArc = Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
     const onElevation = Math.abs(next - goalDeg) <= p.aimToleranceDeg;
     // M3 step 7b: no shot into a hill or a cliff (the balls would stick in the land).
     const clear = ready && inArc && onElevation ? shotClear(ship, target, next, islands) : true;
     if (ready && inArc && onElevation && clear) {
-      commands.push(isChaser(side) ? { type: 'fire', shipId: id, side, trainDeg: radToDeg(offBeam) } : { type: 'fire', shipId: id, side });
+      commands.push({ type: 'fire', shipId: id, side });
       bot.quietSeconds = 0;
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }

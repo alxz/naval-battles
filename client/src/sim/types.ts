@@ -461,7 +461,6 @@ export interface BotParams {
   traderArriveM: number; // a stop of the trade run is reached this close
   traderCruiseSails: number; // sails set on the trade run
   traderIslandOffsetM: number; // a stop off a big island lies this far off its shore
-  sternArcDeg: number; // the stern chasers fire at an enemy within this angle of dead astern
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
   rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach
 }
