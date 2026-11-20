@@ -17,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 7c2 (wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 20 Nov 2026';
+export const BUILD_LABEL = 'M3 step 7e (10 bots in the arena, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */

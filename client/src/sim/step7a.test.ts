@@ -37,7 +37,8 @@ describe('the two traders (M3 step 7a)', () => {
   it('the arena brings both traders with a load in the hold; warships carry none', () => {
     const w = createArenaWorld(7);
     const classes = w.ships.map((s) => s.shipClass);
-    expect(classes).toEqual(ARENA.classes.slice(0, ARENA.bots));
+    expect(classes.slice(0, ARENA.fixedBots)).toEqual(ARENA.classes.slice(0, ARENA.fixedBots));
+    expect(classes).toHaveLength(ARENA.bots);
     expect(classes).toContain('fluyt');
     expect(classes).toContain('caravel');
     for (const s of w.ships) {

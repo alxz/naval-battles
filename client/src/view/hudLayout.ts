@@ -50,6 +50,11 @@ const SHIP_W = 160; // room for the speed in the 16 px pixel font
 const SHIP_H = 64;
 const SHIP_W_COMPACT = 112; // phone: a small compass and the speed in the 8 px font
 const SHIP_H_COMPACT = 44;
+/** Phone, ship panel closed (M3 step 7e): a small compass, the speed and the hull bar; a tap on it opens the full panel. */
+const SHIP_W_MINI = 84;
+const SHIP_H_MINI = 28;
+/** Touch: the margin of the minimap from the right and top edges (it sits close to the corner). */
+const MAP_EDGE = 4;
 const TARGET_W = 168; // "merchantman  110 m" in the 8 px pixel font
 const TARGET_W_TOUCH = 112; // touch: the same in the narrow 8 px font (Silkscreen)
 const TARGET_H_TOUCH = 22;
@@ -64,7 +69,7 @@ export const TARGET_CARD_RANGE_TOUCH = 400;
 const GUNS_W_COMPUTER = 210; // room for the small +/- gun icons
 const GUNS_TOUCH_H = 26; // touch: two short lines, the angle and the range
 const GUNS_TOUCH_EXTRA = 6; // "10.0°" needs a little more than a button's width
-const GEAR_H = 32; // touch: the tuning gear in the top right corner is about this high
+export const GEAR_CSS_H = 32; // touch: the tuning gear in the top right corner is about this high
 /** Computer: the row of ammunition icons with their counts above the guns panel (M3 step 4c). */
 export const AMMO_ROW_H = 24;
 /** Computer: a window narrower than this (a tall browser window) stacks the guns panel above my ship. */
@@ -96,14 +101,16 @@ export function smallButtonSize(height: number): number {
 /** Computer: the sound icon (16 px) in the top left corner. */
 const SOUND_ICON = 16;
 
-export function hudLayout(width: number, height: number, touch: boolean): HudLayout {
+export function hudLayout(width: number, height: number, touch: boolean, shipOpen = false): HudLayout {
   const m = HUD_MARGIN;
   const buttonSize = touch ? touchButtonSize(height) : 0;
   const gunsW = GUNS_W_COMPUTER;
   const compact = touch && isCompact(height);
   const narrow = !touch && width < NARROW_WIDTH;
   const ship: Rect = touch
-    ? { x: m, y: m, w: compact ? SHIP_W_COMPACT : SHIP_W, h: compact ? SHIP_H_COMPACT : SHIP_H }
+    ? compact && !shipOpen
+      ? { x: m, y: m, w: SHIP_W_MINI, h: SHIP_H_MINI }
+      : { x: m, y: m, w: compact ? SHIP_W_COMPACT : SHIP_W, h: compact ? SHIP_H_COMPACT : SHIP_H }
     : { x: m, y: height - m - SHIP_H, w: SHIP_W, h: SHIP_H };
   // Touch: the sound button sits right of the zoom button. Computer: a small icon in the corner.
   const z = smallButtonSize(height);
@@ -111,16 +118,16 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   // Touch: the minimap (the sea is 3 : 2) at the right edge, under the tuning gear.
   const b = touchButtonRects(width, height);
   // Touch, minimap off: the chart button sits at the right edge under the tuning gear.
-  const chartButton: Rect = { x: width - m - buttonSize, y: GEAR_H + 2, w: buttonSize, h: Math.round((buttonSize * 2) / 3) };
+  const chartButton: Rect = { x: width - m - buttonSize, y: MAP_EDGE, w: buttonSize, h: Math.round((buttonSize * 2) / 3) };
   const chart: Rect = touch ? chartButton : { x: sound.x + sound.w + 6, y: sound.y, w: sound.w, h: sound.h };
   const spyglass: Rect = touch ? { x: zoomButtonX(width, height), y: m, w: z, h: z } : { x: chart.x + chart.w + 6, y: chart.y, w: chart.w, h: chart.h };
   const autoZoom: Rect = touch ? { x: sound.x + sound.w + m, y: m, w: z, h: z } : { x: spyglass.x + spyglass.w + 6, y: chart.y, w: chart.w, h: chart.h };
   // Touch (M3 step 4b): a big minimap at the top right, left of the right column of buttons;
   // as wide as MINIMAP_TOUCH_SCALE buttons, but never onto the small buttons in the top middle.
-  const mapRight = b.sailsMore.x - 4;
+  const mapRight = width - MAP_EDGE;
   const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (b.pause.x + b.pause.w + m)));
   const minimap: Rect = touch
-    ? { x: mapRight - mapW, y: m, w: mapW, h: Math.round((mapW * 2) / 3) }
+    ? { x: mapRight - mapW, y: MAP_EDGE, w: mapW, h: Math.round((mapW * 2) / 3) }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
   // Computer: the target card at the top right (M3 step 4c: in the middle it covered the key hints).
   // Touch: at the left edge, under my ship.
@@ -192,7 +199,7 @@ export type ButtonName =
 
 /**
  * Touch buttons (their top left corners and sizes):
- *   left group:   row 1 (bottom) rudder < >,  row 2 fire L B R (B = bow chaser, M3 step 7c)
+ *   left group:   row 1 (bottom) fire L B R (B = bow chaser, M3 step 7c), row 2 rudder < > (swapped in step 7e)
  *   right group:  row 1 sails - +,  above "+" a column: gun down (row 2), gun up (row 3)
  *   zoom:         small, at the top, right of my ship panel; pause: the fourth small button at the top
  */
@@ -205,11 +212,12 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
   const z = smallButtonSize(height);
   const at = (x: number, y: number, size = s): Rect => ({ x, y, w: size, h: size });
   return {
-    rudderLeft: at(left(1), row(1)),
-    rudderRight: at(left(2), row(1)),
-    firePort: at(left(1), row(2)),
-    fireBow: at(left(2), row(2)),
-    fireStarboard: at(left(3), row(2)),
+    // M3 step 7e: the fire row is the lowest, the rudder above it.
+    rudderLeft: at(left(1), row(2)),
+    rudderRight: at(left(2), row(2)),
+    firePort: at(left(1), row(1)),
+    fireBow: at(left(2), row(1)),
+    fireStarboard: at(left(3), row(1)),
     sailsLess: at(right(2), row(1)),
     sailsMore: at(right(1), row(1)),
     gunsDown: at(right(1), row(2)),

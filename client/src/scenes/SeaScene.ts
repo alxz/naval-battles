@@ -36,8 +36,9 @@ const TRADER_GONE_M = 1500;
 const SIGHT = { flagSightM: worldJson.flagSightM, detailFullM: worldJson.detailFullM, detailHullM: worldJson.detailHullM };
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, newChart, updateSightings } from '../view/chart';
+import { wheelAction } from '../view/wheelZoom';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
-import { hudLayout, touchButtonRects } from '../view/hudLayout';
+import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
 import { cameraCircleRadius, circleCamera, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
@@ -245,12 +246,19 @@ export class SeaScene extends Phaser.Scene {
       () => this.toggleSpyglass(),
       () => this.panel.setAutoZoom(!this.panel.values.autoZoom),
     );
-    // Mouse wheel: roll to zoom in and out (this turns the automatic combat zoom off: you took over);
+    // Mouse wheel: roll to zoom in and out (this turns the automatic combat zoom off: you took over; rolling out at
+    // the lowest zoom opens the spyglass for a few seconds);
     // press the wheel to look through the spyglass.
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (dy === 0) return;
-      this.panel.setAutoZoom(false);
-      this.stepManualZoom(dy < 0 ? 1 : -1);
+      // Rolling out at the lowest zoom opens the spyglass look-out for a few seconds (view/wheelZoom.ts).
+      const action = wheelAction(dy, this.spyglassLeft > 0, this.panel.values.zoom <= (viewJson.manualZoomSteps[0] ?? 1) + 1e-6);
+      if (action === null) return;
+      if (action === 'spyglassOn') this.spyglassLeft = viewJson.spyglassSeconds;
+      else if (action === 'spyglassOff') this.spyglassLeft = 0;
+      else {
+        this.panel.setAutoZoom(false);
+        this.stepManualZoom(action === 'zoomIn' ? 1 : -1);
+      }
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.middleButtonDown()) this.toggleSpyglass();
@@ -602,7 +610,7 @@ export class SeaScene extends Phaser.Scene {
             pixelScale: layout.pixelScale,
           })
             // In the arena you do not steer: the arena keys instead of the ship keys (a shorter box, M3 step 6b).
-            .slice(this.arena ? 7 : 0))
+            .filter((_line, i) => !this.arena || i === 0 || i >= 8))
             .concat(this.botLine())
             .concat(['', this.perf.line(this.game.loop.actualFps)])
         : [],
@@ -650,6 +658,13 @@ export class SeaScene extends Phaser.Scene {
     });
   }
 
+  /** Phone: the tuning gear sits see-through near the right edge, half over the lower edge of the minimap. */
+  private placeGear(layout: PixelLayout): void {
+    if (!this.touch || !this.panel) return;
+    const map = hudLayout(layout.width, layout.height, true).minimap;
+    this.panel.placeGear((map.y + map.h) * layout.cssZoom - GEAR_CSS_H / 2, 4);
+  }
+
   /** The screen got a new logical size: resize the camera, water and buttons. */
   private onLayout(layout: PixelLayout): void {
     this.cameras.main.setSize(layout.width, layout.height);
@@ -662,6 +677,8 @@ export class SeaScene extends Phaser.Scene {
     this.pauseMenu.layout(layout.width, layout.height);
     const buttons = hudLayout(layout.width, layout.height, this.touch !== null).sound;
     this.chart.layout(layout.width, layout.height, buttons.y + buttons.h + 6);
+    // Phone: the tuning gear, see-through, half over the lower edge of the minimap, near the right edge.
+    this.placeGear(layout);
     this.minimap.layout(layout.width, layout.height);
   }
 

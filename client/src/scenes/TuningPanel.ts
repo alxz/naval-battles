@@ -82,6 +82,8 @@ export class TuningPanel {
   private readonly debugController;
   private readonly soundController;
   private readonly arenaSpeedController;
+  private gearFit: (() => void) | null = null;
+  private gearPos: { topCss: number; rightCss: number } | null = null;
 
   constructor(start: TuningValues, callbacks: TuningCallbacks, startClosed: boolean) {
     this.values = { ...start };
@@ -97,7 +99,9 @@ export class TuningPanel {
         const closed = root._closed;
         root.title(closed ? '\u2699' : 'Tuning');
         root.domElement.style.setProperty('--width', closed ? '44px' : '245px');
+        this.fitGear();
       };
+      this.gearFit = fit;
       root.onOpenClose((changed) => {
         if (changed === root) fit();
       });
@@ -202,6 +206,28 @@ export class TuningPanel {
     });
 
     if (startClosed) this.gui.close();
+  }
+
+  /**
+   * Phone, panel closed (M3 step 7e): the gear is see-through and sits near the right edge, a little under the
+   * top of the minimap (topCss / rightCss in CSS pixels); opened, the panel goes back to the corner.
+   */
+  placeGear(topCss: number, rightCss: number): void {
+    this.gearPos = { topCss, rightCss };
+    this.gearFit?.();
+  }
+
+  private fitGear(): void {
+    const style = this.gui.domElement.style;
+    if (this.gui._closed && this.gearPos) {
+      style.setProperty('top', `${Math.round(this.gearPos.topCss)}px`);
+      style.setProperty('right', `${Math.round(this.gearPos.rightCss)}px`);
+      style.setProperty('opacity', '0.4');
+    } else {
+      style.removeProperty('top');
+      style.removeProperty('right');
+      style.removeProperty('opacity');
+    }
   }
 
   /** Width of the open panel in CSS pixels (0 when closed), so the minimap can step aside. */

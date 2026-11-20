@@ -1,14 +1,12 @@
 {
-  "bots": 6,
+  "bots": 10,
   "classes": [
     "sloop",
     "brigantine",
     "fluyt",
     "frigate",
     "sloop",
-    "caravel",
-    "brigantine",
-    "fluyt"
+    "caravel"
   ],
   "names": [
     "Black Gull",
@@ -18,7 +16,9 @@
     "Storm Petrel",
     "Iron Crab",
     "Grey Shark",
-    "Salt Witch"
+    "Salt Witch",
+    "Night Heron",
+    "Coral Fang"
   ],
   "respawnSeconds": 20,
   "retargetSeconds": 3,
@@ -36,5 +36,21 @@
     "warshipAway": 0.5,
     "traderPort": 1.0,
     "traderAway": 0.25
-  }
+  },
+  "fixedBots": 6,
+  "extraBots": [
+    "trader",
+    "trader",
+    "warship",
+    "warship"
+  ],
+  "traderClasses": [
+    "fluyt",
+    "caravel"
+  ],
+  "warshipClasses": [
+    "sloop",
+    "brigantine",
+    "frigate"
+  ]
 }

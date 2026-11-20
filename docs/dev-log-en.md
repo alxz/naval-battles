@@ -4,6 +4,28 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (afternoon) — M3 step 7e: your test of 7c2; chaser bars, 10 bots, phone layout, version
+
+### Your test
+
+Solo speed × 1.15 stays. Wrecks: fine. Wishes done in this step (D62): bot arrows only within 1000 m (`sightingRange`); reload bars for the bow and stern chasers at the top of the guns panel (computer; half the panel long, bow above stern, grey while loading, yellow when loaded, no bar if the ship has no such gun: `view/chaserBar.ts`; it works for the bot you watch in the arena too); arena of **10 bots**: the first 6 as before, then 2 random traders (fluyt / caravel) and 2 random warships (sloop / brigantine / frigate), seeded (`arenaClass`, `arena.json`); **safe water 300 → 255 m** (−15%; the law's pardon distance stays 450 m through `leaveFactor`); the mouse wheel rolled out at the lowest zoom opens the spyglass look-out for a few seconds, rolled in puts it away (`view/wheelZoom.ts`); the **version** (`view/version.ts`, "M3 7e") at the bottom of the guns panel (computer), bottom middle (phone) and the first line of the help (H), in the battle and in the arena.
+
+### Phone layout
+
+- My ship panel is a small one by default (84 × 28: a mini compass, the speed, the hull bar); a **tap on it opens** the full panel with the compass in its usual size (`shipOpen` in `Hud`; the target card moves with it).
+- The minimap sits in the top right corner (4 px from the edges); the tuning gear is see-through (40%) and lies half over the minimap's lower edge near the right edge (`TuningPanel.placeGear`).
+- Buttons: **L B R are the bottom row, the rudder `<` `>` above them**; the words and icons on the buttons are fainter (alpha 0.55).
+
+### Checks
+
+445 tests (new: chaser bars, wheel action, arena classes); `tsc`; build; test build; headless arena 60 min with 10 bots: 37 wins, 0 warnings; browser computer and iPhone (bars, version, mini panel and its tap, button rows, gear, wheel look-out), no errors. Not checked on the real iPhone: the gear place (CSS pixels) and how the mini panel feels.
+
+### Next
+
+Your test of 7e. Open from before: groundings at the Isla Verde inlet mouth. Then M4b before M4 (D54).
+
+---
+
 ## 20 Nov 2026 — M3 step 7c2: your test of 7c; wrecks, solo speed
 
 ### Your test (5 logs: PC arena 0853 and 1143, PC battle 1127; iPhone battle 0813 and arena 0823)

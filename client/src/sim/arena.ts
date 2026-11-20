@@ -113,6 +113,17 @@ function anywhere(world: World, islands: readonly Island[], shipClass: string, o
   return gridSpot(world, islands, params, others.filter((o) => !o.sunk), 400);
 }
 
+/**
+ * The class of bot number i: the first `fixedBots` follow the list, the others are random traders and
+ * warships (M3 step 7e: more bots, more data). Seeded, so the same seed gives the same arena.
+ */
+export function arenaClass(world: World, i: number): string {
+  if (i < ARENA.fixedBots) return ARENA.classes[i % ARENA.classes.length] ?? 'sloop';
+  const kind = ARENA.extraBots[(i - ARENA.fixedBots) % ARENA.extraBots.length];
+  const pool = kind === 'trader' ? ARENA.traderClasses : ARENA.warshipClasses;
+  return pool[Math.floor(nextRandom(world) * pool.length) % pool.length] ?? 'sloop';
+}
+
 /** A new arena: `count` bots of mixed classes at random places, each on its own side. */
 export function createArenaWorld(seed: number, count: number = ARENA.bots, islands: readonly Island[] = ISLANDS): World {
   const wind = bearingDegToHeadingRad(WIND.startFromBearingDeg);
@@ -130,7 +141,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
   };
   for (let i = 0; i < count; i++) {
     const id = i + 1;
-    const shipClass = ARENA.classes[i % ARENA.classes.length] ?? 'sloop';
+    const shipClass = arenaClass(world, i);
     const spot = anywhere(world, islands, shipClass, world.ships);
     if (!spot) continue; // no room at all: this bot is left out (the log header lists who came)
     world.ships.push({

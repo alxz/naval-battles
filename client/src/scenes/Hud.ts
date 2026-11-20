@@ -1,7 +1,8 @@
-import { reloadSecondsOf } from '../sim/guns';
+import { gunsOn, reloadLeft, reloadSecondsOf } from '../sim/guns';
+import { chaserBars, type ChaserGun } from '../view/chaserBar';
 import Phaser from 'phaser';
 import { compassPoint, headingRadToBearingDeg } from '../sim/angles';
-import { GUNS } from '../sim/data';
+import { GUNS, SHIP_CLASSES } from '../sim/data';
 import type { SailingInfo } from '../sim/step';
 import type { ShipState, Wind } from '../sim/types';
 import { HUD_MARGIN, TARGET_CARD_RANGE_TOUCH, barColour, hudLayout, panelCovers } from '../view/hudLayout';
@@ -12,6 +13,7 @@ import { BAR_ICONS, barIconHeight, barIconPixels, barIconWidth } from '../view/b
 import type { BarIconName } from '../view/barIcons';
 import { ammoIconPixels, ammoIconSize } from '../view/ammoIcons';
 import type { AmmoSlot } from '../view/ammoIcons';
+import { VERSION } from '../view/version';
 import { paint, textStyle } from './text';
 import type { TextKind } from './text';
 
@@ -110,11 +112,15 @@ export class Hud {
   private layoutNow = { debugX: 0, debugY: 0 };
   private debugBelowY = 0;
   private readonly hint: Phaser.GameObjects.Text;
+  private readonly versionText: Phaser.GameObjects.Text;
   private readonly ammoCounts: Phaser.GameObjects.Text[] = [];
   private readonly ammoKeys: Phaser.GameObjects.Text[] = [];
   private base: HudLayout = hudLayout(640, 360, false);
   private l: HudLayout = this.base;
   private covered = 0;
+  private shipOpen = false; // phone: the full ship panel (compass, sails, bars) is open; closed = a mini panel (M3 step 7e)
+  private lastSize = { w: 640, h: 360 };
+  private shipZone?: Phaser.GameObjects.Zone;
 
   constructor(
     scene: Phaser.Scene,
@@ -147,6 +153,7 @@ export class Hud {
       }
     }
     this.hint = text('small', '#cfe6f7').setAlpha(0.75);
+    this.versionText = text('small', '#cfe6f7').setOrigin(0.5, 1).setText(VERSION).setAlpha(0.5);
 
     if (!touch) {
       // Computer: the gun icons are a reminder of the keys, and they can be clicked too.
@@ -171,16 +178,30 @@ export class Hud {
     this.spyglassIcon.on('pointerdown', () => onToggleSpyglass());
     this.autoZoomIcon = scene.add.image(0, 0, 'icon-autozoom-on').setScrollFactor(0).setDepth(104).setInteractive();
     this.autoZoomIcon.on('pointerdown', () => onToggleAutoZoom());
+    // Phone: a tap on the ship panel opens / closes the full panel (the compass in its usual size).
+    if (touch) {
+      this.shipZone = scene.add.zone(0, 0, 10, 10).setOrigin(0, 0).setScrollFactor(0).setDepth(104).setInteractive();
+      this.shipZone.on('pointerdown', () => {
+        this.shipOpen = !this.shipOpen;
+        this.layout(this.lastSize.w, this.lastSize.h);
+      });
+    }
   }
 
   /** The screen got a new logical size: move the panels. */
   layout(width: number, height: number): void {
-    const l = hudLayout(width, height, this.touch);
+    this.lastSize = { w: width, h: height };
+    const l = hudLayout(width, height, this.touch, this.shipOpen);
     this.base = l;
     this.l = l;
     this.covered = 0;
     const s = l.ship;
-    if (l.compact) {
+    this.shipZone?.setPosition(s.x, s.y).setSize(s.w, s.h);
+    if (l.compact && !this.shipOpen) {
+      // Phone, panel closed: a small compass, the speed and the hull bar.
+      this.compass.place(s.x + 15, s.y + s.h / 2, 10);
+      this.speed.setStyle(textStyle('main')).setPosition(s.x + 31, s.y + 4);
+    } else if (l.compact) {
       // Phone: a small compass and the speed in the 8 px font.
       this.compass.place(s.x + 22, s.y + s.h / 2, 18);
       this.speed.setStyle(textStyle('main')).setPosition(s.x + 46, s.y + 5);
@@ -207,6 +228,8 @@ export class Hud {
     this.gunIcons.forEach((icon, i) => icon.setPosition(gn.x + 136, gn.y + 5 + i * (ICON_SIZE + 4)));
     // Computer: the loaded shot just above the guns panel (touch screens have a button for it).
     this.keyHints.forEach((hint, i) => hint.setPosition(gn.x + 157, gn.y + 9 + i * (ICON_SIZE + 4)));
+    // The version: bottom of the guns panel (computer), bottom middle of the screen (phone).
+    this.versionText.setPosition(this.touch ? Math.round(width / 2) : gn.x + Math.round(gn.w / 2), this.touch ? height - 3 : gn.y + gn.h - 2);
     const so = l.sound;
     this.soundIcon.setPosition(so.x + so.w / 2, so.y + so.h / 2).setScale(Math.max(1, Math.floor((so.w * 0.8) / ICON_SIZE)));
     this.debugText.setPosition(l.debugX, l.debugY);
@@ -246,6 +269,7 @@ export class Hud {
     this.compass.setAlpha(this.fade.ship);
     for (const t of [this.speed, this.unit]) t.setAlpha(this.fade.ship);
     this.targetText.setAlpha(this.fade.target);
+    if (!this.touch) this.versionText.setAlpha(0.5 * this.fade.guns);
     for (const t of [this.elevation, this.range, this.sideText.port, this.sideText.starboard, ...this.keyHints, ...this.gunIcons]) t.setAlpha(this.fade.guns);
 
     // --- Plates ---
@@ -268,35 +292,45 @@ export class Hud {
     });
     this.speed.setText(ship.speed.toFixed(1));
     const c = l.compact;
-    this.unit.setPosition(this.speed.x + this.speed.width + 4, s.y + (c ? 6 : 15));
-    // Sail icon and pips: filled = sails set. (Phone: smaller.)
-    const px = s.x + (c ? 46 : 64);
-    const py = s.y + (c ? 17 : 30);
-    const pip = c ? 7 : 10;
-    gs.fillStyle(0xf2e8c9, 1);
-    gs.fillRect(px, py, 1, pip + 2);
-    gs.fillTriangle(px + 2, py, px + 2, py + pip + 1, px + pip, py + pip + 1);
-    const set = Math.round(ship.sailLevel * SAIL_PIPS);
-    for (let i = 0; i < SAIL_PIPS; i++) {
-      const x = px + pip + 6 + i * (pip + 4);
-      if (i < set) {
-        gs.fillStyle(0xffffff, 1);
-        gs.fillRect(x, py + 1, pip, pip);
-      } else {
-        gs.lineStyle(1, 0xffffff, 0.5);
-        gs.strokeRect(x + 0.5, py + 1.5, pip - 1, pip - 1);
-      }
+    const mini = this.touch && c && !this.shipOpen;
+    this.unit.setVisible(!mini).setPosition(this.speed.x + this.speed.width + 4, s.y + (c ? 6 : 15));
+    if (mini) {
+      // Closed phone panel: only the hull bar under the speed (tap the panel for the rest).
+      const bar = { x: s.x + 31, y: s.y + s.h - 9, w: s.w - 31 - 6, h: 4 };
+      this.bar(gs, bar, ship.hull / Math.max(1, d.hullMax));
+      gs.fillStyle(0xffffff, 0.9);
+      gs.fillRect(bar.x + Math.round(bar.w * d.repairSeaShare), bar.y - 2, 1, bar.h + 4);
     }
-    // A small hull icon in front of the hull bar (M3 step 4b), so each bar says what it is.
-    const hullRow = { x: px, y: s.y + s.h - (c ? 10 : 12), w: s.w - (c ? 46 : 64) - 8, h: c ? 4 : 5 };
-    const hullBar = this.withIcon(gs, 'hull', hullRow);
-    this.bar(gs, hullBar, ship.hull / Math.max(1, d.hullMax));
-    // A tick at the share that repair at sea can reach.
-    gs.fillStyle(0xffffff, 0.9);
-    gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
-    if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
-    // Above the hull bar, two short bars side by side: sails (canvas) and crew (blue) (M3 step 4).
-    this.conditionBars(gs, { x: hullRow.x, y: hullRow.y - (c ? 5 : 7), w: hullRow.w, h: c ? 2 : 3 }, d.sailShare, d.crewShare);
+    if (!mini) {
+      // Sail icon and pips: filled = sails set. (Phone: smaller.)
+      const px = s.x + (c ? 46 : 64);
+      const py = s.y + (c ? 17 : 30);
+      const pip = c ? 7 : 10;
+      gs.fillStyle(0xf2e8c9, 1);
+      gs.fillRect(px, py, 1, pip + 2);
+      gs.fillTriangle(px + 2, py, px + 2, py + pip + 1, px + pip, py + pip + 1);
+      const set = Math.round(ship.sailLevel * SAIL_PIPS);
+      for (let i = 0; i < SAIL_PIPS; i++) {
+        const x = px + pip + 6 + i * (pip + 4);
+        if (i < set) {
+          gs.fillStyle(0xffffff, 1);
+          gs.fillRect(x, py + 1, pip, pip);
+        } else {
+          gs.lineStyle(1, 0xffffff, 0.5);
+          gs.strokeRect(x + 0.5, py + 1.5, pip - 1, pip - 1);
+        }
+      }
+      // A small hull icon in front of the hull bar (M3 step 4b), so each bar says what it is.
+      const hullRow = { x: px, y: s.y + s.h - (c ? 10 : 12), w: s.w - (c ? 46 : 64) - 8, h: c ? 4 : 5 };
+      const hullBar = this.withIcon(gs, 'hull', hullRow);
+      this.bar(gs, hullBar, ship.hull / Math.max(1, d.hullMax));
+      // A tick at the share that repair at sea can reach.
+      gs.fillStyle(0xffffff, 0.9);
+      gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairSeaShare), hullBar.y - 2, 1, hullBar.h + 4);
+      if (d.repairPortShare > 0) gs.fillRect(hullBar.x + Math.round(hullBar.w * d.repairPortShare), hullBar.y - 2, 1, hullBar.h + 4);
+      // Above the hull bar, two short bars side by side: sails (canvas) and crew (blue) (M3 step 4).
+      this.conditionBars(gs, { x: hullRow.x, y: hullRow.y - (c ? 5 : 7), w: hullRow.w, h: c ? 2 : 3 }, d.sailShare, d.crewShare);
+    }
     const inIrons = sailing.twaDeg < sailing.noGoDeg;
     const law = d.offender === 'inside' ? 'OFFENDER!' : d.offender === 'outside' ? `PARDON ${Math.ceil(d.pardonSeconds)}s` : '';
     const status = ship.sunk ? 'SUNK!' : ship.aground ? 'AGROUND!' : law !== '' ? law : ship.repairing ? 'REPAIRING' : d.safeWater ? 'SAFE WATER' : inIrons ? 'IN IRONS!' : '';
@@ -324,6 +358,16 @@ export class Hud {
       this.side(gg, 'port', gn.x + 20, gn.y + gn.h / 2, ship.reloadPort, d);
       this.side(gg, 'starboard', gn.x + gn.w - 20, gn.y + gn.h / 2, ship.reloadStarboard, d);
       this.gauge(gg, gn.x + 46, gn.y + gn.h - 9, 26, ship.elevationDeg);
+      // The chasers' reload bars at the top of the panel (no gun, no bar).
+      const cls = SHIP_CLASSES[ship.shipClass];
+      const total = reloadSecondsOf(ship);
+      const gun = (side: 'bow' | 'stern'): ChaserGun => ({ guns: cls ? gunsOn(cls, side) : 0, left: reloadLeft(ship, side), total });
+      for (const bar of chaserBars(gn, gun('bow'), gun('stern'))) {
+        gg.fillStyle(0x000000, 0.6);
+        gg.fillRect(bar.track.x, bar.track.y, bar.track.w, bar.track.h);
+        gg.fillStyle(bar.ready ? READY : 0x9aa5ad, bar.ready ? 1 : 0.85);
+        gg.fillRect(bar.fill.x, bar.fill.y, bar.fill.w, bar.fill.h);
+      }
     }
     this.elevation.setText(`${ship.elevationDeg.toFixed(1)}°`);
     if (!this.touch) this.ammoRow(gg, gn, d.ammoSlots);
@@ -508,12 +552,13 @@ export function debugLines(info: {
   const salvos = info.ballsFired / Math.max(1, info.gunsPerSide);
   // Short lines (at most 38 characters), so the box stays left of the target card.
   return [
+    `version ${VERSION}`,
     'A / D rudder     W / S sails',
     'Q / E fire port / starboard',
     'Z bow chaser   1 2 3 ammo',
     '+ / - guns up / down',
-    'Shift + / - zoom   M sound',
-    'C chart   ESC pause   H hide this',
+    'Shift + / - or wheel: zoom',
+    'M sound  C chart  ESC pause  H hide',
     '',
     `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
     `speed ${info.ship.speed.toFixed(1)} m/s`,

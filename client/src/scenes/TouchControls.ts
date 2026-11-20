@@ -20,6 +20,9 @@ interface Button {
  *   top:   a small spyglass button (look far for a while) and a pause button "II" (M3 step 7c)
  * They only report what the finger does; SeaScene turns it into commands.
  */
+/** Alpha of the words and icons on the touch buttons. */
+const LABEL_ALPHA = 0.55;
+
 export class TouchControls {
   /** True while the finger is on the button. */
   left = false;
@@ -142,6 +145,7 @@ export class TouchControls {
           .setScrollFactor(0)
           .setDepth(111);
 
+    label.setAlpha(LABEL_ALPHA); // M3 step 7e: the labels are fainter, so they hide less of the sea
     box.on('pointerdown', () => {
       box.setFillStyle(0xffffff, 0.45);
       onHold?.(true);

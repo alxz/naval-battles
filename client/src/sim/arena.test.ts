@@ -12,7 +12,7 @@ describe('createArenaWorld', () => {
     expect(new Set(w.ships.map((s) => s.team)).size).toBe(ARENA.bots);
     expect(new Set(w.ships.map((s) => s.shipClass)).size).toBeGreaterThanOrEqual(4);
     expect(w.bots).toHaveLength(ARENA.bots);
-    expect(w.arena!.pilots.map((p) => p.number)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(w.arena!.pilots.map((p) => p.number)).toEqual(Array.from({ length: ARENA.bots }, (_v, i) => i + 1));
     expect(new Set(w.arena!.pilots.map((p) => p.name)).size).toBe(ARENA.bots);
     for (const s of w.ships) {
       expect(touchesLand(s, SHIP_CLASSES[s.shipClass]!, ISLANDS)).toBe(false);
@@ -131,5 +131,17 @@ describe('arena spawn on a sea that is almost all land', () => {
   it('a sea with no open water at all gives an arena with no ships, not ships on land', () => {
     const islands = [rect('All', -2990, -1990, 2990, 1990), ...reefs(WORLD)];
     expect(createArenaWorld(1, 6, islands).ships).toHaveLength(0);
+  });
+});
+
+describe('arenaClass (M3 step 7e)', () => {
+  it('has 2 random traders and 2 random warships after the fixed bots, the same for the same seed', () => {
+    const a = createArenaWorld(11).ships.map((s) => s.shipClass);
+    const b = createArenaWorld(11).ships.map((s) => s.shipClass);
+    expect(a).toEqual(b);
+    expect(a).toHaveLength(ARENA.bots);
+    const extra = a.slice(ARENA.fixedBots);
+    expect(extra.slice(0, 2).every((c) => ARENA.traderClasses.includes(c))).toBe(true);
+    expect(extra.slice(2).every((c) => ARENA.warshipClasses.includes(c))).toBe(true);
   });
 });

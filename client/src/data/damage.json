@@ -23,7 +23,7 @@
     "sailsPerSecond": 0.01
   },
   "port": {
-    "safeRange": 300,
+    "safeRange": 255,
     "dockRange": 90,
     "maxDockSpeed": 2,
     "maxShare": 0.9,
@@ -31,7 +31,7 @@
     "law": {
       "shooterHullShare": 0.02,
       "damageFactor": 0.5,
-      "leaveFactor": 1.5,
+      "leaveFactor": 1.7647058823529411,
       "forgiveSeconds": 45
     },
     "sailsPerSecond": 0.04,

@@ -23,7 +23,7 @@
   "closeFightRange": 120,
   "closeFightRangeSpare": 20,
   "zoomSmoothing": 0.25,
-  "sightingRange": 1500,
+  "sightingRange": 1000,
   "rangeRings": [
     100,
     150,
