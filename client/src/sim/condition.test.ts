@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { crewOf, crewShare, crewSpeedFactor, crewTurnFactor, crewShortage, damageSails, gunsManned, killCrew, refitShip, reloadFactor, sailShare, sailSpeedFactor, sailsOf } from './condition';
-import { GUNS, SHIP_CLASSES } from './data';
+import { cargoSpeedFactor, crewAccelFactor, crewExposure, crewOf, crewShare, crewSpeedFactor, crewTurnFactor, crewShortage, damageSails, gunsManned, killCrew, refitShip, reloadFactor, rollCargo, sailShare, sailSpeedFactor, sailsOf } from './condition';
+import { DAMAGE, GUNS, SHIP_CLASSES } from './data';
 import { stepShip, targetSpeed } from './step';
 import { createWorld } from './world';
 
@@ -58,20 +58,71 @@ describe('sails and crew (M3 step 4)', () => {
     expect(gunsManned(s, sloop)).toBe(0);
   });
 
-  it('step 4b: a short-handed ship sails slower (0.7 + 0.3 x crew) and turns slower (0.4 + 0.6 x crew)', () => {
+  it('step 7a: with its sailing crew aboard a ship keeps almost all its speed; below it the speed falls to 0.5', () => {
     const s = createWorld(1).ships[0]!;
     s.sailLevel = 1;
     const wind = { fromRad: s.headingRad - (Math.PI * 3) / 4, strength: 0.8 };
     const full = targetSpeed(s, sloop, wind);
     expect(crewSpeedFactor(s)).toBe(1);
     expect(crewTurnFactor(s)).toBe(1);
-    s.crew = sloop.crew / 2;
-    expect(crewSpeedFactor(s)).toBeCloseTo(0.85);
+    s.crew = sloop.crew / 2; // 30 of 60, well above the 10 who sail her
+    expect(crewSpeedFactor(s)).toBeCloseTo(0.975);
     expect(crewTurnFactor(s)).toBeCloseTo(0.7);
-    expect(targetSpeed(s, sloop, wind)).toBeCloseTo(full * 0.85);
+    expect(targetSpeed(s, sloop, wind)).toBeCloseTo(full * 0.975);
+    s.crew = sloop.sailCrew; // just the sailing crew
+    const atSail = 1 - DAMAGE.crew.speedLossFull * (1 - sloop.sailCrew / sloop.crew);
+    expect(crewSpeedFactor(s)).toBeCloseTo(atSail);
+    s.crew = sloop.sailCrew / 2;
+    expect(crewSpeedFactor(s)).toBeCloseTo((DAMAGE.crew.speedMinFactor + atSail) / 2);
     s.crew = 0;
-    expect(crewSpeedFactor(s)).toBeCloseTo(0.7);
+    expect(crewSpeedFactor(s)).toBeCloseTo(DAMAGE.crew.speedMinFactor);
     expect(crewTurnFactor(s)).toBeCloseTo(0.4);
+  });
+
+  it('step 7a: a short crew gathers way slower (time constant x 1 + men lost share)', () => {
+    const s = createWorld(1).ships[0]!;
+    expect(crewAccelFactor(s)).toBe(1);
+    s.crew = sloop.crew / 2;
+    expect(crewAccelFactor(s)).toBeCloseTo(1 + DAMAGE.crew.accelSlowdown * 0.5);
+    const run = (crew: number): number => {
+      const t = createWorld(1).ships[0]!;
+      t.crew = crew;
+      t.sailLevel = 1;
+      const wind = { fromRad: t.headingRad - (Math.PI * 3) / 4, strength: 0.8 };
+      for (let i = 0; i < 90; i++) stepShip(t, sloop, wind, 1 / 30);
+      return t.speed;
+    };
+    expect(run(sloop.crew / 3)).toBeLessThan(run(sloop.crew));
+  });
+
+  it('step 7a: a ball kills fewer men on an emptier deck and grape fewer behind high sides', () => {
+    const s = createWorld(1).ships[0]!;
+    expect(crewExposure(s, sloop, 'round')).toBeCloseTo(sloop.crew / (sloop.length * DAMAGE.crew.crowdPerMetre));
+    const fluyt = SHIP_CLASSES['fluyt']!;
+    const caravel = SHIP_CLASSES['caravel']!;
+    const f = { ...s, shipClass: 'fluyt' };
+    delete f.crew;
+    expect(crewExposure(f, fluyt, 'round')).toBeLessThan(0.25);
+    const c = { ...s, shipClass: 'caravel' };
+    delete c.crew;
+    expect(crewExposure(c, caravel, 'grape')).toBeCloseTo(crewExposure(c, caravel, 'round') * (DAMAGE.crew.grapeCoverHeightM / caravel.hullHeight));
+    expect(crewExposure(s, sloop, 'grape')).toBeCloseTo(crewExposure(s, sloop, 'round')); // 6 m sides: no cover
+  });
+
+  it('step 7a: a full hold slows a trader; warships carry no cargo', () => {
+    const fluyt = SHIP_CLASSES['fluyt']!;
+    expect(rollCargo(sloop, 0.5)).toBeUndefined();
+    expect(rollCargo(fluyt, 0)).toBe(fluyt.cargoMin);
+    expect(rollCargo(fluyt, 1)).toBe(fluyt.cargoMax);
+    const s = { ...createWorld(1).ships[0]!, shipClass: 'fluyt', cargo: 1 };
+    expect(cargoSpeedFactor(s)).toBeCloseTo(1 - (fluyt.ladenSlowdown ?? 0));
+    s.cargo = 0;
+    expect(cargoSpeedFactor(s)).toBe(1);
+    const w = createWorld(1).ships[0]!;
+    w.cargo = 1; // a sloop has no ladenSlowdown
+    expect(cargoSpeedFactor(w)).toBe(1);
+    refitShip(s);
+    expect(s.cargo).toBeUndefined();
   });
 
   it('step 4b: the turn per step shrinks with the crew', () => {

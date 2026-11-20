@@ -20,7 +20,12 @@ export interface ShipParams {
   mastHeight: number; // metres from the water to the mast top (rigging hit zone above the hull)
   mass: number; // tons; in a collision the lighter ship suffers more
   crew: number; // sailors with a full crew (plan 4.10)
+  sailCrew: number; // M3 step 7a: the men needed to sail her; with them aboard she keeps (almost) her full speed
   sailPoints: number; // how much shot the rigging takes before the sails are gone (M3 step 4)
+  polar?: string; // M3 step 7a: key into polars.json when the class sails differently from its rig (the fluyt's tall masts); absent = rig
+  cargoMin?: number; // M3 step 7a, traders: the hold is this full (0..1) at the least when she comes to sea ...
+  cargoMax?: number; // ... and at the most
+  ladenSlowdown?: number; // a full hold takes this share off her speed (0.15 = 15%)
 }
 
 /** Gun and ball numbers for every ship. Loaded from `data/guns.json` (plan 4.4). */
@@ -102,6 +107,7 @@ export type SimEvent =
   // The auto-bot arena (sim/arena.ts):
   | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
   | { type: 'respawn'; shipId: number; x: number; y: number }
+  | { type: 'escaped'; shipId: number; byShipId: number; how: 'port' | 'away' } // M3 step 7a (arena): hurt, and got away alive
   | { type: 'peace'; totalWins: number }
   // Bots (M3 step 4c / 5): for the arena log.
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
@@ -152,6 +158,7 @@ export interface ShipState {
   // Read them through sim/condition.ts and sim/ammo.ts, which fill in those defaults.
   sails?: number; // sail points left (0 .. the class's sailPoints)
   crew?: number; // sailors left (0 .. the class's crew)
+  cargo?: number; // M3 step 7a: how full the hold is, 0..1 (traders only; absent = empty)
   ammo?: AmmoType; // what the next broadside is loaded with
   ammoLeft?: { chain: number; grape: number }; // broadsides of each left; round shot is not counted yet (bought in port in M5)
 }
@@ -259,6 +266,7 @@ export interface Pilot {
   balls: number; // balls it fired
   hullHits: number; // balls of its own that hit an enemy hull
   sinceSeconds: number; // how long its present ship has been afloat
+  escapes?: number; // M3 step 7a: times it was shot at, hurt, and got away alive (half a win each)
 }
 
 export interface ArenaState {
@@ -267,6 +275,10 @@ export interface ArenaState {
   peace: boolean; // after winsToPeace wins nobody attacks any more
   respawns: { shipId: number; seconds: number }[]; // sunk ships come back after this many seconds
   retargetSeconds: number; // until the next choice of targets
+  /** M3 step 7a: ships under attack: who hit them and how long ago (for "got away alive"). */
+  threats?: { shipId: number; byShipId: number; quietSeconds: number }[];
+  /** ... and who already got away from whom in this life (one half win per pair and life, not one at every dash into safe water). */
+  escapedFrom?: { shipId: number; byShipId: number }[];
 }
 
 /** What a bot is doing now (plan 4.9: a state machine). */
@@ -447,8 +459,13 @@ export interface DamageParams {
   };
   /** A short-handed ship sails and turns worse (M3 step 4b): nobody to trim the sails and haul the braces. */
   crew: {
-    speedMinFactor: number; // with no crew left the target speed is this share (a straight line from 1 at a full crew)
+    // M3 step 7a: a ship needs only its sailing crew (ShipParams.sailCrew) to keep its speed.
+    speedMinFactor: number; // with no crew left the target speed is this share (a straight line up to the sailing crew)
+    speedLossFull: number; // with exactly the sailing crew left the speed is 1 - this x the share of men lost (a small loss)
     turnMinFactor: number; // with no crew left the turn rate is this share
+    accelSlowdown: number; // speeding up and slowing down take 1 + this x the share of men lost times longer
+    crowdPerMetre: number; // a ball kills guns.crewKill men on a deck this crowded (men per metre of length); fewer on an emptier deck
+    grapeCoverHeightM: number; // grape kills fewer men behind sides higher than this (x this / hullHeight)
   };
   /** A neutral port ("Open Sea" package C). */
   port: {

@@ -4,15 +4,15 @@
 import { loadableAmmo } from '../sim/ammo';
 import { crewOf, crewShare, sailShare } from '../sim/condition';
 import { damageSpeedFactor } from '../sim/step';
-import { ARENA } from '../sim/arena';
+import { ARENA, pilotScore } from '../sim/arena';
 import { compassPoint, headingRadToBearingDeg, twaDeg } from '../sim/angles';
 import { BOTS, DAMAGE, GUNS, ISLANDS, SHIP_CLASSES, SHORE, WIND, WORLD } from '../sim/data';
 import { distanceToLand, touchesLand } from '../sim/land';
 import { nearestPort, PORTS } from '../sim/port';
-import type { ArenaState, SimEvent, World } from '../sim/types';
+import type { ArenaState, ShipState, SimEvent, World } from '../sim/types';
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 6e (speed: land distance grid, A* buffers, aiming table, fewer redraws) after 6d, 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 7a (fluyt and caravel, sailing crew, cargo, half a win for getting away) after 6e, 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -87,10 +87,10 @@ export function who(world: World, shipId: number): string {
 
 /** The score table, best first. */
 export function standings(arena: ArenaState, world: World): string[] {
-  const rows = [...arena.pilots].sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+  const rows = [...arena.pilots].sort((a, b) => pilotScore(b) - pilotScore(a) || a.losses - b.losses);
   return rows.map((p) => {
     const hitRate = p.balls > 0 ? (p.hullHits / p.balls).toFixed(2) : '-';
-    return `   ${who(world, p.shipId).padEnd(32)} wins ${String(p.wins).padStart(3)}  losses ${String(p.losses).padStart(3)}  balls ${String(p.balls).padStart(4)}  hull hits ${String(p.hullHits).padStart(4)}  hits/ball ${hitRate}`;
+    return `   ${who(world, p.shipId).padEnd(32)} score ${pilotScore(p).toFixed(1).padStart(5)}  wins ${String(p.wins).padStart(3)}  escapes ${String(p.escapes ?? 0).padStart(3)}  losses ${String(p.losses).padStart(3)}  balls ${String(p.balls).padStart(4)}  hull hits ${String(p.hullHits).padStart(4)}  hits/ball ${hitRate}`;
   });
 }
 
@@ -107,6 +107,8 @@ export class ArenaLog {
   private finishDecisions = 0;
   private finishAttacks = 0;
   private finishKills = 0;
+  private finishGoing = new Map<number, { enemyId: number; since: number }>(); // who went in to finish whom, and when
+  private escapes = 0;
   private berthWaits = 0;
   private ramDecisions = 0;
   private ramTries = 0;
@@ -130,7 +132,7 @@ export class ArenaLog {
   private tally(shipClass: string): ClassTally {
     let t = this.classes.get(shipClass);
     if (!t) {
-      t = { ships: 0, wins: 0, losses: 0, lifeSeconds: 0, shoreDeaths: 0, agroundCount: 0, agroundSeconds: 0, stuck: 0, unsticks: 0 };
+      t = { ships: 0, wins: 0, escapes: 0, losses: 0, lifeSeconds: 0, shoreDeaths: 0, agroundCount: 0, agroundSeconds: 0, stuck: 0, unsticks: 0 };
       this.classes.set(shipClass, t);
     }
     return t;
@@ -173,7 +175,11 @@ export class ArenaLog {
         const full = by ? hullOf(world, by.id) : 0;
         const left = by && full > 0 ? ` with ${Math.round((100 * by.hull) / full)}% of its hull left` : '';
         const wins = e.byShipId < 0 ? `Nobody's win, ${arena.totalWins} in all` : `Wins: ${winner?.wins ?? 0} for it, ${arena.totalWins} in all`;
-        const finished = world.bots.find((b) => b.shipId === e.byShipId)?.mode === 'finish';
+        // M3 step 7a fix: the killer is often already an offender ('outlaw') when its last ball lands
+        // (the port law marks it in the same step), so the attack is remembered from its decision.
+        const going = this.finishGoing.get(e.byShipId);
+        const finished = world.bots.find((b) => b.shipId === e.byShipId)?.mode === 'finish' || (going !== undefined && going.enemyId === e.shipId && now - going.since <= BOTS.finishSeconds + 5);
+        if (finished) this.finishGoing.delete(e.byShipId);
         if (finished) this.finishKills++;
         this.add(now, `SUNK: ${who(world, e.shipId)} sunk by ${who(world, e.byShipId)}${left}${finished ? ' (a finishing attack in safe water)' : ''}. ${wins}`);
         this.lines.push(`            ${this.sinkDetails(world, e)}`);
@@ -196,7 +202,12 @@ export class ArenaLog {
         const how = e.reason === 'fired' ? 'fired in its safe water' : 'hit a ship in its safe water';
         this.add(now, `PORT LAW: ${who(world, e.shipId)} ${how}: an offender of ${portName(e.port)}, the shore guns open fire`);
       } else if (e.type === 'pardoned') this.add(now, `PORT LAW: ${who(world, e.shipId)} is pardoned by ${portName(e.port)}`);
-      else if (e.type === 'peace') this.add(now, `PEACE after ${e.totalWins} wins: nobody attacks any more; hurt ships sail to port`);
+      else if (e.type === 'escaped') {
+        this.escapes++;
+        const ship = world.ships.find((x) => x.id === e.shipId);
+        if (ship) this.tally(ship.shipClass).escapes++;
+        this.add(now, `ESCAPED: ${who(world, e.shipId)} got away from ${who(world, e.byShipId)} ${e.how === 'port' ? 'into safe water' : 'out of reach'} (half a win)${ship ? ` [${conditionText(ship)}]` : ''}`);
+      } else if (e.type === 'peace') this.add(now, `PEACE after ${e.totalWins} wins: nobody attacks any more; hurt ships sail to port`);
       // Bots (M3 step 4c / 5).
       else if (e.type === 'botUnstick') {
         const ship = world.ships.find((x) => x.id === e.shipId);
@@ -205,7 +216,10 @@ export class ArenaLog {
         this.add(now, `${who(world, e.shipId)} made no way for ${BOTS.stuckCheckSeconds} s (mode ${mode}${ship?.aground ? ', aground' : ''}): works free heading ${Math.round(headingRadToBearingDeg(e.headingRad))}\u00b0 at ${placeText(e.x, e.y)}`);
       } else if (e.type === 'finishDecision') {
         this.finishDecisions++;
-        if (e.go) this.finishAttacks++;
+        if (e.go) {
+          this.finishAttacks++;
+          this.finishGoing.set(e.shipId, { enemyId: e.enemyId, since: now });
+        }
         const why = e.canFinish ? `can sink it (expects ${Math.round(e.expected)} damage, it has ${Math.round(e.enemyHull)} hull)` : `cannot sink it (expects ${Math.round(e.expected)}, it has ${Math.round(e.enemyHull)})`;
         this.add(now, `FINISH? ${who(world, e.shipId)} vs ${who(world, e.enemyId)} in safe water: ${why} -> ${e.go ? (e.canFinish ? 'GOES IN' : 'GOES IN anyway (reckless)') : 'waits outside'}`);
       } else if (e.type === 'ramDecision') {
@@ -306,10 +320,7 @@ export class ArenaLog {
   modeChanged(world: World, shipId: number, mode: string): void {
     const now = world.tick * (1 / 30);
     const ship = world.ships.find((s) => s.id === shipId);
-    const full = ship ? (SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 1) : 1;
-    const params = ship ? SHIP_CLASSES[ship.shipClass] : undefined;
-    const cond = ship && params ? `, sails ${Math.round(sailShare(ship) * 100)}%, crew ${Math.round(crewShare(ship) * 100)}%, speed left ${Math.round(damageSpeedFactor(ship, params) * 100)}%` : '';
-    const state = ship ? ` [hull ${Math.round((100 * ship.hull) / full)}%${cond}, ${placeText(ship.x, ship.y)}]` : '';
+    const state = ship ? ` [${conditionText(ship)}]` : '';
     if (mode === 'flee') this.add(now, `${who(world, shipId)} is badly hit and flees${state}`);
     else if (mode === 'finish') this.add(now, `${who(world, shipId)} goes into safe water to finish its enemy${state}`);
     else if (mode === 'ram') this.add(now, `${who(world, shipId)} turns to ram its enemy${state}`);
@@ -335,7 +346,7 @@ export class ArenaLog {
       const t = this.tally(kind);
       const life = t.losses > 0 ? `${Math.round(t.lifeSeconds / t.losses)} s` : '-';
       out.push(
-        `   ${kind.padEnd(12)} ships ${r.ships}  wins ${String(t.wins).padStart(3)}  losses ${String(t.losses).padStart(3)}  mean life ${life.padStart(6)}  balls ${String(r.balls).padStart(4)}  hits/ball ${r.balls > 0 ? (r.hits / r.balls).toFixed(2) : '-'}  shore deaths ${t.shoreDeaths}  aground ${t.agroundCount}x ${Math.round(t.agroundSeconds)} s  stuck ${t.stuck}  worked free ${t.unsticks}x`,
+        `   ${kind.padEnd(12)} ships ${r.ships}  wins ${String(t.wins).padStart(3)}  escapes ${String(t.escapes).padStart(3)}  losses ${String(t.losses).padStart(3)}  mean life ${life.padStart(6)}  balls ${String(r.balls).padStart(4)}  hits/ball ${r.balls > 0 ? (r.hits / r.balls).toFixed(2) : '-'}  shore deaths ${t.shoreDeaths}  aground ${t.agroundCount}x ${Math.round(t.agroundSeconds)} s  stuck ${t.stuck}  worked free ${t.unsticks}x`,
       );
     }
     out.push(`   hits by ammunition: round ${this.ammoHits.round}, chain ${this.ammoHits.chain}, grape ${this.ammoHits.grape}; men lost ${Math.round(this.menLost)}, sail points torn ${Math.round(this.sailsTorn)}`);
@@ -367,6 +378,7 @@ export class ArenaLog {
 interface ClassTally {
   ships: number;
   wins: number;
+  escapes: number; // M3 step 7a: got away alive, hurt
   losses: number;
   lifeSeconds: number;
   shoreDeaths: number;
@@ -374,6 +386,15 @@ interface ClassTally {
   agroundSeconds: number;
   stuck: number;
   unsticks: number; // times a bot made no way and worked free (M3 step 4c)
+}
+
+/** "hull 40%, sails 80%, crew 55%, speed left 70%, cargo 60%, (x, y), land ..., port ..." */
+function conditionText(ship: ShipState): string {
+  const params = SHIP_CLASSES[ship.shipClass];
+  const full = params?.hullPoints ?? 1;
+  const cond = params ? `, sails ${Math.round(sailShare(ship) * 100)}%, crew ${Math.round(crewShare(ship) * 100)}%, speed left ${Math.round(damageSpeedFactor(ship, params) * 100)}%` : '';
+  const cargo = ship.cargo !== undefined ? `, cargo ${Math.round(ship.cargo * 100)}%` : '';
+  return `hull ${Math.round((100 * ship.hull) / full)}%${cond}${cargo}, ${placeText(ship.x, ship.y)}`;
 }
 
 function hullOf(world: World, shipId: number): number {

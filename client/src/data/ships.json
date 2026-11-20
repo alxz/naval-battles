@@ -15,7 +15,8 @@
     "mastHeight": 26.4,
     "mass": 100,
     "crew": 60,
-    "sailPoints": 100
+    "sailPoints": 100,
+    "sailCrew": 10
   },
   "brigantine": {
     "name": "Brigantine",
@@ -33,25 +34,53 @@
     "mastHeight": 36.0,
     "mass": 170,
     "crew": 90,
-    "sailPoints": 140
+    "sailPoints": 140,
+    "sailCrew": 16
   },
-  "merchantman": {
-    "name": "Merchantman",
-    "rig": "square",
-    "length": 67.2,
-    "beam": 19.2,
-    "maxSpeed": 10.5,
-    "speedTimeConstant": 9,
-    "turnRate": 0.29,
+  "caravel": {
+    "name": "Caravel",
+    "rig": "mixed",
+    "length": 45.6,
+    "beam": 13.4,
+    "maxSpeed": 16.1,
+    "speedTimeConstant": 7,
+    "turnRate": 0.55,
     "minSteerShare": 0.3,
-    "gunsPerSide": 3,
+    "gunsPerSide": 4,
+    "reloadSeconds": 16,
+    "hullPoints": 400,
+    "hullHeight": 9.0,
+    "mastHeight": 33.6,
+    "mass": 200,
+    "crew": 45,
+    "sailCrew": 12,
+    "sailPoints": 130,
+    "cargoMin": 0.2,
+    "cargoMax": 0.6,
+    "ladenSlowdown": 0.1
+  },
+  "fluyt": {
+    "name": "Fluyt",
+    "rig": "square",
+    "polar": "squareTall",
+    "length": 62.4,
+    "beam": 18.0,
+    "maxSpeed": 14.1,
+    "speedTimeConstant": 9,
+    "turnRate": 0.32,
+    "minSteerShare": 0.3,
+    "gunsPerSide": 1,
     "reloadSeconds": 18,
-    "hullPoints": 480,
+    "hullPoints": 440,
     "hullHeight": 8.4,
-    "mastHeight": 42.0,
-    "mass": 420,
-    "crew": 40,
-    "sailPoints": 170
+    "mastHeight": 48.0,
+    "mass": 380,
+    "crew": 18,
+    "sailCrew": 10,
+    "sailPoints": 170,
+    "cargoMin": 0.3,
+    "cargoMax": 1.0,
+    "ladenSlowdown": 0.15
   },
   "frigate": {
     "name": "Frigate",
@@ -69,6 +98,7 @@
     "mastHeight": 54.0,
     "mass": 600,
     "crew": 180,
-    "sailPoints": 240
+    "sailPoints": 240,
+    "sailCrew": 30
   }
 }

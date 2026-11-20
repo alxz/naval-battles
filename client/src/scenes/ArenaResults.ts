@@ -125,11 +125,11 @@ export class ArenaResults {
       showShip(image, row.shipClass, rank === 0 ? 'player' : 'enemy', art, true, 0, 0, Math.PI / 4, compact ? 0.7 : 1);
       image.setVisible(true).setPosition(Math.round(cx), Math.round(shipY - lift));
       const shot = `${Math.round(row.hitsPerBall * 100)}%`;
-      centre(name.setVisible(true).setText(`#${row.number} ${row.name}\n${row.shipClass}\n${row.wins} wins  ${row.losses} lost\nhits ${shot}`), cx, shipY + (compact ? 30 : 46));
+      centre(name.setVisible(true).setText(`#${row.number} ${row.name}\n${row.shipClass}\n${row.wins} wins  ${row.escapes} esc  ${row.losses} lost\nhits ${shot}`), cx, shipY + (compact ? 30 : 46));
     });
 
     // The others: one short line each.
-    const others = rows.slice(PODIUM).map((r) => `${r.roman.padEnd(3)} #${r.number} ${r.name.padEnd(12)} ${r.wins} / ${r.losses}`);
+    const others = rows.slice(PODIUM).map((r) => `${r.roman.padEnd(3)} #${r.number} ${r.name.padEnd(12)} ${r.wins} / ${r.escapes} / ${r.losses}`);
     centre(this.rest.setVisible(others.length > 0 && !compact).setText(others.join('\n')), w / 2, shipY + 104);
 
     // EXIT, SAVE LOG, BACK in a row, centred.

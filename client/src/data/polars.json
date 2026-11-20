@@ -3,35 +3,112 @@
     "name": "Fore-and-aft",
     "noGoDeg": 40,
     "points": [
-      { "twaDeg": 40, "share": 0 },
-      { "twaDeg": 50, "share": 0.4 },
-      { "twaDeg": 70, "share": 0.65 },
-      { "twaDeg": 90, "share": 0.9 },
-      { "twaDeg": 135, "share": 1 },
-      { "twaDeg": 180, "share": 0.8 }
+      {
+        "twaDeg": 40,
+        "share": 0
+      },
+      {
+        "twaDeg": 50,
+        "share": 0.4
+      },
+      {
+        "twaDeg": 70,
+        "share": 0.65
+      },
+      {
+        "twaDeg": 90,
+        "share": 0.9
+      },
+      {
+        "twaDeg": 135,
+        "share": 1
+      },
+      {
+        "twaDeg": 180,
+        "share": 0.8
+      }
     ]
   },
   "mixed": {
     "name": "Mixed",
     "noGoDeg": 48,
     "points": [
-      { "twaDeg": 48, "share": 0 },
-      { "twaDeg": 50, "share": 0.1 },
-      { "twaDeg": 70, "share": 0.5 },
-      { "twaDeg": 90, "share": 0.8 },
-      { "twaDeg": 135, "share": 1 },
-      { "twaDeg": 180, "share": 0.75 }
+      {
+        "twaDeg": 48,
+        "share": 0
+      },
+      {
+        "twaDeg": 50,
+        "share": 0.1
+      },
+      {
+        "twaDeg": 70,
+        "share": 0.5
+      },
+      {
+        "twaDeg": 90,
+        "share": 0.8
+      },
+      {
+        "twaDeg": 135,
+        "share": 1
+      },
+      {
+        "twaDeg": 180,
+        "share": 0.75
+      }
     ]
   },
   "square": {
     "name": "Square",
     "noGoDeg": 55,
     "points": [
-      { "twaDeg": 55, "share": 0 },
-      { "twaDeg": 70, "share": 0.3 },
-      { "twaDeg": 90, "share": 0.7 },
-      { "twaDeg": 135, "share": 1 },
-      { "twaDeg": 180, "share": 0.85 }
+      {
+        "twaDeg": 55,
+        "share": 0
+      },
+      {
+        "twaDeg": 70,
+        "share": 0.3
+      },
+      {
+        "twaDeg": 90,
+        "share": 0.7
+      },
+      {
+        "twaDeg": 135,
+        "share": 1
+      },
+      {
+        "twaDeg": 180,
+        "share": 0.85
+      }
+    ]
+  },
+  "squareTall": {
+    "name": "Square, tall masts (fluyt)",
+    "noGoDeg": 55,
+    "points": [
+      {
+        "twaDeg": 55,
+        "share": 0
+      },
+      {
+        "twaDeg": 70,
+        "share": 0.3
+      },
+      {
+        "twaDeg": 90,
+        "share": 0.68
+      },
+      {
+        "twaDeg": 135,
+        "share": 1
+      },
+      {
+        "twaDeg": 180,
+        "share": 1.0
+      }
     ]
   }
 }

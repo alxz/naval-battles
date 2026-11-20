@@ -1,8 +1,8 @@
-import { crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
+import { cargoSpeedFactor, crewAccelFactor, crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
 import { collideShips } from './collide';
 import { stepRepair } from './repair';
 import { normalizeAngle, twaDeg } from './angles';
-import { DAMAGE, ISLANDS, POLARS, SHIP_CLASSES, WIND } from './data';
+import { DAMAGE, ISLANDS, polarOf, SHIP_CLASSES, WIND } from './data';
 import { stepGunsAndBalls } from './guns';
 import { stepLaw } from './law';
 import { stepShore } from './shore';
@@ -25,7 +25,7 @@ export interface SailingInfo {
 }
 
 export function sailingInfo(ship: ShipState, params: ShipParams, wind: WindNow): SailingInfo {
-  const polar = POLARS[params.rig];
+  const polar = polarOf(params);
   const twa = twaDeg(ship.headingRad, wind.fromRad);
   return { twaDeg: twa, share: polar ? polarShare(polar, twa) : 0, noGoDeg: polar?.noGoDeg ?? 0 };
 }
@@ -39,12 +39,13 @@ export function windFactor(strength: number): number {
  * The speed the ship is heading for (plan 4.3):
  *   maxSpeed x polar(TWA) x sailLevel x (0.4 + 0.6 x wind)
  *   x (0.2 + 0.8 x sail condition)   (M3 step 4: shot-away sails slow the ship)
- *   x (0.7 + 0.3 x crew share)        (M3 step 4b: too few hands to trim the sails)
+ *   x crew factor                     (M3 step 4b, 7a: only below the sailing crew it falls much)
+ *   x (1 - ladenSlowdown x cargo)     (M3 step 7a: a full hold)
  * The Navigation skill (M6) joins this formula later.
  */
 export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, tuning: Tuning = DEFAULT_TUNING): number {
   const { share } = sailingInfo(ship, params, wind);
-  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship) * crewSpeedFactor(ship);
+  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship) * crewSpeedFactor(ship) * cargoSpeedFactor(ship);
   return damagedSpeed(speed, ship.hull / params.hullPoints);
 }
 
@@ -90,7 +91,8 @@ export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt:
   // In a harbour (M3 step 6c) the harbour boats tow a ship that has any sail set: never slower than towMps.
   const sailing = targetSpeed(ship, params, wind, tuning);
   const target = ship.sailLevel > 0.05 ? Math.max(sailing, towMps) : sailing;
-  ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / params.speedTimeConstant));
+  // A short-handed crew (M3 step 7a) gathers way and loses it slower.
+  ship.speed += (target - ship.speed) * (1 - Math.exp(-dt / (params.speedTimeConstant * crewAccelFactor(ship))));
 
   // Aground, the crew warps the ship round with boats and anchors: it turns at the full rate.
   // A short-handed ship turns slower (M3 step 4b), aground or not.

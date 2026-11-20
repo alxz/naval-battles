@@ -179,7 +179,7 @@ describe('getting off the land', () => {
 });
 
 describe('damageSpeedFactor (M3 step 4b)', () => {
-  it('hull x sails x crew; the worked example of the plan: 30% hull, 80% sails, 60% crew -> about 58%', () => {
+  it('hull x sails x crew; 30% hull, 80% sails, 60% crew -> about 64% (M3 step 7a: the crew costs little speed now)', () => {
     const sloop = SHIP_CLASSES['sloop']!;
     const s = createWorld(1).ships[0]!;
     expect(damageSpeedFactor(s, sloop)).toBe(1);
@@ -187,9 +187,9 @@ describe('damageSpeedFactor (M3 step 4b)', () => {
     s.sails = sloop.sailPoints * 0.8;
     s.crew = sloop.crew * 0.6;
     const hull = DAMAGE.slowdown.minFactor + (1 - DAMAGE.slowdown.minFactor) * 0.3 / DAMAGE.slowdown.startShare; // 0.78
-    const expected = hull * (0.2 + 0.8 * 0.8) * (DAMAGE.crew.speedMinFactor + (1 - DAMAGE.crew.speedMinFactor) * 0.6);
+    const expected = hull * (0.2 + 0.8 * 0.8) * (1 - DAMAGE.crew.speedLossFull * 0.4);
     expect(damageSpeedFactor(s, sloop)).toBeCloseTo(expected, 6);
-    expect(damageSpeedFactor(s, sloop)).toBeCloseTo(0.58, 2);
+    expect(damageSpeedFactor(s, sloop)).toBeCloseTo(0.64, 2);
   });
 });
 

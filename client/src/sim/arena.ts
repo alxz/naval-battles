@@ -3,7 +3,7 @@
 // After winsToPeace wins it turns to peace: nobody attacks, hurt bots sail to a port.
 // Pure rules, no Phaser: the screen (SeaScene, view/arenaLog.ts) only shows and logs it.
 
-import { refitShip } from './condition';
+import { crewShare, refitShip, rollCargo, sailShare } from './condition';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { BOTS, ISLANDS, SHIP_CLASSES } from './data';
@@ -17,6 +17,70 @@ import type { Island, Pilot, ShipState, World } from './types';
 
 export type ArenaParams = typeof arenaJson;
 export const ARENA: ArenaParams = arenaJson;
+
+/** M3 step 7a: the arena score: a win counts 1, getting away alive (hurt) counts half (your rule). */
+export function pilotScore(p: Pick<Pilot, 'wins' | 'escapes'>): number {
+  return p.wins + 0.5 * (p.escapes ?? 0);
+}
+
+/** A trader comes to sea with a random load in her hold (M3 step 7a); a warship with none. */
+function loadCargo(world: World, ship: ShipState): void {
+  const params = SHIP_CLASSES[ship.shipClass];
+  if (!params) return;
+  const load = rollCargo(params, params.cargoMax === undefined ? 0 : nextRandom(world));
+  if (load === undefined) delete ship.cargo;
+  else ship.cargo = load;
+}
+
+/** Hurt enough that getting away counts (M3 step 7a): hull, sails or crew below escapeHurtShare. */
+export function isHurt(ship: ShipState, p: ArenaParams = ARENA): boolean {
+  const full = SHIP_CLASSES[ship.shipClass]?.hullPoints ?? 1;
+  return ship.hull / full < p.escapeHurtShare || sailShare(ship) < p.escapeHurtShare || crewShare(ship) < p.escapeHurtShare;
+}
+
+/**
+ * M3 step 7a: "got away alive". A ship hit by an enemy is under threat from it. She has escaped
+ * (half a win) when, hurt, she reaches a port's safe water, or nobody has hit her for
+ * escapeQuietSeconds and that enemy is more than escapeRangeM away. A threat ends without
+ * credit when she sinks, the enemy sinks, or escapeForgetSeconds pass quietly while she is whole.
+ * One half win per pair and life: a wreck dodging in and out of safe water is not counted again.
+ */
+export function stepEscapes(world: World, dt: number, p: ArenaParams = ARENA): void {
+  const arena = world.arena;
+  if (!arena) return;
+  const threats = (arena.threats ??= []);
+  const done = (arena.escapedFrom ??= []);
+  for (const e of world.events) {
+    if (e.type === 'sunk') arena.escapedFrom = done.filter((d) => d.shipId !== e.shipId); // a new life, a new count
+    if (e.type === 'hit' && e.byShipId !== e.shipId && e.byShipId >= 0 && !(arena.escapedFrom ?? done).some((d) => d.shipId === e.shipId && d.byShipId === e.byShipId)) {
+      const old = threats.find((t) => t.shipId === e.shipId);
+      if (old) {
+        old.byShipId = e.byShipId;
+        old.quietSeconds = 0;
+      } else threats.push({ shipId: e.shipId, byShipId: e.byShipId, quietSeconds: 0 });
+    }
+  }
+  const keep: typeof threats = [];
+  for (const t of threats) {
+    const ship = world.ships.find((s) => s.id === t.shipId);
+    const enemy = world.ships.find((s) => s.id === t.byShipId);
+    if (!ship || ship.sunk || !enemy || enemy.sunk) continue;
+    t.quietSeconds += dt;
+    const hurt = isHurt(ship, p);
+    let how: 'port' | 'away' | null = null;
+    if (hurt && protectedByPort(ship)) how = 'port';
+    else if (hurt && t.quietSeconds >= p.escapeQuietSeconds && Math.hypot(enemy.x - ship.x, enemy.y - ship.y) > p.escapeRangeM) how = 'away';
+    if (how) {
+      const pilot = arena.pilots.find((x) => x.shipId === ship.id);
+      if (pilot) pilot.escapes = (pilot.escapes ?? 0) + 1;
+      arena.escapedFrom!.push({ shipId: ship.id, byShipId: enemy.id });
+      world.events.push({ type: 'escaped', shipId: ship.id, byShipId: enemy.id, how });
+      continue;
+    }
+    if (t.quietSeconds < p.escapeForgetSeconds) keep.push(t);
+  }
+  arena.threats = keep;
+}
 
 /** A random open-water spot anywhere in the sea, away from the other ships. */
 function anywhere(world: World, islands: readonly Island[], shipClass: string, others: readonly ShipState[]): { x: number; y: number } | null {
@@ -71,6 +135,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
       team: id, // everybody for himself
       repairing: false,
     });
+    loadCargo(world, world.ships[world.ships.length - 1]!);
     world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, balls: 0, hullHits: 0, sinceSeconds: 0 });
     world.bots.push(newBot(id, -1, world)); // no target yet: the first choice comes at once
   }
@@ -163,6 +228,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
     }
   }
   for (const pilot of arena.pilots) pilot.sinceSeconds += dt;
+  if (!arena.peace) stepEscapes(world, dt, p);
 
   // Sunk ships come back: a fresh ship of the same class at a random place.
   for (const r of arena.respawns) r.seconds -= dt;
@@ -190,6 +256,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
       offender: undefined,
     });
     refitShip(ship); // full sails and crew, the starting ammunition
+    loadCargo(world, ship);
     const i = world.bots.findIndex((b) => b.shipId === ship.id);
     const fresh = newBot(ship.id, -1, world);
     if (i >= 0) world.bots[i] = fresh;

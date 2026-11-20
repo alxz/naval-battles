@@ -1,11 +1,11 @@
 import { accuracyInputs, gunSigmaDeg, salvoSigmaDeg } from './accuracy';
 import { ammoGuns, ammoParams, loadableAmmo, spendAmmo } from './ammo';
-import { damageSails, gunsManned, killCrew, reloadFactor } from './condition';
+import { crewExposure, damageSails, gunsManned, killCrew, reloadFactor } from './condition';
 import { degToRad } from './angles';
 import { GUNS, SHIP_CLASSES } from './data';
 import { damageHull } from './damage';
 import { ballDamage, isOffenderOf } from './law';
-import { nextGaussian } from './random';
+import { nextGaussian, nextRandom } from './random';
 import { ballHit } from './hits';
 import type { HitZone } from './hits';
 import type { AmmoType, Ball, GunParams, ShipParams, ShipState, Side, World } from './types';
@@ -208,7 +208,12 @@ function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, poin
   if (zone === 'hull') {
     const amount = (ball.damage ?? g.damage) * kind.hull * factor;
     hullLost = Math.min(ship.hull, amount);
-    crewLost = killCrew(ship, g.crewKill * kind.crew * factor);
+    // M3 step 7a: fewer men fall on an emptier deck and behind high sides (grape). A share of a man
+    // is a chance: 0.3 of a man kills one in three hits (seeded, like every random thing in the world).
+    const params = SHIP_CLASSES[ship.shipClass];
+    const men = g.crewKill * kind.crew * factor * (params ? crewExposure(ship, params, ammo) : 1);
+    const whole = Math.floor(men);
+    crewLost = killCrew(ship, whole + (nextRandom(world) < men - whole ? 1 : 0));
   } else {
     sailsLost = damageSails(ship, g.sailDamage * kind.sails * factor);
   }

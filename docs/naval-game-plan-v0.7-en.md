@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) `dev-log-en.md` (what was done, problems and fixes, in detail) and `world-ideas-en.md` (ideas for the world, not yet scheduled). This plan keeps the decisions and the checklists short; the dev log has the details. The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); step 6a built (collisions and ramming v2, bot seamanship part 2, headless arena); 6b + 6c + 6d built 19 Nov (camera circle, arena flags and bars, Spanish flag; ways round the land, harbour boats, lead aiming, rammers, WANTED, 3–5 bots; wrecks run for port, lee shores; `npm run build:test`; 6e speed work); next: ship variety and class balance · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
+**Status (18 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 in progress**: steps 1–5 built (bigger ships, auto-bot arena, port law, sails / crew / three kinds of shot, bot seamanship part 1, arena results); step 6a built (collisions and ramming v2, bot seamanship part 2, headless arena); 6b + 6c + 6d built 19 Nov (camera circle, arena flags and bars, Spanish flag; ways round the land, harbour boats, lead aiming, rammers, WANTED, 3–5 bots; wrecks run for port, lee shores; `npm run build:test`; 6e speed work); **step 7a built** (fluyt and caravel instead of the merchantman, sailing crew, cargo, half a win for getting away, 12 × 8 flags); next: 7b crew spirit and running, 7c bot skills, 7d bars and flags in battle · then **M4b before M4** (D54) · proposed: **M3b "Caribbean Sea"** (D48) · open decisions: O1, O6, O7 (section 9).
 
 ---
 
@@ -99,6 +99,9 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D47 | The arena observer sees everything | In the arena: hull, sails and crew bars over every ship and a small flag of a random nation (England, Spain, France, the Netherlands, pirates) for now; the results screen gets a "save log" button. In a battle against bots, what you may see stays limited as planned for M4b (perception) | The arena is a test tool; its observer is not a ship | **Confirmed 18 Nov** |
 | D49 | Ways round the land, harbour boats | Bots plan a way round land on a 10 m water grid (A*, 16 m from the shore) whenever the straight line to their goal is blocked; in a harbour (along an inlet, or within the dock range) boats tow a ship with any sail set at ≥ 1.5 m/s, you too; a small harbour up an inlet takes only ships up to 0.7 × its radius long (sloop, brigantine) | Developer's test 18 Nov: bots stuck for minutes in and round the Isla Verde harbour | **Confirmed 19 Nov** |
 | D50 | Bot gunnery and tactics | Bots turn their broadside toward the lead point (where the enemy will be when the balls land) and, with a loaded side within 25°, put it exactly on the beam; 25 s in a fight without a broadside → close in. A bot whose deliberate ram struck becomes a **rammer**: fights closer (100 m), chain shot to tear the sails, grape under 80 m, ram chance 50% | Developer's test 18 Nov (parallel runs, no lead; ram + sails + grape as an aggressive tactic) | **Confirmed 19 Nov** (small first version, D37 exception asked by the developer) |
+| D52 | Two traders | The merchantman is replaced by two traders of the time: the **fluyt** (Dutch cargo ship: 0.7 of a sloop's speed, tall masts that run well before the wind, 1 gun a side, 18 men, a big hold that slows her when full) and the **caravel** (an old-fashioned armed trader: 0.8 of a sloop, 4 guns a side, higher and stronger sides that shelter her men from grape). A captain's experience (7c) multiplies a class's speed by 0.85–1.2. In the arena a hurt ship that gets away alive scores half a win | Developer's request and the 6e arena logs (the merchantman: 1 win, 16 losses); history: merchant crews were small and their ships lightly armed | **Confirmed 19 Nov** |
+| D53 | Sailing crew | A ship keeps almost its full speed while its sailing crew is aboard (sloop 10, caravel 12, fluyt 10, brigantine 16, frigate 30 men); below that the speed falls to half. Losses slow turning (to 0.4), gathering way (up to 2× slower) and reloading. A ball kills fewer men on an emptier deck, and grape fewer behind high sides | Developer's idea: a small crew can keep sails set; hands are needed for manoeuvres | **Confirmed 19 Nov** |
+| D54 | Order after M3 | M3 ends with steps 7a–7d (traders, crew spirit and running, bot skills, bars and flags in battle). **M4b "Eyes at Sea" comes before M4** (patrol routes, renegades, sudden fear and false flags all need sight). A new milestone **"Squadrons"** after M4b: pairs, packs, loners, convoys guarding a trader. Skills that grow with time come with M6 | Developer's ideas of 19 Nov, staged by D37 | **Confirmed 19 Nov** |
 | D51 | WANTED; 3–5 bots | An offender of a port's peace carries a red "WANTED: name" label until pardoned (you and bots). A battle against bots has 3–5 bots at random (the panel can still fix a number) | Developer's request 18 Nov | **Confirmed 19 Nov** |
 | D48 | A Caribbean map | The test sea (6 × 4 km, generated islands) is replaced by a map of the **central Caribbean** from the developer's mockup, in its own milestone **M3b "Caribbean Sea"** after M3, using the mask tool planned for M5 (`tools/build_map.py`). The fixes asked for the test sea (move the central port so ships can sail round its island, the Isla Verde safe-water pocket, a bigger port town, a Spanish port) are made on the new map, not on the test sea. Only cheap picture changes come earlier (the port flag of Spain, clearer shore-gun sprites) | Developer's proposal 18 Nov; island tweaks on the test sea would be thrown away | Proposed 18 Nov (open decision O6) |
 
@@ -437,20 +440,21 @@ Game units (D26): lengths about 2.4× real (D39), speeds faster still (D38, an a
 |---|---|---|---|---|---|---|---|---|---|---|
 | Sloop | 36 m | fore-and-aft | 4 | 60 | 40 | 20.1 m/s | 0.80 | 264 | 100 | Your first ship; pirates |
 | Brigantine | 48 m | mixed | 6 | 90 | 80 | 18.4 m/s | 0.63 | 384 | 140 | Pirates, patrols |
-| Merchantman | 67 m | square | 3 | 40 | 300 | 10.5 m/s | 0.29 | 480 | 170 | Slow, rich, weakly armed |
+| Caravel (7a) | 46 m | mixed (lateen) | 4 | 45 (sailing 12) | 100 | 16.1 m/s | 0.55 | 400 | 130 | Old-fashioned armed trader; high sides |
+| Fluyt (7a) | 62 m | square, tall masts | 1 | 18 (sailing 10) | 300 | 14.1 m/s | 0.32 | 440 | 170 | Dutch cargo ship: rich, almost unarmed, good before the wind |
 | Frigate | 84 m | square | 12 | 180 | 120 | 16.6 m/s | 0.40 | 720 | 240 | Royal Navy; the "boss" |
 
-- Values of 18 Nov (`ships.json`): ships × 1.2 (D39) and 1.75 × faster (D38) than in v0.6. Class sizes and balance are still open (M3): in the arena the merchantman almost never wins (2 wins, 32 losses in 4 h) and the frigate wins most.
+- Values of 18 Nov (`ships.json`): ships × 1.2 (D39) and 1.75 × faster (D38) than in v0.6. On 19 Nov (D52) the merchantman gave way to the fluyt and the caravel; a trader's hold is 20–100% full when she comes to sea (`cargoMin`, `cargoMax`) and a full hold costs the fluyt 15% of her speed (`ladenSlowdown`). The fluyt sails by her own polar `squareTall` (as fast dead before the wind as on a broad reach).
 - Real equivalents: sloop 15 m and 11 knots, frigate 35 m and 9 knots (1 knot = 0.514 m/s).
 - The sloop's turn rate (0.8 rad/s) is your tuning from M1; the other classes keep the v0.5 ratios. **Turning circle radius = speed ÷ turn rate:** the sloop turns on a circle of about 14 m, less than half its length. It felt good alone on the sea; we check it again in the first duel.
 - Hull and mast heights are per class in `ships.json` (starting values: sloop 5 m and 22 m, frigate 8 m and 45 m).
-- The merchantman is weakly armed, so new players have a fair first target.
+- The traders are weakly armed, so new players have a fair first target; in the arena they are meant to run, not to win (D52).
 
 **Variants** are data only and need no new art:
 
 | Variant | Change | Purpose |
 |---|---|---|
-| Armed merchantman | 8 guns per side, crew 120 | A merchant that fights back |
+| Armed fluyt | 6 guns per side, crew 50 | A merchant that fights back |
 | Navy sloop-of-war | Sloop with crew 90 and a better captain | A fast patrol that can catch you |
 | Skill tier: green / regular / veteran | Captain skills 1 / 4 / 8 | The same ship can be easy or dangerous |
 
@@ -812,11 +816,13 @@ Next — **step 6** (your test of 18 Nov):
 - [x] **6d, 19 Nov — your test of 6c:** a badly hit bot always runs for a port it can use (no more running along the edge of the sea), and its run is land-aware; a big ship does not follow its enemy into a small harbour and no bot sails into a harbour unless it goes to port there; no wearing on a lee shore; in a harbour bots sail at most 4 m/s; "up the inlet" only with the inlet in sight; hard by a shore no "turn round" onto the bank. Headless 6 × 60 min: aground 9–40 an hour (was 50–260), works free 10–27, Isla Verde 0–4. **Test build** `npm run build:test`: one HTML file (≈6.4 MB) with code, pictures, sounds and fonts inside, opens from the disk without a server; no tuning panel; version in a corner.
 - [x] **6e, 19 Nov — speed (your report: the game felt slow):** measured first (CPU profiles of the simulation and the browser). Simulation: a distance-to-land grid answers "no land near" at once for most land checks; A* reuses its arrays (no 4 MB of garbage per search) and leans toward the goal; the aim angle is read from a table instead of 21 test balls; the harbour test skips far ports. Screen: texts are drawn again only when their words or colour change; flags are small pictures; range rings and port rings are drawn once per zoom and only moved; the minimap draws its islands only when you discover one; the tuning panel's width is no longer read twice a frame. Result: headless arena 2.8× faster (60 game min in 6.7 s), worst arena frame 25.7 → 13.5 ms, text redraws per frame 7–14 → 1–4; same seed, same game. Help (H) shows fps, frame and simulation times.
 
-Then:
-- [ ] Ship variety (a small random speed factor ±3–5% per ship; crew fatigue).
-- [ ] Class sizes and balance from the arena logs (the merchantman first); gun wear in accuracy.
-- [ ] All 4 classes from JSON with variants and skill tiers; the full bot state machine (merchant, patrol, pirate); headless bot scenarios in Vitest; `tools/validate_data.py`.
-- **Done when:** a pirate and a navy bot fight each other with no help from you, and the bot scenarios pass.
+Next — **step 7** (traders and bot behaviour, D52–D54):
+- [x] **7a, 19 Nov — fluyt and caravel (D52, D53):** two traders instead of the merchantman (data, sprites from `render_ship.py` with a lateen sail and a tumblehome hull), the fluyt's own polar, cargo at birth; sailing crew (speed almost kept, turning / gathering way / reloading suffer); fewer men killed on an emptier deck and by grape behind high sides; the arena: sloop, brigantine, fluyt, frigate, sloop, caravel, score = wins + ½ × escapes ("got away alive": hurt, into safe water or 1.5 km clear for 60 s; once per enemy and life); flags 12 × 8 with a bold Burgundy cross; a runner keeps sea room (no more running into a corner); the "finishing attack sank its enemy" count fixed. Headless 4 × 60 min: aground 7–15 an hour, works free 6–11; the traders still fight (that is 7b): fluyt 3 wins, 2 escapes, 30 losses; caravel 7 / 2 / 21.
+- [ ] **7b — crew spirit and running:** courage per bot (traders much lower); fear after hits, a warning shot or a black flag nearby (× 1.5); chances weighed every 3–6 s (random): leave the fight early; a cornered bot that cannot outrun may ram in despair; stern chasers (2 aft guns on the traders); cargo over the side for speed; runners pick the course where they are faster than the hunter (square rigs before the wind).
+- [ ] **7c — bot skills** (the former "skill tiers"): seamanship (speed × 0.85–1.2, steering, way-finding), gunnery (accuracy, reload), courage, loner or pack (a flag for "Squadrons"); drawn at birth, shown in the arena log and table.
+- [ ] **7d — bars and flags in battle:** sails / crew bars and a flag over bots in a battle against you; random classes and nations for the 3–5 bots; flag up to 400 m, bars up to 450 m (D41 numbers, before perception itself).
+- [ ] Still open from the old list: a small random speed factor per ship; crew fatigue; gun wear in accuracy; headless bot scenarios in Vitest; `tools/validate_data.py`.
+- **Done when:** a pirate and a navy bot fight each other with no help from you, a trader runs and sometimes gets away, and the bot scenarios pass.
 
 #### M3b — Caribbean Sea (D48, proposed; about 2–3 weeks)
 - [ ] Your mockup of the central Caribbean → a land / sea mask → `tools/build_map.py` (moved here from M5): coasts, islands, shoals; the map edge instead of the reef border.
@@ -824,14 +830,8 @@ Then:
 - [ ] Bots find their way on the new map (a navigation grid for long trips round islands); the arena and the headless arena run on it.
 - **Done when:** the headless arena runs 4 hours on the new map with no "stuck" warnings and about the same wins an hour as on the test sea.
 
-#### M4 — Boarding and capture (2 weeks)
-- [ ] Surrender rule; boarding roll; battle report.
-- [ ] Loot crates; plunder screen; take ship / prize / sink / release.
-- [ ] Ship-loss rule.
-- [ ] A crew that has lost more than 60% of its men surrenders more easily (developer's idea, 17 Nov; see 4.7).
-- **Done when:** you start in a sloop and end the session in a captured brigantine. **→ Release R2 "Skirmish".**
-
-#### M4b — Eyes at Sea: perception (D41, about 2 weeks)
+#### M4b — Eyes at Sea: perception (D41, about 2 weeks; before M4 by D54)
+- [ ] **Also (D54):** each bot gets a default route at birth (island to island or port to port, not always the shortest); renegades hunt across the whole map; false flags (a pirate shows another flag and hoists the black one late).
 - [ ] `sim/perception.ts`: each ship's known contacts (level contact / silhouette / flag, place, heading, speed, last seen), updated 3 times a second; sight ranges by level, light, fog, lanterns and mast height (`data/sight.json`). Details: `world-ideas-en.md`, section 9.
 - [ ] Bots choose targets, aim, chase and flee only from their contacts; a lost enemy is searched for at its last known place, then forgotten.
 - [ ] Your view: ships your ship does not see are not drawn; edge markers, the target card and hull bars only for known ships; the chart shows "last seen".
@@ -841,6 +841,17 @@ Then:
 - [ ] **Nations (simple first):** each bot gets a random flag (England, Spain, France, the Netherlands, pirates) for the picture and the contact level 3; what a flag means (allies, wars) comes with M5 and Stage 2.
 - [ ] Headless tests: a bot does not attack what it cannot see; it searches where it lost you; the same seed gives the same game.
 - **Done when:** you can slip away from a bot behind an island or in a fog bank, and it looks for you where it saw you last.
+
+#### M4 — Boarding and capture (2 weeks)
+- [ ] Surrender rule; boarding roll; battle report.
+- [ ] Loot crates; plunder screen; take ship / prize / sink / release.
+- [ ] Ship-loss rule.
+- [ ] A crew that has lost more than 60% of its men surrenders more easily (developer's idea, 17 Nov; see 4.7).
+- **Done when:** you start in a sloop and end the session in a captured brigantine. **→ Release R2 "Skirmish".**
+
+#### Squadrons (D54, new; about 2 weeks, after M4b)
+- [ ] Bots in pairs and packs that sail and fight together; loners chosen at birth that keep their own course and targets; escorts that pick a trader and sail near her, guarding her route.
+- **Done when:** in the arena a convoy of a fluyt and an escort reaches its port more often than a lone fluyt.
 
 #### M5 — World and ports (5 weeks; 6 with both sides)
 - [ ] The map itself comes in M3b (D48); here: port details and the tactical view.
@@ -1003,6 +1014,7 @@ Closed earlier: side in Stage 1 (D29, 13 Nov), score and saving (D30, 13 Nov), a
 
 | Change | Section |
 |---|---|
+| 19 Nov (evening): D52 (fluyt and caravel), D53 (sailing crew), D54 (M3 steps 7a–7d, M4b before M4, a "Squadrons" milestone) | 2 |
 | New decisions D43 (camera circle, spyglass centred), D44 (collisions and ramming v2), D45 (bot seamanship), D46 (headless arena), D47 (the arena observer sees everything), D48 (a Caribbean map in M3b); on 19 Nov D49 (ways round the land, harbour boats), D50 (lead aiming, rammers), D51 (WANTED, 3–5 bots) | 2 |
 | Status, key constants and the ship table brought up to date (D38, D39, sails) | top, 4.0, 4.10 |
 | Camera: no slide toward the enemy | 4.1 |

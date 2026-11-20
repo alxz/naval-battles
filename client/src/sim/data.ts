@@ -24,6 +24,11 @@ export const SHIP_CLASSES: Record<string, ShipParams> = shipsJson;
 /** The three polar tables, by rig name. */
 export const POLARS: Record<string, Polar> = polarsJson;
 
+/** The polar a class sails by: its own (M3 step 7a, the fluyt's tall masts) or its rig's. */
+export function polarOf(params: { rig: string; polar?: string }): Polar | undefined {
+  return POLARS[params.polar ?? params.rig];
+}
+
 /** The wind at the start of a new game, and how it drifts. */
 export const WIND = windJson;
 

@@ -4,6 +4,31 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (evening) — M3 step 7a: the fluyt and the caravel
+
+### Why
+
+Your 6e logs (3 h of arena): the merchantman won 1 fight and lost 16, lay aground 25 times (half of all groundings), worked free 23 times and once spent 15 minutes on the West reef in the north-west corner while running from a fight. It charged into 111 fights like a warship, and grape killed its 40 men while it kept sailing at full speed. Your answer: two traders of the time, the arena counts getting away alive as half a win, crew losses should cost little speed but much handiness.
+
+### What changed
+
+- **Two traders instead of the merchantman (D52):** the fluyt (62 m, 14.1 m/s = 0.7 of a sloop, 1 gun a side, 18 men, hold 30–100% full, a full hold −15% speed; tall masts: her own polar `squareTall`, as fast dead before the wind as on a broad reach) and the caravel (46 m, 16.1 m/s = 0.8, 4 guns a side, 45 men, hull 400, sides 9 m high). Sprites from `render_ship.py`: a new lateen sail and a hull whose sides lean in (the fluyt). The merchantman's pictures are gone.
+- **Sailing crew (D53):** with its sailing crew aboard a ship keeps 95–100% of its speed; below that the speed falls to half with nobody left. Losses still slow turning (to 0.4) and reloading, and now also gathering way and losing it (up to 2× slower).
+- **How many men a ball kills:** times the crowding of the deck (men per metre of hull against a full sloop) and, for grape, the cover of the sides (6 m ÷ side height). A full sloop as before; a fluyt about 0.17; grape on the caravel 0.4. A share of a man is a seeded chance.
+- **Arena:** sloop, brigantine, fluyt, frigate, sloop, caravel. Score = wins + ½ × escapes. An escape: the ship was hit, is hurt (hull, sails or crew below 70%), and reaches a port's safe water, or nobody hits it for 60 s and the enemy is more than 1.5 km away; once per enemy and life. The table shows W / E / L; the log writes "ESCAPED ..." lines and an escapes column per class; the hold of a trader is in the log.
+- **Flags 12 × 8:** a bold, ragged red Burgundy cross with a gold centre for Spain; St George two pixels thick; a big gold lily for France; the Dutch Prince's flag; skull and crossbones.
+- **Fixes:** a runner judges each heading by the sea room 500 m along it and turns along the edge instead of into a corner (`seaRoom`, up to 135° off "straight away"); "finishing attacks ... sank their enemy" now counts a kill even when the killer was already marked an offender in the same step.
+
+### Results
+
+Headless 4 × 60 min (seeds 43790–43793): sunk 26–34 an hour, aground 7–15, works free 6–11, no warnings. By class over the 4 hours: sloop (2 ships) 40 wins / 10 escapes / 34 losses, brigantine 31 / 6 / 19, frigate 34 / 4 / 11, caravel 7 / 2 / 21, fluyt 3 / 2 / 30. The traders still go into every fight: running away is step 7b. 392 tests; build and test build; arena checked in the browser (computer).
+
+### Next
+
+7b crew spirit and running; 7c bot skills; 7d bars and flags in battle. Then M4b before M4 (D54).
+
+---
+
 ## 19 Nov 2026 (late night) — M3 step 6e: speed
 
 ### Measured first

@@ -47,7 +47,11 @@
     "freeSpeed": 3
   },
   "crew": {
-    "speedMinFactor": 0.7,
-    "turnMinFactor": 0.4
+    "speedMinFactor": 0.5,
+    "speedLossFull": 0.05,
+    "turnMinFactor": 0.4,
+    "accelSlowdown": 1.0,
+    "crowdPerMetre": 1.67,
+    "grapeCoverHeightM": 6.0
   }
 }

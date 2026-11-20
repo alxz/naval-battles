@@ -414,6 +414,17 @@ What went into step 4b at once (fixes of step 4): controls lock when sunk, damag
 
 ---
 
+## 12. Ideas of 19 Nov: traders, fear, squadrons, skills (D52–D54)
+
+What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b), bot skills drawn at birth (7c), bars and flags in battle (7d). The rest waits here, by milestone:
+
+- **M4b, with sight:** default routes chosen at birth (island to island, port to port, not always the shortest); renegades who hunt over the whole map; false flags (a pirate comes under another flag and hoists the black one late; a trader's fear check at that moment).
+- **M4:** striking the colours: a frightened trader heaves to and surrenders, and the boarding takes the prize; high sides make boarding harder (the caravel).
+- **Squadrons (new milestone after M4b):** pairs and packs; loners chosen at birth; escorts that take a trader and guard her along her route.
+- **M5:** the value of the cargo: thrown over the side to run faster, it is gold lost for the pirate; a Spanish silver galleon as a rare, rich, well-armed prize.
+- **M6:** skills that grow with time, for bots as for you.
+- History notes behind D52: Atlantic merchant ships of the late 17th century were mostly small; pirates carried 2–3 times more men per ton than merchants; a fluyt could be sailed by 10–12 men; caravels had mostly gone out of use by our period (we keep one as an old-fashioned trader); merchant crews often surrendered without a fight, and an English law of 1721 punished those who did not defend their ship.
+
 ## History
 
 | Date | What |
@@ -421,3 +432,4 @@ What went into step 4b at once (fixes of step 4): controls lock when sunk, damag
 | 17 Nov 2026 | First version: the developer's ideas 1–9 and 11, conclusions and order |
 | 17 Nov 2026 (late) | The developer's answers: a 12-minute day (D42), perception as M4b (D41), item 10 (surrender, breaking a contract); detailed plans for M4b and day and night (sections 8–10) |
 | 18 Nov 2026 | Ideas from the test of step 4 (section 11): finishing shot, port capacity, detail by distance, flags, damage pictures, island placement |
+| 19 Nov 2026 | Section 12: traders, fear, squadrons, skills; staged by D52–D54 |

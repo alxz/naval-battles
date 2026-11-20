@@ -987,7 +987,7 @@ export class SeaScene extends Phaser.Scene {
     this.arenaLog.add(0, `arena started with ${pilots.length} bots (seed ${seed}):`);
     for (const p of pilots) {
       const ship = this.ship(p.shipId);
-      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}, at ${placeText(ship?.x ?? 0, ship?.y ?? 0)}`);
+      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}${ship?.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship?.x ?? 0, ship?.y ?? 0)}`);
     }
   }
 

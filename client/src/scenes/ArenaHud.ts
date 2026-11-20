@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { pilotScore } from '../sim/arena';
 import { SHIP_CLASSES } from '../sim/data';
 import type { Pose } from '../sim/simulation';
 import type { World } from '../sim/types';
@@ -124,16 +125,17 @@ export class ArenaHud {
     });
 
     // The score table.
-    const sorted = [...arena.pilots].sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+    const sorted = [...arena.pilots].sort((a, b) => pilotScore(b) - pilotScore(a) || a.losses - b.losses);
     // A phone has little room: the best three, and the ship you follow if it is not among them.
     const rows = this.touch ? sorted.filter((p, i) => i < 3 || p.shipId === focusId) : sorted;
     const lines = [
       `AUTO-BOT  ${arena.peace ? 'PEACE' : 'WAR'}  ${clockText}  x${timeScale}`,
       `wins ${arena.totalWins}${following ? '' : '   free view: NEXT to follow'}`,
+      `${' '.repeat(23)}  W   E   L`, // wins, escapes (M3 step 7a), losses
       ...rows.map((p) => {
         const ship = world.ships.find((sh) => sh.id === p.shipId);
         const mark = p.shipId === focusId ? '>' : ' ';
-        return `${mark}#${p.number} ${p.name.padEnd(12)} ${(ship?.shipClass ?? '').slice(0, 5).padEnd(5)} ${String(p.wins).padStart(3)} ${String(p.losses).padStart(3)}${ship?.sunk ? ' sunk' : ''}`;
+        return `${mark}#${p.number} ${p.name.padEnd(12)} ${(ship?.shipClass ?? '').slice(0, 5).padEnd(5)} ${String(p.wins).padStart(3)} ${String(p.escapes ?? 0).padStart(3)} ${String(p.losses).padStart(3)}${ship?.sunk ? ' sunk' : ''}`;
       }),
     ];
     this.board.setText(lines.join('\n'));

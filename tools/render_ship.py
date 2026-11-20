@@ -47,7 +47,7 @@ PREVIEW_FILE = ART_DIR / "ship-art-preview.png"
 SIZE = 1.2
 FRAME = 80  # frame size in pixels at detail 1 (1 pixel per game metre) for the sloop
 # Bigger ships need bigger frames (bowsprit and booms included; height x HEIGHT_SCALE above the anchor).
-FRAMES = {"sloop": 80, "brigantine": 96, "merchantman": 120, "frigate": 136}
+FRAMES = {"sloop": 80, "brigantine": 96, "caravel": 96, "fluyt": 120, "frigate": 136}
 ANCHOR = (0.5, 0.6)  # where the middle of the hull at the water sits in the frame (share of the frame)
 COLUMNS = 8  # frames per row in a sheet
 DIRECTIONS = (16, 32)
@@ -304,6 +304,7 @@ class HullSpec:
     guns: list[float] = field(default_factory=list)  # x of each gun (both sides)
     deck_guns: bool = True  # guns on the open deck (small ships) or only behind ports (a gun deck below)
     windows: int = 3
+    tumble: float = 1.0  # M3 step 7a: deck width as a share of the widest hull (the fluyt's sides lean in: < 1)
 
 
 class Hull:
@@ -356,18 +357,21 @@ class Hull:
             lift = self.raise_at(t0)
             deck0 = self.sheer(t0) - 0.9 + lift
             deck1 = self.sheer(_t1) - 0.9 + lift
+            # Widths at the water, the low and high strakes, and the rail (a "tumblehome" hull is widest low down).
+            tb = s.tumble
+            k_low, k_high, k_top = (0.9, 0.97, 1.0) if tb >= 1 else (1.0, (1.0 + tb) / 2, tb)
             for side in (1, -1):
                 water0, water1 = (x0, side * w0 * 0.8, 0), (x1, side * w1 * 0.8, 0)
-                low0, low1 = (x0, side * w0 * 0.9, h0 * 0.45), (x1, side * w1 * 0.9, h1 * 0.45)
-                high0, high1 = (x0, side * w0 * 0.97, h0 * 0.8), (x1, side * w1 * 0.97, h1 * 0.8)
-                top0, top1 = (x0, side * w0, h0), (x1, side * w1, h1)
+                low0, low1 = (x0, side * w0 * k_low, h0 * 0.45), (x1, side * w1 * k_low, h1 * 0.45)
+                high0, high1 = (x0, side * w0 * k_high, h0 * 0.8), (x1, side * w1 * k_high, h1 * 0.8)
+                top0, top1 = (x0, side * w0 * k_top, h0), (x1, side * w1 * k_top, h1)
                 m.quad(water0, water1, low1, low0, HULL_DARK)
                 m.quad(low0, low1, high1, high0, band)
                 m.quad(high0, high1, top1, top0, WOOD_DARK)
-                in0, in1 = (x0, side * max(0, w0 - 0.8), h0), (x1, side * max(0, w1 - 0.8), h1)
+                in0, in1 = (x0, side * max(0, w0 * k_top - 0.8), h0), (x1, side * max(0, w1 * k_top - 0.8), h1)
                 m.quad(top0, top1, in1, in0, band)
                 m.quad(in0, in1, (in1[0], in1[1], deck1), (in0[0], in0[1], deck0), HULL_DARK)
-            inner0, inner1 = max(0, w0 - 0.8), max(0, w1 - 0.8)
+            inner0, inner1 = max(0, w0 * k_top - 0.8), max(0, w1 * k_top - 0.8)
             colour = DECK_AFT if lift > 0 else DECK
             m.quad((x0, -inner0, deck0), (x1, -inner1, deck1), (x1, inner1, deck1), (x0, inner0, deck0), colour)
             m.min_detail = 2
@@ -529,31 +533,88 @@ def build_brigantine(band: tuple[int, int, int]) -> Model:
     return m
 
 
-def build_merchantman(band: tuple[int, int, int]) -> Model:
-    """A broad, slow trader, 56 m: three masts, high stern castle, cargo on deck; 3 guns a side."""
+def lateen_sail(m: Model, x: float, deck: float, height: float, yard: float, swing_deg: float) -> None:
+    """
+    A lateen sail (M3 step 7a, the caravel): a triangle hung from a long slanting yard that crosses
+    the mast, its fore end low, its aft end high; the foot is sheeted aft, swung out to starboard.
+    """
+    a = math.radians(32)
+    swing = math.radians(swing_deg)
+
+    def place(dx: float, z: float, out: float = 0.0) -> np.ndarray:
+        """dx: along the ship from the mast (+ forward); swung round the mast by the swing angle."""
+        return np.array([x + dx * math.cos(swing), -dx * math.sin(swing) + out, z])
+
+    pivot_z = deck + height * 0.6
+    fore = place(yard * 0.38 * math.cos(a), pivot_z - yard * 0.38 * math.sin(a))
+    aft = place(-yard * 0.62 * math.cos(a), pivot_z + yard * 0.62 * math.sin(a))
+    clew = place(-yard * 0.5 * math.cos(a), deck + 2.2, 1.5)
+    panels = 5
+    for i in range(panels):
+        p0 = fore + (aft - fore) * (i / panels)
+        p1 = fore + (aft - fore) * ((i + 1) / panels)
+        m.tri(p0, p1, clew, SAIL if i % 2 == 0 else SAIL_SEAM)
+    m.spar(fore, aft, 0.6, WOOD)  # the yard
+
+
+def build_caravel(band: tuple[int, int, int]) -> Model:
+    """
+    M3 step 7a: a caravel, 38 m: an old-fashioned armed trader with high sides and a tall stern
+    castle; a square-rigged foremast and two lateen masts; 4 guns a side on deck.
+    """
     m = Model()
-    hull = Hull(m, HullSpec(56, 8.0, 4.0, 1.6, 0.24, 1.8, 0.14, 1.0, 0.72, 0.62, 1.6, guns=[-12.0, 0.0, 12.0], windows=4), band)
-    bowsprit_end = np.array([38.0, 0.0, 11.0])
-    m.spar((24.0, 0, 5.8), bowsprit_end, 1.2, WOOD)
-    fore_x, main_x, mizzen_x = 15.0, 1.0, -15.0
-    mast(m, fore_x, hull.deck(fore_x), 31.0, 1.5, [17.0, 26.0])
-    mast(m, main_x, hull.deck(main_x), 35.0, 1.7, [19.0, 29.0])
-    mast(m, mizzen_x, hull.deck(mizzen_x), 26.0, 1.2, [19.0])
-    for bottom, top, hw in ((9.0, 16.0, 9.0), (17.5, 24.5, 7.0), (26.5, 30.0, 4.6)):
-        square_sail(m, fore_x, bottom, top, hw, 26)
-    for bottom, top, hw in ((10.0, 18.0, 10.5), (19.5, 27.5, 8.2), (29.5, 33.5, 5.5)):
-        square_sail(m, main_x, bottom, top, hw, 26)
-    gaff_sail(m, mizzen_x, 8.5, 18.5, 12.0, 8.0, 22)
-    jibs(m, bowsprit_end, [np.array([fore_x + 0.8, 0, 19.0])], 23.0, 3.5)
-    for x, top in ((fore_x, 26.0), (main_x, 29.0), (mizzen_x, 19.0)):
+    hull = Hull(m, HullSpec(38, 5.6, 4.0, 2.0, 0.3, 2.4, 0.12, 1.0, 0.62, 0.55, 1.9, guns=[-9.0, -3.0, 3.0, 9.0], windows=2), band)
+    bowsprit_end = np.array([26.0, 0.0, 8.5])
+    m.spar((15.5, 0, 5.4), bowsprit_end, 0.9, WOOD)
+    fore_x, main_x, mizzen_x = 11.0, 0.5, -10.5
+    mast(m, fore_x, hull.deck(fore_x), 24.0, 1.2, [16.5])
+    mast(m, main_x, hull.deck(main_x), 26.0, 1.4, [21.0])
+    mast(m, mizzen_x, hull.deck(mizzen_x), 21.0, 1.0, [])
+    for bottom, top, hw in ((8.5, 15.5, 7.0), (17.0, 22.0, 5.0)):
+        square_sail(m, fore_x, bottom, top, hw, 28)
+    lateen_sail(m, main_x, hull.deck(main_x), 20.0, 26.0, 24)
+    lateen_sail(m, mizzen_x, hull.deck(mizzen_x), 14.0, 17.0, 20)
+    jibs(m, bowsprit_end, [np.array([fore_x + 0.6, 0, 15.0])], 15.0, 2.8)
+    for x, top in ((fore_x, 16.5), (main_x, 21.0)):
         shrouds(m, hull, x, top)
-    # Cargo: crates and bales on the main deck, two big hatches.
-    for hx in (-5.0, 8.0):
-        m.box((hx - 2.5, -2.5, hull.deck(hx)), (hx + 2.5, 2.5, hull.deck(hx) + 0.6), WOOD_DARK)
-    for cx, cy, size in ((-8.5, 3.0, 1.6), (-8.0, -3.2, 1.4), (4.5, 3.4, 1.5), (5.0, -3.0, 1.3), (11.0, 2.8, 1.2)):
+    # On deck: a hatch, a few bales, the tiller under the stern castle.
+    m.box((3.5, -1.4, hull.deck(4)), (6.5, 1.4, hull.deck(4) + 0.5), WOOD_DARK)
+    for cx, cy, size in ((-5.0, 2.0, 1.3), (-5.5, -1.8, 1.1)):
         m.box((cx - size / 2, cy - size / 2, hull.deck(cx)), (cx + size / 2, cy + size / 2, hull.deck(cx) + size), CARGO)
-    m.box((-22.5, -0.6, hull.deck(-22)), (-21.5, 0.6, hull.deck(-22) + 1.5), WOOD_DARK)  # helm
-    flag(m, main_x, 35.0, 5.0)
+    m.box((-15.5, -0.5, hull.deck(-15)), (-14.7, 0.5, hull.deck(-15) + 1.4), WOOD_DARK)
+    flag(m, main_x, 26.0, 4.2)
+    return m
+
+
+def build_fluyt(band: tuple[int, int, int]) -> Model:
+    """
+    M3 step 7a: a Dutch fluyt, 52 m: a big round-bellied hold with sides leaning in (a narrow deck),
+    a narrow rounded stern, very tall masts with narrow square sails and a lateen mizzen,
+    cargo on deck; only one gun a side.
+    """
+    m = Model()
+    hull = Hull(m, HullSpec(52, 7.6, 3.8, 1.5, 0.2, 2.2, 0.1, 0.8, 0.45, 0.62, 1.5, guns=[2.0], windows=2, tumble=0.78), band)
+    bowsprit_end = np.array([35.0, 0.0, 10.0])
+    m.spar((22.0, 0, 5.4), bowsprit_end, 1.1, WOOD)
+    fore_x, main_x, mizzen_x = 14.0, 0.0, -15.0
+    mast(m, fore_x, hull.deck(fore_x), 36.0, 1.4, [18.0, 28.0])
+    mast(m, main_x, hull.deck(main_x), 41.0, 1.6, [20.0, 31.0])
+    mast(m, mizzen_x, hull.deck(mizzen_x), 25.0, 1.1, [])
+    for bottom, top, hw in ((8.5, 17.0, 7.5), (19.0, 27.0, 5.8), (29.0, 34.0, 3.8)):
+        square_sail(m, fore_x, bottom, top, hw, 26)
+    for bottom, top, hw in ((9.5, 19.0, 8.5), (21.0, 30.0, 6.5), (32.0, 38.5, 4.2)):
+        square_sail(m, main_x, bottom, top, hw, 26)
+    lateen_sail(m, mizzen_x, hull.deck(mizzen_x), 16.0, 18.0, 20)
+    jibs(m, bowsprit_end, [np.array([fore_x + 0.8, 0, 18.0])], 21.0, 3.0)
+    for x, top in ((fore_x, 28.0), (main_x, 31.0)):
+        shrouds(m, hull, x, top)
+    # The hold: two big hatches and cargo stacked on deck.
+    for hx in (-6.0, 7.0):
+        m.box((hx - 2.4, -2.0, hull.deck(hx)), (hx + 2.4, 2.0, hull.deck(hx) + 0.6), WOOD_DARK)
+    for cx, cy, size in ((-9.5, 2.0, 1.5), (-9.0, -2.1, 1.3), (-3.0, 2.1, 1.2), (4.0, -2.1, 1.4), (10.0, 1.8, 1.2), (10.5, -1.6, 1.0)):
+        m.box((cx - size / 2, cy - size / 2, hull.deck(cx)), (cx + size / 2, cy + size / 2, hull.deck(cx) + size), CARGO)
+    m.box((-20.5, -0.5, hull.deck(-20)), (-19.7, 0.5, hull.deck(-20) + 1.4), WOOD_DARK)  # helm
+    flag(m, mizzen_x, 25.0, 4.2)
     return m
 
 
@@ -715,7 +776,7 @@ def preview(sheets: list[tuple[Path, int, int]], target: Path) -> None:
 
 
 def main() -> None:
-    models = {"sloop": build_sloop, "brigantine": build_brigantine, "merchantman": build_merchantman, "frigate": build_frigate}
+    models = {"sloop": build_sloop, "brigantine": build_brigantine, "caravel": build_caravel, "fluyt": build_fluyt, "frigate": build_frigate}
     only = sys.argv[1:]  # e.g. "python tools/render_ship.py frigate" renders only the frigate (faster while tuning)
     for ship_class, build in models.items():
         if only and ship_class not in only:

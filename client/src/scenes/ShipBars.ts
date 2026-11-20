@@ -99,7 +99,7 @@ export class ShipBars {
       if (crew > 0) g.fillStyle(BAR_ICONS.crew.colour, 1).fillRect(bar.x + bar.width - half, y2, crew, SMALL_BAR_PX);
       const rows = FLAGS[nation];
       const fx = bar.x - (rows[0]?.length ?? 9) - 4;
-      const fy = bar.y - 1;
+      const fy = bar.y - 3; // the 8-pixel flag stands beside the bars (M3 step 7a)
       this.flags[i]?.setTexture(`flag-${nation}`).setPosition(fx - 1, fy - 1).setVisible(true);
     });
   }

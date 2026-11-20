@@ -11,24 +11,30 @@ export const NATIONS: readonly Nation[] = ['england', 'spain', 'france', 'nether
 export const FLAG_COLOURS: Readonly<Record<string, number>> = {
   W: 0xf4f0e4, // white
   R: 0xc0242c, // red
+  C: 0xe0202a, // the bright red of the Burgundy cross
   B: 0x23408e, // blue
+  O: 0xe07a1c, // the orange of the Dutch "Prince's flag"
   K: 0x141414, // black
   G: 0xe9c46a, // gold
   S: 0x8a8070, // the edge
 };
 
-/** 9 x 6 pixels each. */
+/**
+ * 12 x 8 pixels each (M3 step 7a; 9 x 6 before: the thin Spanish cross was hard to see).
+ * At this size every flag is one bold shape that reads at a glance.
+ */
 export const FLAGS: Readonly<Record<Nation, readonly string[]>> = {
-  // England: the red cross of St George on white.
-  england: ['WWWRRWWWW', 'WWWRRWWWW', 'RRRRRRRRR', 'WWWRRWWWW', 'WWWRRWWWW', 'WWWRRWWWW'],
-  // Spain: the Cross of Burgundy, a red saltire on white (as on the port's flag).
-  spain: ['RWWWWWWWR', 'WRWWWWWRW', 'WWRRWRRWW', 'WWRRWRRWW', 'WRWWWWWRW', 'RWWWWWWWR'],
-  // France: the white flag of the royal navy, with gold lilies.
-  france: ['WWWWWWWWW', 'WGWWWWWGW', 'WWWWGWWWW', 'WWWGGGWWW', 'WWWWGWWWW', 'WWWWWWWWW'],
-  // The Netherlands: red, white and blue.
-  netherlands: ['RRRRRRRRR', 'RRRRRRRRR', 'WWWWWWWWW', 'WWWWWWWWW', 'BBBBBBBBB', 'BBBBBBBBB'],
-  // Pirates: black, with a white skull.
-  pirates: ['KKKKKKKKK', 'KKKWWWKKK', 'KKWKWKWKK', 'KKKWWWKKK', 'KKWKWKWKK', 'KKKKKKKKK'],
+  // England: the red cross of St George on white, two pixels thick.
+  england: ['WWWWWRRWWWWW', 'WWWWWRRWWWWW', 'WWWWWRRWWWWW', 'RRRRRRRRRRRR', 'RRRRRRRRRRRR', 'WWWWWRRWWWWW', 'WWWWWRRWWWWW', 'WWWWWRRWWWWW'],
+  // Spain: the Cross of Burgundy, a bold "ragged" red saltire (knots on its arms) on white,
+  // with a gold crown where the arms cross.
+  spain: ['CCWWWWWWWWCC', 'WCCCWWWWCCCW', 'WWCCCWWCCCWW', 'WWWCCGGCCWWW', 'WWWCCGGCCWWW', 'WWCCCWWCCCWW', 'WCCCWWWWCCCW', 'CCWWWWWWWWCC'],
+  // France: the white flag of the royal navy with a big gold lily.
+  france: ['WWWWWWWWWWWW', 'WWWWWGGWWWWW', 'WWWWGGGGWWWW', 'WWGWWGGWWGWW', 'WWGGGGGGGGWW', 'WWWWWGGWWWWW', 'WWWWGWWGWWWW', 'WWWWWWWWWWWW'],
+  // The Netherlands: the Prince's flag, orange, white and blue.
+  netherlands: ['OOOOOOOOOOOO', 'OOOOOOOOOOOO', 'OOOOOOOOOOOO', 'WWWWWWWWWWWW', 'WWWWWWWWWWWW', 'BBBBBBBBBBBB', 'BBBBBBBBBBBB', 'BBBBBBBBBBBB'],
+  // Pirates: black, a white skull over crossed bones.
+  pirates: ['KKKKKKKKKKKK', 'KKKKWWWWKKKK', 'KKKWKWWKWKKK', 'KKKWWWWWWKKK', 'KKKKWKKWKKKK', 'KKWWKKKKWWKK', 'KKKKWWWWKKKK', 'KKWWKKKKWWKK'],
 };
 
 /**

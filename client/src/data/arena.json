@@ -1,12 +1,34 @@
 {
   "bots": 6,
-  "classes": ["sloop", "brigantine", "merchantman", "frigate", "sloop", "brigantine", "merchantman", "frigate"],
-  "names": ["Black Gull", "Sea Wolf", "Red Heron", "Silver Eel", "Storm Petrel", "Iron Crab", "Grey Shark", "Salt Witch"],
+  "classes": [
+    "sloop",
+    "brigantine",
+    "fluyt",
+    "frigate",
+    "sloop",
+    "caravel",
+    "brigantine",
+    "fluyt"
+  ],
+  "names": [
+    "Black Gull",
+    "Sea Wolf",
+    "Red Heron",
+    "Silver Eel",
+    "Storm Petrel",
+    "Iron Crab",
+    "Grey Shark",
+    "Salt Witch"
+  ],
   "respawnSeconds": 20,
   "retargetSeconds": 3,
   "winsToPeace": 500,
   "woundedBonusM": 300,
   "crowdPenaltyM": 150,
   "switchMarginM": 120,
-  "spawnTries": 40
+  "spawnTries": 40,
+  "escapeQuietSeconds": 60,
+  "escapeRangeM": 1500,
+  "escapeHurtShare": 0.7,
+  "escapeForgetSeconds": 180
 }

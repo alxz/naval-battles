@@ -12,7 +12,7 @@ export type Owner = 'player' | 'enemy';
 /** 0 = plain boxes; 16 or 32 = pre-rendered pictures in that many directions. */
 export type ArtChoice = 0 | 16 | 32;
 
-const MASTS: Record<string, number> = { sloop: 1, brigantine: 2, merchantman: 3, frigate: 3 };
+const MASTS: Record<string, number> = { sloop: 1, brigantine: 2, caravel: 3, fluyt: 3, frigate: 3 };
 
 /** Frame size (pixels at detail 1) of a class's pictures; big ships have bigger frames. */
 function frameSize(shipClass: string): number {

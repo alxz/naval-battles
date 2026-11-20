@@ -16,7 +16,7 @@ import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './la
 import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
-import { BOTS, DAMAGE, GUNS, POLARS, SHIP_CLASSES } from './data';
+import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, WORLD } from './data';
 import { predictLanding, reloadLeft, sideAngleRad } from './guns';
 import { touchesLand } from './land';
 import { clamp } from './math';
@@ -135,7 +135,7 @@ export function sailsForSpeed(ship: ShipState, params: ShipParams, wind: WindNow
  * Updates `bot.tack`; returns the heading.
  */
 export function steerWithTacks(goalRad: number, params: ShipParams, wind: WindNow, bot: BotState, p: BotParams): number {
-  const noGo = POLARS[params.rig]?.noGoDeg ?? 0;
+  const noGo = polarOf(params)?.noGoDeg ?? 0;
   if (twaDeg(goalRad, wind.fromRad) >= noGo + p.tackMarginDeg) {
     bot.tack = 0;
     return goalRad;
@@ -154,7 +154,7 @@ export function steerWithTacks(goalRad: number, params: ShipParams, wind: WindNo
 
 /** The close-hauled heading on this tack (+1: clockwise of the wind, -1: anticlockwise). */
 export function closeHauled(params: ShipParams, wind: WindNow, tack: 1 | -1, p: BotParams): number {
-  const noGo = POLARS[params.rig]?.noGoDeg ?? 0;
+  const noGo = polarOf(params)?.noGoDeg ?? 0;
   return normalizeAngle(wind.fromRad + tack * degToRad(noGo + p.closeHauledMarginDeg));
 }
 
@@ -337,24 +337,43 @@ export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, 
   const away = normalizeAngle(bearingToEnemy + Math.PI);
   const look = Math.max(FLEE_LAND_LOOK_M, ship.speed * 12);
   const open = (h: number): boolean => islands.length === 0 || !landAhead(ship, params, islands, h, look);
+  // M3 step 7a (your 6e log: a merchantman ran into the north-west corner and lay on the reef for
+  // 15 minutes): a runner does not run into a corner. Each heading is judged by how much sea is
+  // left ahead of it (seaRoom); a heading that ends near the edge loses to one that keeps sea room.
+  const room = (h: number): number => seaRoom(ship.x + Math.cos(h) * FLEE_ROOM_LOOK_M, ship.y + Math.sin(h) * FLEE_ROOM_LOOK_M);
   let best = away;
-  let bestSpeed = -1;
-  for (const offDeg of [0, 20, -20, 40, -40]) {
+  let bestScore = -Infinity;
+  // Up to 135 degrees off: in a corner the only way out is along an edge, half across the enemy's bow.
+  for (const offDeg of [0, 20, -20, 40, -40, 60, -60, 90, -90, 135, -135]) {
     const heading = normalizeAngle(away + degToRad(offDeg));
     if (!open(heading)) continue;
     const speed = targetSpeed({ ...ship, headingRad: heading, sailLevel: 1 }, params, wind);
-    if (speed > bestSpeed + 0.2) {
+    // Fast and straight away is best; a wide turn costs a little; little sea room ahead costs a lot.
+    const cramped = Math.max(0, FLEE_ROOM_M - room(heading)) / FLEE_ROOM_M; // 0 = plenty of room, 1 = at the edge
+    const score = speed - FLEE_TURN_COST * Math.abs(offDeg) - FLEE_CORNER_COST * cramped;
+    if (score > bestScore + 0.2) {
       best = heading;
-      bestSpeed = speed;
+      bestScore = score;
     }
   }
-  if (bestSpeed >= 0) return best;
-  for (const offDeg of [60, -60, 90, -90]) {
-    const heading = normalizeAngle(away + degToRad(offDeg));
-    if (open(heading)) return heading;
-  }
+  if (bestScore > -Infinity) return best;
   return unstickHeading(ship, params, islands, wind);
 }
+
+/** M3 step 7a: how far a point is from the reef that rings the sea (0 at the reef or beyond). */
+export function seaRoom(x: number, y: number): number {
+  const r = WORLD.reefWidth;
+  return Math.max(0, Math.min(x - (WORLD.minX + r), WORLD.maxX - r - x, y - (WORLD.minY + r), WORLD.maxY - r - y));
+}
+
+/** A runner judges a heading by the sea room this far along it ... */
+const FLEE_ROOM_LOOK_M = 500;
+/** ... wants at least this much room there ... */
+const FLEE_ROOM_M = 400;
+/** ... and gives up this many m/s of speed to keep it (a cornered heading is almost never taken). */
+const FLEE_CORNER_COST = 20;
+/** A heading off "straight away" costs this many m/s per degree (so equal speeds prefer straight away). */
+const FLEE_TURN_COST = 0.02;
 
 /** A running ship looks this far ahead for land (more when fast). */
 const FLEE_LAND_LOOK_M = 150;

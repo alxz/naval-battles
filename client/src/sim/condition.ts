@@ -45,16 +45,61 @@ export function sailSpeedFactor(ship: ShipState): number {
 }
 
 /**
- * M3 step 4b: a short-handed ship sails slower. The target speed falls in a straight line
- * from 1 (full crew) to crew.speedMinFactor (nobody left): too few hands to trim the sails.
+ * A short-handed ship sails slower, but only a little while she has her sailing crew
+ * (M3 step 7a, your idea: a small crew can keep the sails set; it is turning, tacking and
+ * trimming that need many hands):
+ *   with sailCrew or more aboard:  1 - crew.speedLossFull x (share of the crew lost)   (0.95..1)
+ *   below sailCrew:                a straight line down to crew.speedMinFactor with nobody left
+ * Before 7a the speed fell straight from 1 to 0.7 with the whole crew, so a sloop that lost
+ * its fighting men to grape also lost its speed.
  */
 export function crewSpeedFactor(ship: ShipState, d: DamageParams = DAMAGE): number {
-  return d.crew.speedMinFactor + (1 - d.crew.speedMinFactor) * crewShare(ship);
+  const params = paramsOf(ship);
+  const full = params?.crew ?? 0;
+  if (full <= 0) return 1;
+  const hands = crewOf(ship);
+  const sail = Math.min(params?.sailCrew ?? full, full);
+  const loss = d.crew.speedLossFull;
+  if (hands >= sail) return 1 - loss * (1 - Math.min(1, hands / full));
+  const atSailCrew = 1 - loss * (1 - sail / full);
+  return d.crew.speedMinFactor + (atSailCrew - d.crew.speedMinFactor) * (sail > 0 ? hands / sail : 0);
 }
 
-/** M3 step 4b: ... and turns slower: from 1 (full crew) to crew.turnMinFactor (nobody left). */
+/** M3 step 4b: a short-handed ship turns slower: from 1 (full crew) to crew.turnMinFactor (nobody left). */
 export function crewTurnFactor(ship: ShipState, d: DamageParams = DAMAGE): number {
   return d.crew.turnMinFactor + (1 - d.crew.turnMinFactor) * crewShare(ship);
+}
+
+/**
+ * M3 step 7a: ... and gathers way and loses it slower: her speed time constant is multiplied by
+ * 1 + crew.accelSlowdown x (share of the crew lost). (Full crew 1, half 1.5, nobody 2.)
+ */
+export function crewAccelFactor(ship: ShipState, d: DamageParams = DAMAGE): number {
+  return 1 + d.crew.accelSlowdown * (1 - crewShare(ship));
+}
+
+/**
+ * M3 step 7a: how many men one ball kills, for each man guns.crewKill says: the deck's crowding
+ * (men aboard per metre of hull, against crew.crowdPerMetre) times, for grape, the cover of the
+ * sides (crew.grapeCoverHeightM / hullHeight, at most 1). A sloop full of men: about 1.
+ * A fluyt with 18 men: about 0.17; the high-sided caravel takes grape at 0.4 of a sloop's losses.
+ */
+export function crewExposure(ship: ShipState, params: ShipParams, ammo: string, d: DamageParams = DAMAGE): number {
+  const crowd = Math.min(2, crewOf(ship) / Math.max(1, params.length * d.crew.crowdPerMetre));
+  const cover = ammo === 'grape' ? Math.min(1, d.crew.grapeCoverHeightM / Math.max(0.1, params.hullHeight)) : 1;
+  return crowd * cover;
+}
+
+/** M3 step 7a: a full hold slows a trader: 1 - ladenSlowdown x cargo (1 for an empty hold or a warship). */
+export function cargoSpeedFactor(ship: ShipState): number {
+  return 1 - (paramsOf(ship)?.ladenSlowdown ?? 0) * Math.min(1, Math.max(0, ship.cargo ?? 0));
+}
+
+/** M3 step 7a: how full a trader's hold is when she comes to sea, for a random number r in 0..1; undefined for a warship. */
+export function rollCargo(params: ShipParams, r: number): number | undefined {
+  if (params.cargoMax === undefined) return undefined;
+  const lo = params.cargoMin ?? 0;
+  return lo + (params.cargoMax - lo) * Math.min(1, Math.max(0, r));
 }
 
 /**
@@ -91,4 +136,5 @@ export function refitShip(ship: ShipState): void {
   delete ship.crew;
   delete ship.ammo;
   delete ship.ammoLeft;
+  delete ship.cargo; // a new ship comes with a new load (the arena rolls it again)
 }

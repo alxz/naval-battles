@@ -5,7 +5,7 @@
 
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { clamp } from './math';
-import { POLARS } from './data';
+import { polarOf } from './data';
 import type { ShipParams, ShipState, WindNow } from './types';
 
 /** The circle the target sails round, clockwise (turning to starboard), and where it is in its tack. */
@@ -45,7 +45,7 @@ export function circleHeadingRad(ship: ShipState, circle: Circle): number {
  */
 export function circleSteerRad(ship: ShipState, params: ShipParams, wind: WindNow, circle: Circle): number {
   const wanted = circleHeadingRad(ship, circle);
-  const noGo = POLARS[params.rig]?.noGoDeg ?? 0;
+  const noGo = polarOf(params)?.noGoDeg ?? 0;
   const upwind = twaDeg(wanted, wind.fromRad) < noGo + UPWIND_MARGIN_DEG;
   // Memory (hysteresis): once the tack has started, it ends only when the circle can be
   // followed again with the wind on the port side (wanted heading clockwise from the wind).
