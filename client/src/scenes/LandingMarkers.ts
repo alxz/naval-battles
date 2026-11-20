@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
-import { landingSpread, predictLanding, reloadLeft, sideAngleRad } from '../sim/guns';
+import { gunsOn, landingSpread, predictLanding, reloadLeft, sideAngleRad } from '../sim/guns';
+import { turnAbout } from '../view/chaserAim';
 import { STEP_SECONDS } from '../sim/step';
 import type { ShipParams, ShipState, Side } from '../sim/types';
 
@@ -29,7 +30,7 @@ export class LandingMarkers {
     this.ghosts.push({ x, y, age: 0, life: seconds });
   }
 
-  update(ship: ShipState, params: ShipParams, s: number, windStrength: number, dt: number): void {
+  update(ship: ShipState, params: ShipParams, s: number, windStrength: number, dt: number, bowTrainDeg = 0): void {
     const g = this.g;
     g.clear();
     for (let i = this.ghosts.length - 1; i >= 0; i--) {
@@ -45,6 +46,16 @@ export class LandingMarkers {
       g.lineStyle(1, 0xffffff, 0.5 * (1 - ghost.age / ghost.life));
       g.lineBetween(x - r, y - r, x + r, y + r);
       g.lineBetween(x - r, y + r, x + r, y - r);
+    }
+    // M3 step 7c: the bow chaser: a small diamond where its ball would land (trained on a ship in its arc).
+    if (gunsOn(params, 'bow') > 0) {
+      const p = turnAbout(ship, predictLanding(ship, params, 'bow', STEP_SECONDS), bowTrainDeg);
+      const ready = reloadLeft(ship, 'bow') <= 0;
+      const x = p.x * s;
+      const y = p.y * s;
+      const r = 3 + 1.5 * s;
+      g.lineStyle(2, ready ? 0xffe066 : 0x9aa5ad, ready ? 0.9 : 0.5);
+      g.strokePoints([new Phaser.Math.Vector2(x, y - r), new Phaser.Math.Vector2(x + r, y), new Phaser.Math.Vector2(x, y + r), new Phaser.Math.Vector2(x - r, y)], true);
     }
     for (const side of ['port', 'starboard'] as Side[]) {
       const p = predictLanding(ship, params, side, STEP_SECONDS);

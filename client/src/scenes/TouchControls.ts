@@ -13,10 +13,11 @@ interface Button {
 
 /**
  * On-screen buttons for phones and tablets (places: `touchButtonRects` in view/hudLayout.ts):
- *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo);
+ *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo),
+ *          "B" between them the bow chaser (M3 step 7c);
  *          they also show the reload (see setReload)
  *   right: "-" "+" sails (one step per tap); above "+" the gun up / gun down icons (held)
- *   top:   a small spyglass button (look far for a while)
+ *   top:   a small spyglass button (look far for a while) and a pause button "II" (M3 step 7c)
  * They only report what the finger does; SeaScene turns it into commands.
  */
 export class TouchControls {
@@ -27,19 +28,22 @@ export class TouchControls {
   lower = false;
   private readonly buttons: Button[] = [];
   private spyglass: Button | null = null;
+  private pause: Button | null = null;
 
   constructor(
     scene: Phaser.Scene,
     onSails: (direction: 1 | -1) => void,
     onZoom: () => void,
-    onFire: (side: 'port' | 'starboard') => void,
+    onFire: (side: 'port' | 'starboard' | 'bow') => void,
     onAmmo: () => void,
+    onPause: () => void,
   ) {
     scene.input.addPointer(2); // allow up to 3 fingers at once (rudder + sails + guns)
 
     this.add(scene, 'rudderLeft', '<', (down) => (this.left = down));
     this.add(scene, 'rudderRight', '>', (down) => (this.right = down));
     this.add(scene, 'firePort', 'L', undefined, () => onFire('port'));
+    this.add(scene, 'fireBow', 'B', undefined, () => onFire('bow')); // M3 step 7c: the bow chaser, between L and R
     this.add(scene, 'fireStarboard', 'R', undefined, () => onFire('starboard'));
     this.add(scene, 'sailsLess', '-', undefined, () => onSails(-1));
     this.add(scene, 'sailsMore', '+', undefined, () => onSails(1));
@@ -49,12 +53,14 @@ export class TouchControls {
     this.add(scene, 'ammo', 'RND', undefined, onAmmo, true);
     // The button at the top ("zoom" in the layout) is the spyglass: tap to look far for a while.
     this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);
+    // M3 step 7c: pause (the ESC key on a computer); also in the arena.
+    this.pause = this.add(scene, 'pause', 'II', undefined, onPause, true);
   }
 
   /** Show or hide the ship buttons (the auto-bot arena has no ship of yours; the spyglass stays). */
   setShipButtonsVisible(on: boolean): void {
     for (const b of this.buttons) {
-      if (b === this.spyglass) continue;
+      if (b === this.spyglass || b === this.pause) continue;
       b.box.setVisible(on);
       b.label.setVisible(on);
       if (on) b.box.setInteractive();
@@ -84,9 +90,10 @@ export class TouchControls {
    * The fire buttons show the guns of their side: a yellow letter when loaded; while reloading
    * the button is dark and counts the seconds down.
    */
-  setReload(portSeconds: number, starboardSeconds: number): void {
+  setReload(portSeconds: number, starboardSeconds: number, bowSeconds = 0): void {
     for (const [name, letter, left] of [
       ['firePort', 'L', portSeconds],
+      ['fireBow', 'B', bowSeconds],
       ['fireStarboard', 'R', starboardSeconds],
     ] as const) {
       const b = this.buttons.find((x) => x.name === name);

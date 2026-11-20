@@ -18,8 +18,8 @@ import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './la
 import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, radToDeg, twaDeg } from './angles';
-import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, WORLD } from './data';
-import { gunsOn, predictLanding, reloadLeft, sideAngleRad } from './guns';
+import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, SKILLS, WORLD } from './data';
+import { batteryAmmo, gunsOn, isChaser, predictLanding, reloadLeft, sideAngleRad } from './guns';
 import { touchesLand } from './land';
 import { clamp } from './math';
 import { nextGaussian } from './random';
@@ -183,7 +183,7 @@ export function broadsideHeading(bearingRad: number, distance: number, side: Sid
 export function aimElevation(ship: ShipState, params: ShipParams, side: Side, distance: number, maxDeg: number): number | null {
   // M3 step 6e (speed): read from a table of landing distances (REACH_STEPS + 1 elevations, made once
   // per ship size and kind of shot) instead of flying 21 test balls every time a bot aims.
-  const table = reachTable(ship, params, side, maxDeg, ammoGuns(loadableAmmo(ship)));
+  const table = reachTable(ship, params, side, maxDeg, ammoGuns(batteryAmmo(ship, side)));
   const n = table.length - 1;
   if (distance > table[n]!) return null;
   if (distance <= table[0]!) return 0;
@@ -208,7 +208,7 @@ const reachTables = new Map<string, Float64Array>();
  * muzzle speed and top elevation.
  */
 export function reachTable(ship: ShipState, params: ShipParams, side: Side, maxDeg: number, g: GunParams): Float64Array {
-  const key = `${side === 'stern' ? `stern ${params.length}` : params.beam}|${g.muzzleSpeed}|${g.gravity}|${maxDeg}`;
+  const key = `${isChaser(side) ? `chaser ${params.length}` : params.beam}|${g.muzzleSpeed}|${g.gravity}|${maxDeg}`;
   let table = reachTables.get(key);
   if (!table) {
     table = new Float64Array(REACH_STEPS + 1);
@@ -335,7 +335,14 @@ function interpolate(points: readonly number[][], x: number): number {
  * with land within FLEE_LAND_LOOK_M ahead is not taken; then up to 90 degrees off "away" is tried,
  * and with no open course at all, the most open one along the shore.
  */
-export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, bearingToEnemy: number, islands: readonly Island[] = []): number {
+export function fleeHeading(
+  ship: ShipState,
+  params: ShipParams,
+  wind: WindNow,
+  bearingToEnemy: number,
+  islands: readonly Island[] = [],
+  pursuer?: { ship: ShipState; params: ShipParams },
+): number {
   const away = normalizeAngle(bearingToEnemy + Math.PI);
   const look = Math.max(FLEE_LAND_LOOK_M, ship.speed * 12);
   const open = (h: number): boolean => islands.length === 0 || !landAhead(ship, params, islands, h, look);
@@ -352,7 +359,12 @@ export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, 
     const speed = targetSpeed({ ...ship, headingRad: heading, sailLevel: 1 }, params, wind);
     // Fast and straight away is best; a wide turn costs a little; little sea room ahead costs a lot.
     const cramped = Math.max(0, FLEE_ROOM_M - room(heading)) / FLEE_ROOM_M; // 0 = plenty of room, 1 = at the edge
-    const score = speed - FLEE_TURN_COST * Math.abs(offDeg) - FLEE_CORNER_COST * cramped;
+    // M3 step 7c: a runner looks for the course where it is faster than its pursuer (a schooner
+    // close-hauled against a square rig, a square rig before the wind against a schooner). The
+    // pursuer's speed is what anyone sees: its rig, hull and sails, sailing on the same course.
+    // Counted only for courses that open the distance (cos > 0: across its bow it would be cut off).
+    const edge = pursuer ? (speed - targetSpeed({ ...pursuer.ship, headingRad: heading, sailLevel: 1 }, pursuer.params, wind)) * Math.max(0, Math.cos(degToRad(offDeg))) : 0;
+    const score = speed + SKILLS.fleeEdgeWeight * edge - FLEE_TURN_COST * Math.abs(offDeg) - FLEE_CORNER_COST * cramped;
     if (score > bestScore + 0.2) {
       best = heading;
       bestScore = score;
@@ -360,6 +372,12 @@ export function fleeHeading(ship: ShipState, params: ShipParams, wind: WindNow, 
   }
   if (bestScore > -Infinity) return best;
   return unstickHeading(ship, params, islands, wind);
+}
+
+/** The enemy as a pursuer for fleeHeading (M3 step 7c); none if its class is unknown. */
+function pursuerOf(enemy: ShipState): { ship: ShipState; params: ShipParams } | undefined {
+  const params = SHIP_CLASSES[enemy.shipClass];
+  return params ? { ship: enemy, params } : undefined;
 }
 
 /** M3 step 7a: how far a point is from the reef that rings the sea (0 at the reef or beyond). */
@@ -779,11 +797,11 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     sails = 1;
   } else if (bot.mode === 'breakOff') {
     bot.side = null;
-    goal = fleeHeading(ship, params, world.wind, bearing, islands); // away from the enemy (not onto a shore, M3 step 6d)
+    goal = fleeHeading(ship, params, world.wind, bearing, islands, pursuerOf(enemy)); // away from the enemy (not onto a shore, M3 step 6d)
     sails = sailsForSpeed(ship, params, world.wind, p.fightSpeed, p.minSails);
   } else if (bot.mode === 'flee') {
     bot.side = null;
-    goal = fleeHeading(ship, params, world.wind, bearing, islands);
+    goal = fleeHeading(ship, params, world.wind, bearing, islands, pursuerOf(enemy));
     sails = 1;
   } else if (bot.mode === 'repair') {
     bot.side = null;
@@ -893,9 +911,10 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   if (enemySafe && !goIn) return commands;
   const myPort = safePortIndex(ship.x, ship.y, ports);
   if (!goIn && myPort >= 0 && !offenderNear(world, myPort, ship.id, ports)) return commands;
-  // The battery that faces the enemy best: a broadside, or (M3 step 7b) the stern chasers of a trader.
-  const batteries: Side[] = gunsOn(params, 'stern') > 0 ? ['port', 'starboard', 'stern'] : ['port', 'starboard'];
-  const facing = (s: Side): number => Math.cos(normalizeAngle(bearing - sideAngleRad(ship.headingRad, s)));
+  // The battery that faces the enemy best: a broadside, the stern chasers of a trader (M3 step 7b)
+  // or the bow chasers in a chase (step 7c). A loaded battery comes before one that is still loading.
+  const batteries = (['port', 'starboard', 'stern', 'bow'] as Side[]).filter((s) => gunsOn(params, s) > 0);
+  const facing = (s: Side): number => Math.cos(normalizeAngle(bearing - sideAngleRad(ship.headingRad, s))) + (reloadLeft(ship, s) <= 0 ? 1 : 0);
   const side: Side = batteries.reduce((a, b) => (facing(b) > facing(a) ? b : a));
   const flight = predictLanding(ship, params, side, STEP_SECONDS).seconds;
   const target = aimPoint(ship, enemy, flight);
@@ -916,13 +935,13 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     // The guns fire straight abeam, so fire only when the aim point lies close to that line.
     const offBeam = normalizeAngle(Math.atan2(target.y - ship.y, target.x - ship.x) - sideAngleRad(ship.headingRad, side));
     const ready = reloadLeft(ship, side) <= 0;
-    // The stern chasers can be trained a little: they fire at anything within sternArcDeg of dead astern.
-    const inArc = side === 'stern' ? Math.abs(offBeam) <= degToRad(p.sternArcDeg) : Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
+    // The chasers can be trained a little: they fire at anything within sternArcDeg of the centre line.
+    const inArc = isChaser(side) ? Math.abs(offBeam) <= degToRad(p.sternArcDeg) : Math.abs(Math.sin(offBeam)) * aimDistance <= p.fireOffsetM && Math.cos(offBeam) > 0;
     const onElevation = Math.abs(next - goalDeg) <= p.aimToleranceDeg;
     // M3 step 7b: no shot into a hill or a cliff (the balls would stick in the land).
     const clear = ready && inArc && onElevation ? shotClear(ship, target, next, islands) : true;
     if (ready && inArc && onElevation && clear) {
-      commands.push(side === 'stern' ? { type: 'fire', shipId: id, side, trainDeg: radToDeg(offBeam) } : { type: 'fire', shipId: id, side });
+      commands.push(isChaser(side) ? { type: 'fire', shipId: id, side, trainDeg: radToDeg(offBeam) } : { type: 'fire', shipId: id, side });
       bot.quietSeconds = 0;
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }

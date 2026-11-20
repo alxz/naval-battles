@@ -7,6 +7,7 @@ import { crewShare, refitShip, rollCargo, sailShare } from './condition';
 import { nationFor } from './nation';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
+import { crowdWeight, rollSkills } from './skills';
 import { BOTS, ISLANDS, SHIP_CLASSES } from './data';
 import { protectedByPort } from './law';
 import { nextRandom } from './random';
@@ -154,7 +155,9 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
     });
     loadCargo(world, world.ships[world.ships.length - 1]!);
     world.arena!.pilots.push({ shipId: id, number: id, name: ARENA.names[i % ARENA.names.length] ?? `Bot ${id}`, wins: 0, losses: 0, balls: 0, hullHits: 0, sinceSeconds: 0 });
-    world.bots.push(newBot(id, -1, world)); // no target yet: the first choice comes at once
+    const bot = newBot(id, -1, world); // no target yet: the first choice comes at once
+    rollSkills(world.ships[world.ships.length - 1]!, bot, world); // M3 step 7c
+    world.bots.push(bot);
   }
   return world;
 }
@@ -189,14 +192,14 @@ export function chooseTargets(world: World, p: ArenaParams = ARENA): void {
     let best: ShipState | undefined;
     let bestScore = Infinity;
     for (const o of candidates) {
-      const score = targetScore(ship, o, chasers(o), p);
+      const score = targetScore(ship, o, chasers(o) * crowdWeight(bot), p); // M3 step 7c: loners keep apart, packs join in
       if (score < bestScore) {
         bestScore = score;
         best = o;
       }
     }
     const current = candidates.find((o) => o.id === bot.enemyId);
-    const keep = current && targetScore(ship, current, chasers(current), p) <= bestScore + p.switchMarginM;
+    const keep = current && targetScore(ship, current, chasers(current) * crowdWeight(bot), p) <= bestScore + p.switchMarginM;
     if (keep || !best || best.id === bot.enemyId) continue;
     bot.enemyId = best.id;
     // A bot that is running, mending or in port only notes its new enemy: it finishes what it
@@ -276,6 +279,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
     loadCargo(world, ship);
     const i = world.bots.findIndex((b) => b.shipId === ship.id);
     const fresh = newBot(ship.id, -1, world);
+    rollSkills(ship, fresh, world); // M3 step 7c: a new life, a new crew
     if (i >= 0) world.bots[i] = fresh;
     else world.bots.push(fresh);
     const pilot = pilotOf(world, ship.id);

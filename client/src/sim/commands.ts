@@ -4,6 +4,7 @@ import { refitShip, rollCargo } from './condition';
 import { nextRandom } from './random';
 import { AMMO, GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { newBot } from './bot';
+import { rollSkills } from './skills';
 import { orderBroadside } from './guns';
 import { clamp } from './math';
 import { nearestOpenWater } from './spawn';
@@ -23,7 +24,15 @@ export function applyCommand(world: World, command: Command): void {
   // Test setup: hand a ship to the computer (a new bot with fresh memory), or take it back.
   if (command.type === 'setBot') {
     world.bots = world.bots.filter((b) => b.shipId !== command.shipId);
-    if (command.enemyId !== null) world.bots.push(newBot(command.shipId, command.enemyId, world));
+    if (command.enemyId !== null) {
+      const bot = newBot(command.shipId, command.enemyId, world);
+      const ship = world.ships.find((s) => s.id === command.shipId);
+      if (command.skilled && ship) {
+        rollSkills(ship, bot, world); // M3 step 7c: a battle's bots get their skills
+        world.events.push({ type: 'skills', shipId: ship.id });
+      }
+      world.bots.push(bot);
+    }
     return;
   }
 

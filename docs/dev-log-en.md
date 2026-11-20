@@ -4,6 +4,36 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 19 Nov 2026 (night) — M3 step 7c: bow chasers, pause, minimap view, bot skills
+
+### Your test of 7b / 7d (battle log 2056, arena log 2127, 4 h)
+
+The battle works: flags, the runners' stern chasers, SAVE LOG. The arena: sloop 28 wins / 22 escapes / 16 losses, brigantine 11 / 3 / 16, frigate 12 / 4 / 6, fluyt 2 / 4 / 9, caravel 0 / 4 / 7; 78 fights left on poor odds, traders ran 71 times, 382 stern salvos, 0 warnings. Your wishes: a bow chaser for the hunter (and for you), ESC pause with statistics and END GAME, a minimap click that moves the arena view, names and classes in the H window with a lighter plate; then 7c.
+
+### What was built
+
+- **Bow chasers (D58)** on every ship: 1 gun at the bow, 2 on the frigate (`ships.json bowGuns`, `Side` 'bow'). Round shot only (chain and grape are useless at chase range and would make the chase too easy), full range, trained up to 30° off the bow, its own reload (`reloadBow`). Bots pick the battery that faces the enemy best, loaded ones first. You: **Z** fires it; the gun crew trains it on the nearest ship within 30° of the bow; a small diamond shows where it lands. Zoom moved to **Shift + / Shift −** (the wheel still works; + / − alone still raise and lower the guns; in the arena + / − zoom). Touch: a **B** button between L and R.
+- **Pause (D59):** ESC (touch: the "II" button at the top) stops the simulation. ESC closes the chart or the arena results first. The window shows the statistics (battle: every ship with hull / sails / crew, SUNK or GOT AWAY; arena: the table with W / E / L / score) and RESUME / SAVE LOG / END GAME. END GAME in the arena opens the results; in a battle the end banner names the winner: your ship sunk → the enemy; all enemies sunk or gone → you; otherwise damage done (a sunk enemy 1, a hurt one its lost hull share) against damage taken, closer than 0.1 → a draw. The battle stays still under the banner; the log gets an "END GAME pressed" line.
+- **Arena minimap:** a click moves the free view to that place (C still opens the chart).
+- **H window:** each bot line shows its name (arena pilot, or flag and number in a battle), class and skills; the plate is see-through (0.3).
+- **Bot skills (D60, `sim/skills.ts`, `data/skills.json`):** drawn at birth (every arena life, every battle bot). Seamanship 0.85–1.2: top speed × it, turning × (1 + 0.5 × (it − 1)). Gunnery 1–8: the ship's `battleSkill` in the accuracy formula and the reload (× 1 − 0.025 × (skill − 4)). Courage (7b) now drawn at birth. Loner 40%: loners count other hunters 1.5× against an enemy, pack bots −0.5× (they like to join). Most bots are average (the mean of two random numbers). The log shows them ("sea 1.08 gun 6 heart 0.62 pack") at the start, at each respawn and for battle bots, and a summary of wins / losses by skill level.
+- **Runners pick their course:** `fleeHeading` adds how much faster the runner is than its pursuer on each course (the pursuer's rig, hull and sails, as anyone sees them), counted only for courses that open the distance.
+
+### Problems and fixes
+
+- The test hunter at 330 m never fired: the bow chaser reaches about 235 m (10° elevation). The test now starts at 200 m; that is the right range for a chase gun.
+- The pause table's columns slid on "fluyt": the canvas joins a lower-case "fl" into one letter. The table is in capitals now.
+
+### Numbers
+
+Headless 4 × 60 min (seeds 43790–43793): 9–16 sinkings an hour (7b: 8–14), bow chaser shots 80–137 an hour, stern salvos 30–73, desperate rams 3–5, 0 warnings. Over the 4 h: sloop 23 wins / 26 escapes / 15 losses, frigate 20 / 2 / 7, brigantine 7 / 4 / 13, fluyt 1 / 2 / 11, caravel 0 / 3 / 5. Skill levels are close so far (few lives per level); watch the "skills (wins/losses)" line in long runs. 432 tests; build and test build; browser on computer and iPhone (bow shot, Shift + zoom, pause in battle and arena, END GAME, minimap click, H text).
+
+### Next
+
+Your test of 7c. Then M4b before M4 (D54), then Squadrons (the loner / pack flag is ready for it).
+
+---
+
 ## 19 Nov 2026 (late) — M3 steps 7b and 7d: crew spirit, traders that run, the land stops balls; a battle against bots
 
 ### Your test of 7a and the 1949 log (4 h)

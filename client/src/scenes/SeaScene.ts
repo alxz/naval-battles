@@ -23,7 +23,8 @@ import { circleRudder } from '../sim/circle';
 import type { Circle } from '../sim/circle';
 import { STEP_SECONDS, sailingInfo } from '../sim/step';
 import { GUNS } from '../sim/data';
-import { predictLanding, reloadLeft } from '../sim/guns';
+import { CHASER_TRAIN_DEG, gunsOn, predictLanding, reloadLeft } from '../sim/guns';
+import { chaserTrainDeg, turnAbout } from '../view/chaserAim';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
 import { battleClasses, createWorld, enemiesFor } from '../sim/world';
 import worldJson from '../data/world.json';
@@ -59,6 +60,10 @@ import { TuningPanel, releaseFocus } from './TuningPanel';
 import { Wake } from './Wake';
 import { ArenaHud } from './ArenaHud';
 import { ArenaResults } from './ArenaResults';
+import { PauseMenu } from './PauseMenu';
+import { skillsText } from '../sim/skills';
+import { arenaLines, battleLines, battleVerdict, endWords } from '../view/pauseStats';
+import type { BattleShipRow } from '../view/pauseStats';
 import { TurnDevice } from './TurnDevice';
 import { isPortraitTouch } from '../view/pixelLayout';
 import { arenaResults } from '../view/arenaResults';
@@ -70,7 +75,7 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'SPACE', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'SHIFT' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'SPACE', Phaser.Input.Keyboard.Key>;
 
 /** The auto-bot arena (M3 step 2): time speeds, how fast the free view moves (screen px per second), where the log is kept. */
 const ARENA_SPEEDS = [1, 2, 4, 8];
@@ -123,6 +128,9 @@ export class SeaScene extends Phaser.Scene {
   private hud!: Hud;
   private banner!: Banner;
   private arenaResults!: ArenaResults;
+  private pauseMenu!: PauseMenu; // M3 step 7c: ESC
+  private paused = false;
+  private ended = false; // M3 step 7c: a battle stopped with END GAME stays still under its banner
   private turnDevice!: TurnDevice;
   private peaceShown = false; // the results open by themselves once, when the arena reaches peace
   private chart!: Chart;
@@ -207,7 +215,7 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,Q,E,R,F,H,M,C,V,T,L,SPACE') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,SHIFT,Q,E,R,F,H,M,C,V,T,L,SPACE') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.ammoKeys = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE].map((code) => keyboard.addKey(code));
@@ -223,6 +231,7 @@ export class SeaScene extends Phaser.Scene {
         () => this.toggleSpyglass(),
         (side) => this.firePlayer(side),
         () => this.cycleAmmo(),
+        () => this.onPauseKey(),
       );
     }
     this.sounds = new Sounds(this);
@@ -260,7 +269,11 @@ export class SeaScene extends Phaser.Scene {
       this.freeView = { x: from.x - (p.x - p.prevPosition.x) / s, y: from.y - (p.y - p.prevPosition.y) / s };
     });
     this.chart = new Chart(this, isTouch, () => this.chart.setOpen(false));
-    this.minimap = new Minimap(this, isTouch, () => this.chart.setOpen(!this.chart.isOpen()));
+    this.minimap = new Minimap(this, isTouch, (sea) => {
+      // M3 step 7c: in the arena a click on the minimap moves the view there (C still opens the chart).
+      if (this.arena && !this.chart.isOpen()) this.freeView = sea;
+      else this.chart.setOpen(!this.chart.isOpen());
+    });
     this.banner = new Banner(this, () => this.restart(), () => this.downloadLog()); // last: drawn on top of everything
     this.turnDevice = new TurnDevice(this);
     this.arenaResults = new ArenaResults(
@@ -271,6 +284,12 @@ export class SeaScene extends Phaser.Scene {
       },
       () => this.arenaResults.hide(),
       () => this.downloadLog(),
+    );
+    this.pauseMenu = new PauseMenu(
+      this,
+      () => this.setPaused(false),
+      () => this.downloadLog(),
+      () => this.endGame(),
     );
 
     // Integer pixel scaling: measure the screen now and after every resize.
@@ -343,7 +362,11 @@ export class SeaScene extends Phaser.Scene {
     const upright = isPortraitTouch(window.innerWidth, window.innerHeight, this.touch !== null);
     this.turnDevice.update(upright, this.cameras.main.width, this.cameras.main.height);
     if (upright) return;
-    if (this.arena) this.readArenaInput(seconds);
+    // M3 step 7c: ESC closes the chart, else pauses (and resumes).
+    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.onPauseKey();
+    if (this.paused) {
+      // Paused: no orders and no simulation; the picture stays as it is.
+    } else if (this.arena) this.readArenaInput(seconds);
     else {
       this.readInput(seconds);
       this.steerTarget();
@@ -351,7 +374,7 @@ export class SeaScene extends Phaser.Scene {
 
     // 1. Let the simulation catch up with real time (the arena can run faster).
     const simStart = performance.now();
-    const alpha = this.sim.update(seconds * (this.arena ? this.timeScale : 1));
+    const alpha = this.sim.update(this.paused || this.ended ? 0 : seconds * (this.arena ? this.timeScale : 1));
     this.perf.note(delta, performance.now() - simStart);
     if (this.arena) {
       this.pickFocus();
@@ -448,11 +471,11 @@ export class SeaScene extends Phaser.Scene {
     this.wake.update(seconds, wakeShips, s);
     this.rings.visible = v.rangeRings;
     this.rings.labelsVisible = this.touch === null;
-    this.touch?.setReload(myShip.reloadPort, myShip.reloadStarboard);
+    this.touch?.setReload(myShip.reloadPort, myShip.reloadStarboard, myShip.reloadBow ?? 0);
     this.touch?.setAmmo(ammoLabel(myShip, true));
     this.rings.update(me.x, me.y, me.headingRad, s);
     const myParams = SHIP_CLASSES[myShip.shipClass];
-    if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
+    if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds, this.arena ? 0 : this.bowTrainDeg(myShip, myParams));
 
     // 4. The camera circle (D43): your ship (or the watched bot) sails freely inside a circle round the
     // middle of the screen; the camera follows only when it would leave it. The spyglass (or the
@@ -553,7 +576,7 @@ export class SeaScene extends Phaser.Scene {
         : null,
       debug: v.debugText,
       debugLines: v.debugText
-        ? (this.arena ? ['SPACE next ship  T speed  L log', 'H hide this', ''] : []).concat(debugLines({
+        ? (this.arena ? ['SPACE next ship  T speed  L log', '+ / - zoom  ESC pause', 'H hide this', ''] : []).concat(debugLines({
             ship: myShip,
             sailing,
             wind,
@@ -570,7 +593,7 @@ export class SeaScene extends Phaser.Scene {
             pixelScale: layout.pixelScale,
           })
             // In the arena you do not steer: the arena keys instead of the ship keys (a shorter box, M3 step 6b).
-            .slice(this.arena ? 6 : 0))
+            .slice(this.arena ? 7 : 0))
             .concat(this.botLine())
             .concat(['', this.perf.line(this.game.loop.actualFps)])
         : [],
@@ -627,6 +650,7 @@ export class SeaScene extends Phaser.Scene {
     this.arenaHud.layout(layout.width, layout.height);
     this.banner.layout(layout.width, layout.height);
     this.arenaResults.layout(layout.width, layout.height);
+    this.pauseMenu.layout(layout.width, layout.height);
     const buttons = hudLayout(layout.width, layout.height, this.touch !== null).sound;
     this.chart.layout(layout.width, layout.height, buttons.y + buttons.h + 6);
     this.minimap.layout(layout.width, layout.height);
@@ -639,12 +663,11 @@ export class SeaScene extends Phaser.Scene {
     else {
       // Read (and forget) the presses, so a key pressed while sunk does not act after "Sail again".
       const KD = Phaser.Input.Keyboard;
-      [this.keys.Q, this.keys.E, this.keys.W, this.keys.S, this.cursors.up, this.cursors.down, ...this.ammoKeys].forEach((k) => k && KD.JustDown(k));
+      [this.keys.Q, this.keys.E, this.keys.Z, this.keys.W, this.keys.S, this.cursors.up, this.cursors.down, ...this.ammoKeys].forEach((k) => k && KD.JustDown(k));
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
     if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
-    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.chart.setOpen(false);
 
     // H shows or hides the debug text (keys and all the numbers).
     if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
@@ -652,8 +675,8 @@ export class SeaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.L)) this.downloadLog();
 
     // Zoom is only about the picture, so it does not go through the simulation.
-    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.stepManualZoom(1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.X)) this.stepManualZoom(-1);
+    // M3 step 7c: Shift + / Shift - (Z now fires the bow chaser); + / - alone raise and lower the guns.
+    if (this.keys.SHIFT.isDown) this.readZoomKeys();
     if (Phaser.Input.Keyboard.JustDown(this.keys.V)) this.toggleSpyglass();
   }
 
@@ -681,8 +704,10 @@ export class SeaScene extends Phaser.Scene {
     });
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.firePlayer('port');
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
-    const up = this.keys.R.isDown || this.raiseKeys.some((k) => k.isDown) || this.hud.raise || (this.touch?.raise ?? false);
-    const down = this.keys.F.isDown || this.lowerKeys.some((k) => k.isDown) || this.hud.lower || (this.touch?.lower ?? false);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.firePlayer('bow');
+    const shift = this.keys.SHIFT.isDown; // Shift + / Shift - zoom (M3 step 7c)
+    const up = this.keys.R.isDown || (!shift && this.raiseKeys.some((k) => k.isDown)) || this.hud.raise || (this.touch?.raise ?? false);
+    const down = this.keys.F.isDown || (!shift && this.lowerKeys.some((k) => k.isDown)) || this.hud.lower || (this.touch?.lower ?? false);
     const raise = (up ? 1 : 0) - (down ? 1 : 0);
     if (raise !== 0) {
       const next = Math.max(0, Math.min(GUNS.maxElevationDeg, this.elevationDeg + raise * ELEVATION_DEG_PER_SECOND * seconds));
@@ -693,7 +718,18 @@ export class SeaScene extends Phaser.Scene {
     }
   }
 
-  /** One step in or out through view.json manualZoomSteps (keys Z / X, the mouse wheel). */
+  /** + / - pressed now: one zoom step in or out (M3 step 7c: with Shift in a battle, alone in the arena). */
+  private readZoomKeys(): void {
+    const KD = Phaser.Input.Keyboard;
+    let raise = false;
+    let lower = false;
+    for (const k of this.raiseKeys) if (KD.JustDown(k)) raise = true;
+    for (const k of this.lowerKeys) if (KD.JustDown(k)) lower = true;
+    if (raise) this.stepManualZoom(1);
+    if (lower) this.stepManualZoom(-1);
+  }
+
+  /** One step in or out through view.json manualZoomSteps (keys Shift + / Shift -, the mouse wheel). */
   private stepManualZoom(direction: 1 | -1): void {
     const steps = viewJson.manualZoomSteps;
     const now = this.panel.values.zoom;
@@ -747,10 +783,19 @@ export class SeaScene extends Phaser.Scene {
   private firePlayer(side: Side): void {
     const me = this.ship(PLAYER_ID);
     const params = me ? SHIP_CLASSES[me.shipClass] : undefined;
-    this.sim.queueCommand({ type: 'fire', shipId: PLAYER_ID, side });
-    if (!me || !params || me.sunk || reloadLeft(me, side) > 0) return;
-    const p = predictLanding(me, params, side, STEP_SECONDS);
-    this.markers2.addGhost(p.x, p.y, p.seconds + 0.8);
+    // M3 step 7c: the bow chaser's crew trains it on the nearest ship within 30 degrees of the bow.
+    const trainDeg = side === 'bow' && me && params ? this.bowTrainDeg(me, params) : 0;
+    this.sim.queueCommand(trainDeg !== 0 ? { type: 'fire', shipId: PLAYER_ID, side, trainDeg } : { type: 'fire', shipId: PLAYER_ID, side });
+    if (!me || !params || me.sunk || reloadLeft(me, side) > 0 || gunsOn(params, side) <= 0) return;
+    const p = turnAbout(me, predictLanding(me, params, side, STEP_SECONDS), trainDeg);
+    this.markers2.addGhost(p.x, p.y, predictLanding(me, params, side, STEP_SECONDS).seconds + 0.8);
+  }
+
+  /** Where the player's bow chaser is trained now (degrees off the bow; 0 = dead ahead). */
+  private bowTrainDeg(me: ShipState, params: ShipParams): number {
+    const longest = predictLanding({ ...me, speed: 0, elevationDeg: GUNS.maxElevationDeg }, params, 'bow', STEP_SECONDS);
+    const rangeM = Math.hypot(longest.x - me.x, longest.y - me.y) * 1.1;
+    return chaserTrainDeg(me, this.sim.world.ships, CHASER_TRAIN_DEG, rangeM);
   }
 
   /**
@@ -812,10 +857,16 @@ export class SeaScene extends Phaser.Scene {
 
   /** One line per bot for the debug text: "bot 2 engage, port side". */
   private botLine(): string[] {
+    // M3 step 7c: the bot's name (the arena pilot, or the ship's nation in a battle) and its ship class.
+    const pilots = this.sim.world.arena?.pilots ?? [];
     return this.sim.world.bots.map((bot) => {
       const ship = this.ship(bot.shipId);
-      if (ship?.sunk) return `bot ${bot.shipId} sunk`;
-      return `bot ${bot.shipId} ${bot.mode}${bot.side ? `, ${bot.side} side` : ''}${bot.tack !== 0 ? `, tack ${bot.tack > 0 ? '+' : '-'}` : ''}`;
+      const pilot = pilots.find((p) => p.shipId === bot.shipId);
+      const name = pilot ? `#${pilot.number} ${pilot.name}` : `${ship?.nation ?? 'bot'} ${bot.shipId}`;
+      const head = `${name}, ${ship?.shipClass ?? '?'}`;
+      if (ship?.sunk) return `${head}: sunk`;
+      const skills = skillsText(ship, bot); // M3 step 7c
+      return `${head}${skills ? ` (${skills})` : ''}: ${bot.mode}${bot.side ? `, ${bot.side}` : ''}${bot.tack !== 0 ? `, tack ${bot.tack > 0 ? '+' : '-'}` : ''}`;
     });
   }
 
@@ -899,9 +950,69 @@ export class SeaScene extends Phaser.Scene {
     this.targetCircle = null;
     this.cameraCentre = null;
     this.banner.hide();
+    this.ended = false;
+    this.setPaused(false);
     this.hitFlash = [];
     this.chartState.sightings = []; // a new duel: the islands you know stay on the chart, the old ship marks go
     this.startBattleLog(seed);
+  }
+
+  /** ESC or the touch "II" button (M3 step 7c): close the chart or the results first, else pause / resume. */
+  private onPauseKey(): void {
+    if (this.chart.isOpen()) this.chart.setOpen(false);
+    else if (this.arenaResults.isShown()) this.arenaResults.hide();
+    else if (this.paused) this.setPaused(false);
+    else if (!this.banner.isShown() && !this.ended) this.setPaused(true);
+  }
+
+  private setPaused(on: boolean): void {
+    this.paused = on;
+    if (on) this.pauseMenu.show(this.pauseLines(), this.touch !== null);
+    else this.pauseMenu.hide();
+  }
+
+  /** The statistics in the pause window: the battle's ships, or the arena table. */
+  private pauseLines(): string[] {
+    const world = this.sim.world;
+    const time = clock(world.tick * STEP_SECONDS);
+    if (this.arena && world.arena) {
+      const rows = arenaResults(world.arena.pilots, (id) => this.ship(id)?.shipClass ?? 'sloop');
+      const sunk = new Set(world.ships.filter((sh) => sh.sunk).map((sh) => sh.id));
+      return arenaLines(time, rows, sunk);
+    }
+    const { me, foes } = this.battleRows();
+    if (!me) return [`time ${time}`];
+    return battleLines(time, me, foes, `hits: you ${this.myDuelHullHits}  enemy ${this.enemyHullHits}`);
+  }
+
+  private battleRows(): { me: BattleShipRow | null; foes: BattleShipRow[] } {
+    const mine = this.ship(PLAYER_ID);
+    const row = (sh: ShipState): BattleShipRow => ({
+      name: battleName(sh, PLAYER_ID),
+      shipClass: sh.shipClass,
+      hullShare: sh.hull / (SHIP_CLASSES[sh.shipClass]?.hullPoints ?? 1),
+      sailShare: sailShare(sh),
+      crewShare: crewShare(sh),
+      sunk: sh.sunk,
+      gone: mine !== undefined && sh.id !== PLAYER_ID && !sh.sunk && this.traderGone(sh, mine),
+    });
+    return { me: mine ? row(mine) : null, foes: this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID).map(row) };
+  }
+
+  /** END GAME (M3 step 7c): the arena's results, or the battle's end banner with the winner. */
+  private endGame(): void {
+    this.setPaused(false);
+    if (this.arena) {
+      this.showArenaResults();
+      return;
+    }
+    const { me, foes } = this.battleRows();
+    if (!me) return;
+    const verdict = battleVerdict(me, foes);
+    const words = endWords(verdict.winner, verdict.dealt, verdict.taken);
+    this.ended = true;
+    this.battleLog.add(this.sim.world.tick * STEP_SECONDS, `END GAME pressed: ${words.title} ${words.line}`);
+    this.banner.request(verdict.winner === 'you' ? 'win' : verdict.winner === 'enemy' ? 'lose' : 'draw', words.line, this.duelStats(), words.title, true);
   }
 
   /** M3 step 7d: a trader that ran farther than TRADER_GONE_M from you is out of the battle. */
@@ -969,7 +1080,7 @@ export class SeaScene extends Phaser.Scene {
       if (sh.id === PLAYER_ID) continue;
       const isBot = this.sim.world.bots.some((b) => b.shipId === sh.id);
       if ((v.targetBehaviour === 'bot') !== isBot) {
-        this.sim.queueCommand({ type: 'setBot', shipId: sh.id, enemyId: v.targetBehaviour === 'bot' ? PLAYER_ID : null });
+        this.sim.queueCommand({ type: 'setBot', shipId: sh.id, enemyId: v.targetBehaviour === 'bot' ? PLAYER_ID : null, skilled: true });
       }
     }
     if (v.targetBehaviour === 'bot' || target.sunk) return;
@@ -1054,6 +1165,8 @@ export class SeaScene extends Phaser.Scene {
     this.chartState.sightings = [];
     this.arenaModes.clear();
     this.peaceShown = false;
+    this.ended = false;
+    if (this.paused) this.setPaused(false);
     this.arenaResults.hide();
     this.arenaLog = new ArenaLog();
     this.arenaStartedAt = new Date().toLocaleString();
@@ -1062,7 +1175,8 @@ export class SeaScene extends Phaser.Scene {
     this.arenaLog.add(0, `arena started with ${pilots.length} bots (seed ${seed}):`);
     for (const p of pilots) {
       const ship = this.ship(p.shipId);
-      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}${ship?.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship?.x ?? 0, ship?.y ?? 0)}`);
+      const skills = skillsText(ship, this.sim.world.bots.find((b) => b.shipId === p.shipId));
+      this.arenaLog.add(0, `   #${p.number} ${p.name}, ${ship?.shipClass ?? '?'}${ship?.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship?.x ?? 0, ship?.y ?? 0)}${skills ? `; ${skills}` : ''}`);
     }
   }
 
@@ -1074,10 +1188,8 @@ export class SeaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.downloadLog();
     if (Phaser.Input.Keyboard.JustDown(k.M)) this.panel.toggleSound();
     if (Phaser.Input.Keyboard.JustDown(k.C)) this.chart.setOpen(!this.chart.isOpen());
-    if (Phaser.Input.Keyboard.JustDown(this.escKey)) this.chart.setOpen(false);
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.panel.toggleDebugText();
-    if (Phaser.Input.Keyboard.JustDown(k.Z)) this.stepManualZoom(1);
-    if (Phaser.Input.Keyboard.JustDown(k.X)) this.stepManualZoom(-1);
+    this.readZoomKeys(); // + / - (with or without Shift): the arena has no guns to raise
     if (Phaser.Input.Keyboard.JustDown(k.V)) this.toggleSpyglass();
     const dx = (k.D.isDown || this.cursors.right.isDown ? 1 : 0) - (k.A.isDown || this.cursors.left.isDown ? 1 : 0);
     const dy = (k.S.isDown || this.cursors.down.isDown ? 1 : 0) - (k.W.isDown || this.cursors.up.isDown ? 1 : 0);

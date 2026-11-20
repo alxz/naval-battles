@@ -97,6 +97,13 @@ export function toChart(fit: ChartFit, world: WorldBounds, p: { x: number; y: nu
   return { x: fit.x + (p.x - world.minX) * fit.scale, y: fit.y + (p.y - world.minY) * fit.scale };
 }
 
+/** The other way (M3 step 7c: a click on the minimap): a point on the chart as a place in the sea, kept inside the sea. */
+export function fromChart(fit: ChartFit, world: WorldBounds, p: { x: number; y: number }): { x: number; y: number } {
+  const x = world.minX + (p.x - fit.x) / fit.scale;
+  const y = world.minY + (p.y - fit.y) / fit.scale;
+  return { x: Math.max(world.minX, Math.min(world.maxX, x)), y: Math.max(world.minY, Math.min(world.maxY, y)) };
+}
+
 /**
  * The part of the sea the camera shows, as a rectangle on the chart or minimap (M3 step 4b):
  * centre and half sizes in metres. Clipped to the sea, so it never leaves the map; at least 2 x 2 pixels.

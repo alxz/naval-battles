@@ -1,6 +1,7 @@
 // The auto-bot arena log (M3 step 2): plain lines a person can read, kept to a fixed size.
 // Pure: no Phaser and no browser here; the scene stores it and offers it as a download.
 
+import { skillsText } from '../sim/skills';
 import { loadableAmmo } from '../sim/ammo';
 import { crewOf, crewShare, sailShare } from '../sim/condition';
 import { damageSpeedFactor } from '../sim/step';
@@ -16,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 7b (crew spirit, traders run, stern chasers, land stops balls) + 7d (battle: classes, bars, flags, log) after 7a, 19 Nov 2026';
+export const BUILD_LABEL = 'M3 step 7c (bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 19 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -135,6 +136,9 @@ export class ArenaLog {
   private jettisons = 0;
   private desperateRams = 0;
   private sternSalvos = 0;
+  private bowShots = 0;
+  /** M3 step 7c: wins and losses by skill level (low / mid / high seamanship and gunnery). */
+  private readonly skillWins: Record<string, { wins: number; losses: number }> = {};
   private landHits = 0;
   private escapePoints = 0;
   // M3 step 7d (a battle against bots): balls and hull hits per ship, and the result
@@ -170,6 +174,14 @@ export class ArenaLog {
     }
   }
 
+  /** M3 step 7c: count a win or a loss for the skill levels of this ship (ships without skills are left out). */
+  private skillTally(ship: ShipState | undefined, what: 'wins' | 'losses'): void {
+    if (!ship || ship.seamanship === undefined) return;
+    const sea = ship.seamanship < 0.97 ? 'low' : ship.seamanship > 1.08 ? 'high' : 'mid';
+    const gun = ship.battleSkill < 4 ? 'low' : ship.battleSkill > 6 ? 'high' : 'mid';
+    for (const key of [`sea ${sea}`, `gun ${gun}`]) (this.skillWins[key] ??= { wins: 0, losses: 0 })[what]++;
+  }
+
   get size(): number {
     return this.lines.length;
   }
@@ -189,6 +201,7 @@ export class ArenaLog {
       if (e.type === 'gunFired') {
         this.shotsOf(e.shipId).balls += e.balls ?? 1;
         if (e.side === 'stern') this.sternSalvos++;
+        if (e.side === 'bow') this.bowShots++;
       }
       if (e.type === 'landHit') this.landHits++;
       if (e.type === 'targetChosen') {
@@ -220,10 +233,15 @@ export class ArenaLog {
           if (e.byShipId < 0) t.shoreDeaths++;
         }
         if (by) this.tally(by.shipClass).wins++;
+        this.skillTally(by, 'wins');
+        this.skillTally(loser, 'losses');
         this.endAground(now, e.shipId, false, world);
+      } else if (e.type === 'skills') {
+        this.add(now, `${who(world, e.shipId)} skills: ${skillsText(world.ships.find((sh) => sh.id === e.shipId), world.bots.find((b) => b.shipId === e.shipId))}`);
       } else if (e.type === 'respawn') {
         const land = distanceToLand(e.x, e.y, ISLANDS);
-        this.add(now, `${who(world, e.shipId)} is back at sea at ${placeText(e.x, e.y)}`);
+        const skills = skillsText(world.ships.find((sh) => sh.id === e.shipId), world.bots.find((b) => b.shipId === e.shipId));
+        this.add(now, `${who(world, e.shipId)} is back at sea at ${placeText(e.x, e.y)}${skills ? `; ${skills}` : ''}`);
         if (land.distance < SPAWN_LAND_WARN_M) this.warn(now, `${who(world, e.shipId)} appeared only ${Math.round(land.distance)} m from land (${land.name})`);
       }
       else if (e.type === 'offender') {
@@ -391,7 +409,13 @@ export class ArenaLog {
     out.push(`   collisions ${this.collisions} (hull points lost ${Math.round(this.collisionDamage)}), warnings ${this.warnings}`);
     out.push(`   rams: tried ${this.ramTries} of ${this.ramDecisions} chances, ${this.ramHits} collisions while ramming, ${this.rammers} bots became rammers`);
     out.push(`   finishing attacks in safe water: ${this.finishAttacks} of ${this.finishDecisions} chances, ${this.finishKills} sank their enemy; waits for a berth: ${this.berthWaits}`);
-    out.push(`   spirit: left a fight ${this.leaves['fear'] ?? 0}x from fear, ${this.leaves['odds'] ?? 0}x on poor odds, traders ran ${this.leaves['trader'] ?? 0}x; desperate rams ${this.desperateRams}; cargo thrown over the side ${this.jettisons}x; stern salvos ${this.sternSalvos}; balls stopped by the land ${this.landHits}; escape points ${this.escapePoints.toFixed(2)}`);
+    const levels = ['low', 'mid', 'high'].map((lv) => {
+      const sea = this.skillWins[`sea ${lv}`] ?? { wins: 0, losses: 0 };
+      const gun = this.skillWins[`gun ${lv}`] ?? { wins: 0, losses: 0 };
+      return `${lv} sea ${sea.wins}/${sea.losses} gun ${gun.wins}/${gun.losses}`;
+    });
+    out.push(`   skills (wins/losses): ${levels.join('; ')}  (sea low < 0.97 < mid < 1.08 < high; gun low < 4 < mid < 6 < high)`);
+    out.push(`   spirit: left a fight ${this.leaves['fear'] ?? 0}x from fear, ${this.leaves['odds'] ?? 0}x on poor odds, traders ran ${this.leaves['trader'] ?? 0}x; desperate rams ${this.desperateRams}; cargo thrown over the side ${this.jettisons}x; stern salvos ${this.sternSalvos}; bow chaser shots ${this.bowShots}; balls stopped by the land ${this.landHits}; escape points ${this.escapePoints.toFixed(2)}`);
     return out;
   }
 

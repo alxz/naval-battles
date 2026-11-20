@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Island, ShipState } from '../sim/types';
-import { chartFit, discover, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
+import { chartFit, discover, fromChart, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
 
 const square = (name: string, x: number, y: number, kind?: string): Island => ({
   name,
@@ -58,6 +58,13 @@ describe('chartFit and toChart', () => {
     const nw = toChart(fit, world, { x: -3000, y: -2000 });
     expect(nw.y).toBeCloseTo(10, 6);
     expect(nw.x).toBeCloseTo(310 - 3000 * fit.scale, 6);
+  });
+  it('fromChart turns a point back into the sea and stays inside it (M3 step 7c)', () => {
+    const fit = chartFit(world, { x: 10, y: 10, w: 600, h: 300 });
+    const p = fromChart(fit, world, toChart(fit, world, { x: 1234, y: -567 }));
+    expect(p.x).toBeCloseTo(1234, 6);
+    expect(p.y).toBeCloseTo(-567, 6);
+    expect(fromChart(fit, world, { x: 0, y: 1000 })).toEqual({ x: -3000, y: 2000 });
   });
 });
 

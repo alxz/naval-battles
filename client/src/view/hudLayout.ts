@@ -84,8 +84,8 @@ export function isCompact(height: number): boolean {
 
 /** The zoom button (touch) sits to the right of my ship panel; its left edge. */
 export function zoomButtonX(width: number, height: number): number {
-  // Three small buttons in the middle of the top edge: spyglass, sound, auto zoom.
-  return Math.round(width / 2 - smallButtonSize(height) * 1.5 - HUD_MARGIN);
+  // Four small buttons in the middle of the top edge: spyglass, sound, auto zoom, pause (M3 step 7c).
+  return Math.round(width / 2 - smallButtonSize(height) * 2 - HUD_MARGIN * 1.5);
 }
 
 /** The small buttons at the top on touch screens (zoom, sound) are this big. */
@@ -118,7 +118,7 @@ export function hudLayout(width: number, height: number, touch: boolean): HudLay
   // Touch (M3 step 4b): a big minimap at the top right, left of the right column of buttons;
   // as wide as MINIMAP_TOUCH_SCALE buttons, but never onto the small buttons in the top middle.
   const mapRight = b.sailsMore.x - 4;
-  const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (autoZoom.x + autoZoom.w + m)));
+  const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (b.pause.x + b.pause.w + m)));
   const minimap: Rect = touch
     ? { x: mapRight - mapW, y: m, w: mapW, h: Math.round((mapW * 2) / 3) }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
@@ -186,13 +186,15 @@ export type ButtonName =
   | 'gunsDown'
   | 'gunsUp'
   | 'ammo'
-  | 'zoom';
+  | 'zoom'
+  | 'fireBow'
+  | 'pause';
 
 /**
  * Touch buttons (their top left corners and sizes):
- *   left group:   row 1 (bottom) rudder < >,  row 2 fire L R
+ *   left group:   row 1 (bottom) rudder < >,  row 2 fire L B R (B = bow chaser, M3 step 7c)
  *   right group:  row 1 sails - +,  above "+" a column: gun down (row 2), gun up (row 3)
- *   zoom:         small, at the top, right of my ship panel
+ *   zoom:         small, at the top, right of my ship panel; pause: the fourth small button at the top
  */
 export function touchButtonRects(width: number, height: number): Record<ButtonName, Rect> {
   const s = touchButtonSize(height);
@@ -206,12 +208,14 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
     rudderLeft: at(left(1), row(1)),
     rudderRight: at(left(2), row(1)),
     firePort: at(left(1), row(2)),
-    fireStarboard: at(left(2), row(2)),
+    fireBow: at(left(2), row(2)),
+    fireStarboard: at(left(3), row(2)),
     sailsLess: at(right(2), row(1)),
     sailsMore: at(right(1), row(1)),
     gunsDown: at(right(1), row(2)),
     gunsUp: at(right(1), row(3)),
     ammo: at(left(1), row(3)), // above "L": the kind of shot (M3 step 4)
     zoom: at(zoomButtonX(width, height), HUD_MARGIN, z),
+    pause: at(zoomButtonX(width, height) + 3 * (z + HUD_MARGIN), HUD_MARGIN, z),
   };
 }

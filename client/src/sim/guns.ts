@@ -9,31 +9,47 @@ import { damageHull } from './damage';
 import { ballDamage, isOffenderOf } from './law';
 import { nextGaussian, nextRandom } from './random';
 import { ballHit } from './hits';
+import { gunneryReload } from './skills';
 import type { HitZone } from './hits';
 import type { AmmoType, Ball, GunParams, Island, PendingShot, ShipParams, ShipState, Side, World } from './types';
 
-/** How far the stern chasers can be trained off dead astern, degrees (M3 step 7b). */
+/** How far the chasers (stern, M3 step 7b; bow, step 7c) can be trained off the centre line, degrees. */
 export const STERN_TRAIN_DEG = 30;
+export const CHASER_TRAIN_DEG = STERN_TRAIN_DEG;
+
+/** The bow and stern chasers: guns on the centre line that can be trained a little (not a broadside). */
+export function isChaser(side: Side): boolean {
+  return side === 'stern' || side === 'bow';
+}
 
 /** The direction a battery fires: 90 degrees left (port) or right (starboard) of the bow; the stern chasers (M3 step 7b) straight astern. */
 export function sideAngleRad(headingRad: number, side: Side): number {
   if (side === 'stern') return headingRad + Math.PI;
+  if (side === 'bow') return headingRad;
   return headingRad + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
 }
 
-/** How many guns a battery has: gunsPerSide for a broadside, sternGuns (M3 step 7b) for the stern. */
+/** How many guns a battery has: gunsPerSide for a broadside, sternGuns (M3 step 7b) for the stern, bowGuns (step 7c) for the bow. */
 export function gunsOn(params: ShipParams, side: Side): number {
-  return side === 'stern' ? (params.sternGuns ?? 0) : params.gunsPerSide;
+  if (side === 'stern') return params.sternGuns ?? 0;
+  if (side === 'bow') return params.bowGuns ?? 0;
+  return params.gunsPerSide;
+}
+
+/** The ammunition a battery really fires: the bow chasers always fire round shot (M3 step 7c). */
+export function batteryAmmo(ship: ShipState, side: Side): AmmoType {
+  return side === 'bow' ? 'round' : loadableAmmo(ship);
 }
 
 /** Where gun number `gun` sits on the deck, in world metres (guns spread from stern to bow; stern chasers side by side at the stern). */
 export function gunPosition(ship: ShipState, params: ShipParams, side: Side, gun: number, g: GunParams = GUNS): { x: number; y: number } {
   const fx = Math.cos(ship.headingRad);
   const fy = Math.sin(ship.headingRad);
-  if (side === 'stern') {
+  if (isChaser(side)) {
     const n = gunsOn(params, side);
     const across = n > 1 ? (gun / (n - 1) - 0.5) * params.beam * 0.5 : 0;
-    return { x: ship.x - fx * (params.length / 2) - fy * across, y: ship.y - fy * (params.length / 2) + fx * across };
+    const along = side === 'bow' ? params.length / 2 : -params.length / 2;
+    return { x: ship.x + fx * along - fy * across, y: ship.y + fy * along + fx * across };
   }
   const n = params.gunsPerSide;
   const along = n > 1 ? (gun / (n - 1) - 0.5) * g.gunSpreadShare * params.length : 0;
@@ -58,7 +74,7 @@ export const NO_ERROR: ShotError = { elevationDeg: 0, directionDeg: 0 };
  * `error` turns the gun a little (accuracy, step 3); without it the ball flies exactly as aimed.
  * By default the gun numbers of the ammunition the ship has loaded (chain and grape fly slower).
  */
-export function launchBall(ship: ShipState, side: Side, from: { x: number; y: number }, g: GunParams = ammoGuns(loadableAmmo(ship)), error: ShotError = NO_ERROR): Ball {
+export function launchBall(ship: ShipState, side: Side, from: { x: number; y: number }, g: GunParams = ammoGuns(batteryAmmo(ship, side)), error: ShotError = NO_ERROR): Ball {
   const out = sideAngleRad(ship.headingRad, side) + degToRad(error.directionDeg);
   const elev = degToRad(ship.elevationDeg + error.elevationDeg);
   const horizontal = g.muzzleSpeed * Math.cos(elev);
@@ -89,10 +105,10 @@ export function stepBall(ball: Ball, dt: number, g: GunParams = GUNS): void {
  * It runs the same steps as a real ball, so the marker and the real shot always agree.
  * By default for the ammunition the ship has loaded.
  */
-export function predictLanding(ship: ShipState, params: ShipParams, side: Side, dt: number, g: GunParams = ammoGuns(loadableAmmo(ship))): { x: number; y: number; seconds: number } {
+export function predictLanding(ship: ShipState, params: ShipParams, side: Side, dt: number, g: GunParams = ammoGuns(batteryAmmo(ship, side))): { x: number; y: number; seconds: number } {
   // The middle of the battery: on the ship's side, level with the middle of the hull (the stern chasers: at the stern).
   const out = sideAngleRad(ship.headingRad, side);
-  const reach = side === 'stern' ? params.length / 2 : params.beam / 2;
+  const reach = isChaser(side) ? params.length / 2 : params.beam / 2;
   const from = { x: ship.x + Math.cos(out) * reach, y: ship.y + Math.sin(out) * reach };
   const ball = launchBall(ship, side, from, g);
   while (ball.z > 0 && ball.ageSeconds < g.maxBallSeconds) stepBall(ball, dt, g);
@@ -102,6 +118,7 @@ export function predictLanding(ship: ShipState, params: ShipParams, side: Side, 
 /** Seconds until this battery can fire again. */
 export function reloadLeft(ship: ShipState, side: Side): number {
   if (side === 'stern') return ship.reloadStern ?? 0;
+  if (side === 'bow') return ship.reloadBow ?? 0;
   return side === 'port' ? ship.reloadPort : ship.reloadStarboard;
 }
 
@@ -115,9 +132,9 @@ export function orderBroadside(world: World, ship: ShipState, side: Side, stepSe
   if (!params || ship.sunk || reloadLeft(ship, side) > 0) return false;
   // Plan 4.4: every gun needs its gun crew; with a short crew fewer guns fire (spread along the side).
   const n = gunsOn(params, side);
-  const manned = side === 'stern' ? Math.min(n, Math.floor(crewOf(ship) / g.crewPerGun)) : gunsManned(ship, params, g);
+  const manned = isChaser(side) ? Math.min(n, Math.floor(crewOf(ship) / g.crewPerGun)) : gunsManned(ship, params, g);
   if (manned <= 0) return false;
-  const ammo = loadableAmmo(ship); // the chosen kind, or round shot when none of it is left
+  const ammo = batteryAmmo(ship, side); // the chosen kind, or round shot when none of it is left; the bow: round shot
   spendAmmo(ship, ammo);
   // The roll of the ship: one random error for the whole broadside (plan 4.4).
   const salvoErrorDeg = nextGaussian(world) * salvoSigmaDeg(accuracyInputs(ship, world.wind.strength), g);
@@ -126,20 +143,21 @@ export function orderBroadside(world: World, ship: ShipState, side: Side, stepSe
     const delay = n > 1 ? (gun / (n - 1)) * g.rippleSeconds : 0;
     const shot: PendingShot = { shipId: ship.id, side, gun, tick: world.tick + Math.round(delay / stepSeconds), salvoErrorDeg, ammo };
     // M3 step 7b: the stern chasers can be trained a little to either side (a broadside cannot: the ship turns).
-    if (side === 'stern' && trainDeg !== 0) shot.trainDeg = Math.max(-STERN_TRAIN_DEG, Math.min(STERN_TRAIN_DEG, trainDeg));
+    if (isChaser(side) && trainDeg !== 0) shot.trainDeg = Math.max(-CHASER_TRAIN_DEG, Math.min(CHASER_TRAIN_DEG, trainDeg));
     world.pendingShots.push(shot);
   }
   // A short crew loads slower (plan 4.4).
-  const reload = params.reloadSeconds * reloadFactor(ship, g);
+  const reload = params.reloadSeconds * reloadFactor(ship, g) * gunneryReload(ship); // M3 step 7c: skilled gunners load faster
   if (side === 'port') ship.reloadPort = reload;
   else if (side === 'starboard') ship.reloadStarboard = reload;
-  else ship.reloadStern = reload;
+  else if (side === 'stern') ship.reloadStern = reload;
+  else ship.reloadBow = reload;
   return true;
 }
 
 /** The reload time this ship would get now (the HUD draws the pie against it). */
 export function reloadSecondsOf(ship: ShipState, g: GunParams = GUNS): number {
-  return (SHIP_CLASSES[ship.shipClass]?.reloadSeconds ?? 0) * reloadFactor(ship, g);
+  return (SHIP_CLASSES[ship.shipClass]?.reloadSeconds ?? 0) * reloadFactor(ship, g) * gunneryReload(ship);
 }
 
 /** Fire the guns whose time has come, move every ball, and make splashes. */
@@ -150,6 +168,10 @@ export function stepGunsAndBalls(world: World, dt: number, g: GunParams = GUNS, 
     if (ship.reloadStern !== undefined) {
       ship.reloadStern = Math.max(0, ship.reloadStern - dt);
       if (ship.reloadStern === 0) delete ship.reloadStern; // absent = ready (keeps old saves and tests the same)
+    }
+    if (ship.reloadBow !== undefined) {
+      ship.reloadBow = Math.max(0, ship.reloadBow - dt);
+      if (ship.reloadBow === 0) delete ship.reloadBow;
     }
   }
 
@@ -265,7 +287,7 @@ function applyHit(world: World, ship: ShipState, ball: Ball, zone: HitZone, poin
  * Each is one sigma: about two thirds of the balls land within it.
  * The elevation error is turned into metres by flying the middle ball at elevation +- sigma.
  */
-export function landingSpread(ship: ShipState, params: ShipParams, side: Side, windStrength: number, dt: number, g: GunParams = ammoGuns(loadableAmmo(ship))): { alongM: number; acrossM: number } {
+export function landingSpread(ship: ShipState, params: ShipParams, side: Side, windStrength: number, dt: number, g: GunParams = ammoGuns(batteryAmmo(ship, side))): { alongM: number; acrossM: number } {
   const inputs = accuracyInputs(ship, windStrength);
   const gunSigma = gunSigmaDeg(inputs, g);
   const salvoSigma = salvoSigmaDeg(inputs, g);

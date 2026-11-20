@@ -1,0 +1,13 @@
+{
+  "seamanshipMin": 0.85,
+  "seamanshipMax": 1.2,
+  "turnPerSeamanship": 0.5,
+  "gunneryMin": 1,
+  "gunneryMax": 8,
+  "neutralGunnery": 4,
+  "reloadPerGunnery": 0.025,
+  "lonerShare": 0.4,
+  "lonerCrowd": 1.5,
+  "packCrowd": -0.5,
+  "fleeEdgeWeight": 1.0
+}

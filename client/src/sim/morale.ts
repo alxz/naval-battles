@@ -58,7 +58,7 @@ export function nearMiss(world: World, x: number, y: number, byShipId: number, p
  * ratio of these two numbers is a fair first guess at who wins.
  */
 export function strength(ship: ShipState, params: ShipParams): number {
-  const guns = params.gunsPerSide + 0.5 * (params.sternGuns ?? 0);
+  const guns = params.gunsPerSide + 0.5 * ((params.sternGuns ?? 0) + (params.bowGuns ?? 0));
   return guns * (0.4 + 0.6 * crewShare(ship)) * Math.max(0, ship.hull);
 }
 

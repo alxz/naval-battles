@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { textStyle } from './text';
 import type { TextKind } from './text';
 
-export type BannerKind = 'win' | 'lose';
+export type BannerKind = 'win' | 'lose' | 'draw'; // draw: a battle ended with END GAME and no winner (M3 step 7c)
 
 const SHOW_AFTER_SECONDS = 1.5; // let the sinking play out a moment first
 
@@ -54,12 +54,12 @@ export class Banner {
   }
 
   /** Ask for the banner; it appears after a short pause. Asking again changes nothing. */
-  request(kind: BannerKind, line: string, stats: string): void {
+  request(kind: BannerKind, line: string, stats: string, title?: string, now = false): void {
     if (this.kind !== null) return;
     this.kind = kind;
-    this.wait = SHOW_AFTER_SECONDS;
-    this.title.setText(kind === 'win' ? 'VICTORY!' : 'YOUR SHIP IS LOST');
-    this.title.setColor(kind === 'win' ? '#ffe066' : '#ff8070');
+    this.wait = now ? 0 : SHOW_AFTER_SECONDS; // END GAME (M3 step 7c): at once
+    this.title.setText(title ?? (kind === 'win' ? 'VICTORY!' : kind === 'lose' ? 'YOUR SHIP IS LOST' : 'A DRAW'));
+    this.title.setColor(kind === 'win' ? '#ffe066' : kind === 'lose' ? '#ff8070' : '#cfe6f7');
     this.line.setText(line);
     this.stats.setText(stats);
   }
@@ -88,7 +88,7 @@ export class Banner {
     g.clear();
     g.fillStyle(0x000000, 0.72);
     g.fillRoundedRect(x, y, w, h, 10);
-    g.lineStyle(1, this.kind === 'win' ? 0xffe066 : 0xff8070, 0.8);
+    g.lineStyle(1, this.kind === 'win' ? 0xffe066 : this.kind === 'lose' ? 0xff8070 : 0xcfe6f7, 0.8);
     g.strokeRoundedRect(x + 0.5, y + 0.5, w - 1, h - 1, 10);
     // Two buttons side by side: SAIL AGAIN and (M3 step 7d) SAVE LOG.
     const bw = 168;

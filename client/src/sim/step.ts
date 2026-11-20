@@ -13,6 +13,7 @@ import type { DamageParams, Island, ShipParams, ShipState, Tuning, WindNow, Worl
 import { DEFAULT_TUNING } from './types';
 import { inHarbour, portsCached, stepPortRepair } from './port';
 import { driftWind } from './wind';
+import { seamanshipSpeed, seamanshipTurn } from './skills';
 
 /** One simulation step is 1/30 of a second. */
 export const STEP_SECONDS = 1 / 30;
@@ -41,11 +42,11 @@ export function windFactor(strength: number): number {
  *   x (0.2 + 0.8 x sail condition)   (M3 step 4: shot-away sails slow the ship)
  *   x crew factor                     (M3 step 4b, 7a: only below the sailing crew it falls much)
  *   x (1 - ladenSlowdown x cargo)     (M3 step 7a: a full hold)
- * The Navigation skill (M6) joins this formula later.
+ *   x seamanship                      (M3 step 7c: bot skills, 0.85..1.2; the Navigation skill joins in M6)
  */
 export function targetSpeed(ship: ShipState, params: ShipParams, wind: WindNow, tuning: Tuning = DEFAULT_TUNING): number {
   const { share } = sailingInfo(ship, params, wind);
-  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship) * crewSpeedFactor(ship) * cargoSpeedFactor(ship);
+  const speed = params.maxSpeed * tuning.speedScale * share * ship.sailLevel * windFactor(wind.strength) * sailSpeedFactor(ship) * crewSpeedFactor(ship) * cargoSpeedFactor(ship) * seamanshipSpeed(ship);
   return damagedSpeed(speed, ship.hull / params.hullPoints);
 }
 
@@ -96,7 +97,7 @@ export function stepShip(ship: ShipState, params: ShipParams, wind: WindNow, dt:
 
   // Aground, the crew warps the ship round with boats and anchors: it turns at the full rate.
   // A short-handed ship turns slower (M3 step 4b), aground or not.
-  const steer = (ship.aground ? 1 : steerShare(ship, params, tuning)) * crewTurnFactor(ship);
+  const steer = (ship.aground ? 1 : steerShare(ship, params, tuning)) * crewTurnFactor(ship) * seamanshipTurn(ship);
   ship.headingRad = normalizeAngle(ship.headingRad + params.turnRate * ship.rudder * steer * dt);
 
   ship.x += Math.cos(ship.headingRad) * ship.speed * dt;

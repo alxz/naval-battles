@@ -2,7 +2,7 @@ import { PORTS } from '../sim/port';
 import Phaser from 'phaser';
 import { ISLANDS, WORLD } from '../sim/data';
 import type { ShipState } from '../sim/types';
-import { chartFit, isKnown, toChart, viewFrame } from '../view/chart';
+import { chartFit, fromChart, isKnown, toChart, viewFrame } from '../view/chart';
 import type { ChartState } from '../view/chart';
 import { hudLayout, panelCovers } from '../view/hudLayout';
 import type { Rect } from '../view/hudLayout';
@@ -15,7 +15,7 @@ const COVERED_ALPHA = 0.25;
  * the islands you have seen, your ship (yellow, with a short line for its heading) and the
  * other ships where you saw them last (red, pale when out of sight).
  * Computer: bottom right. Touch screens: top right, left of the right column of buttons (M3 step 4b: bigger).
- * A click or tap on it opens the big chart. Like the HUD panels it fades when a ship is under it.
+ * A click or tap on it opens the big chart; in the arena it moves the view to that place (M3 step 7c). Like the HUD panels it fades when a ship is under it.
  */
 export class Minimap {
   private readonly g: Phaser.GameObjects.Graphics;
@@ -29,13 +29,17 @@ export class Minimap {
   private guns: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private alpha = 1;
 
-  constructor(scene: Phaser.Scene, touch: boolean, onTap: () => void) {
+  /** `onTap` gets the place in the sea under the finger (M3 step 7c: the arena moves its view there). */
+  constructor(scene: Phaser.Scene, touch: boolean, onTap: (sea: { x: number; y: number }) => void) {
     this.touch = touch;
     // Depth 126 like the chart button: it stays on top of the open chart and closes it again.
     this.base = scene.add.graphics().setScrollFactor(0).setDepth(touch ? 126 : 105);
     this.g = scene.add.graphics().setScrollFactor(0).setDepth(touch ? 126 : 105);
     this.zone = scene.add.zone(0, 0, 10, 10).setOrigin(0, 0).setScrollFactor(0).setDepth(127).setInteractive();
-    this.zone.on('pointerdown', () => onTap());
+    this.zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      const b = this.box;
+      onTap(fromChart(chartFit(WORLD, { x: b.x, y: b.y, w: b.w, h: b.h }), WORLD, { x: p.x, y: p.y }));
+    });
   }
 
   /** The sea (a faint tint and a thin frame, so the ships show through), the islands you know, the ports. */

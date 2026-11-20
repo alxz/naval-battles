@@ -352,7 +352,7 @@ export class Hud {
     this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
-      this.gfx.debug.fillStyle(0x000000, plate);
+      this.gfx.debug.fillStyle(0x000000, DEBUG_PLATE_ALPHA); // M3 step 7c: lighter, the sea shows through
       this.gfx.debug.fillRoundedRect(b.x - 4, b.y - 3, b.width + 8, b.height + 6, 6);
     }
   }
@@ -482,6 +482,9 @@ export class Hud {
   }
 }
 
+/** The plate under the debug text (H): see-through, so the battle shows behind it (M3 step 7c). */
+const DEBUG_PLATE_ALPHA = 0.3;
+
 /** The debug lines: keys and every number we used while tuning. */
 export function debugLines(info: {
   ship: ShipState;
@@ -507,9 +510,10 @@ export function debugLines(info: {
   return [
     'A / D rudder     W / S sails',
     'Q / E fire port / starboard',
+    'Z bow chaser   1 2 3 ammo',
     '+ / - guns up / down',
-    'Z / X zoom   M sound   C chart',
-    'H hide this',
+    'Shift + / - zoom   M sound',
+    'C chart   ESC pause   H hide this',
     '',
     `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
     `speed ${info.ship.speed.toFixed(1)} m/s`,

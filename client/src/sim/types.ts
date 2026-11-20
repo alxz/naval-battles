@@ -27,6 +27,7 @@ export interface ShipParams {
   cargoMax?: number; // ... and at the most
   ladenSlowdown?: number; // a full hold takes this share off her speed (0.15 = 15%)
   sternGuns?: number; // M3 step 7b: stern chasers firing astern (absent = none)
+  bowGuns?: number; // M3 step 7c: bow chasers firing ahead, round shot only (absent = none)
   trader?: boolean; // M3 step 7b: a merchant: sails a trade run, runs from enemies, gets more for reaching port alive
 }
 
@@ -66,7 +67,7 @@ export interface AmmoParams {
 
 /** Port = left side looking forward, starboard = right side. */
 /** A battery: the two broadsides, and (M3 step 7b) the stern chasers that fire astern. */
-export type Side = 'port' | 'starboard' | 'stern';
+export type Side = 'port' | 'starboard' | 'stern' | 'bow';
 
 /** A cannonball in flight. z is the height above the water. */
 export interface Ball {
@@ -93,7 +94,7 @@ export interface PendingShot {
   tick: number; // fires at the start of this step
   salvoErrorDeg: number; // the roll error of this broadside: the same for every gun in it
   ammo: AmmoType; // what the broadside was loaded with when it was ordered
-  trainDeg?: number; // M3 step 7b: the stern chasers trained this far off dead astern (+ = clockwise)
+  trainDeg?: number; // M3 step 7b/7c: the chasers trained this far off the centre line (+ = clockwise)
 }
 
 /** Things that happened during one step, for the screen (sounds, splashes, flashes). */
@@ -110,6 +111,7 @@ export type SimEvent =
   | { type: 'shoreFired'; port: number; x: number; y: number }
   // The auto-bot arena (sim/arena.ts):
   | { type: 'targetChosen'; shipId: number; targetId: number; distance: number }
+  | { type: 'skills'; shipId: number } // M3 step 7c: a battle's bot got its skills (for the log)
   | { type: 'respawn'; shipId: number; x: number; y: number }
   | { type: 'escaped'; shipId: number; byShipId: number; how: 'port' | 'away'; points?: number } // M3 step 7a (arena): hurt, and got away alive; 7b: the points it earned
   | { type: 'botLeaves'; shipId: number; enemyId: number; reason: 'fear' | 'odds' | 'trader'; fear: number; odds: number } // M3 step 7b: a bot leaves a fight early
@@ -151,6 +153,8 @@ export interface ShipState {
   reloadPort: number; // seconds until the port battery is ready (0 = ready)
   reloadStarboard: number;
   reloadStern?: number; // M3 step 7b: seconds until the stern chasers are ready (absent = ready)
+  seamanship?: number; // M3 step 7c: the crew's seamanship, speed x this (0.85..1.2; absent = 1)
+  reloadBow?: number; // M3 step 7c: seconds until the bow chasers are ready (absent = ready)
   nation?: string; // M3 step 7b: the flag it sails under (view/flags.ts nations); 'pirates' frightens traders more
   hull: number; // hull points left
   sunk: boolean; // a sunk ship stays in the list (for the picture) but takes no part any more
@@ -295,11 +299,27 @@ export interface ArenaState {
 export type BotMode = 'chase' | 'engage' | 'breakOff' | 'flee' | 'repair' | 'port' | 'outlaw' | 'idle' | 'finish' | 'ram' | 'trade';
 
 /** What makes one bot different from another, drawn once when it is created (seeded random). */
+/** M3 step 7c: the ranges of the bot skills (data/skills.json, sim/skills.ts). */
+export interface SkillParams {
+  seamanshipMin: number;
+  seamanshipMax: number;
+  turnPerSeamanship: number;
+  gunneryMin: number;
+  gunneryMax: number;
+  neutralGunnery: number;
+  reloadPerGunnery: number;
+  lonerShare: number;
+  lonerCrowd: number;
+  packCrowd: number;
+  fleeEdgeWeight: number;
+}
+
 export interface BotPersonality {
   preferredRange: number; // metres it likes for a broadside fight
   patienceSeconds: number; // how long it chases without gaining before it gives up
   aimErrorSigmaDeg: number; // how well it judges the elevation (smaller = better gunner)
   courage?: number; // M3 step 7b: 0..1; it leaves a fight when its fear grows above this (absent = 0.7)
+  loner?: boolean; // M3 step 7c: true = avoids enemies others hunt, false = joins them (a pack bot), absent = neither
 }
 
 /**
@@ -463,12 +483,12 @@ export type Command =
   // Test setup now (lil-gui); later sea events can change the wind the same way.
   | { type: 'setWind'; fromRad: number; strength: number }
   | { type: 'setElevation'; shipId: number; valueDeg: number }
-  | { type: 'fire'; shipId: number; side: Side; trainDeg?: number } // trainDeg: stern chasers only (M3 step 7b)
+  | { type: 'fire'; shipId: number; side: Side; trainDeg?: number } // trainDeg: chasers only (stern 7b, bow 7c)
   | { type: 'jettison'; shipId: number } // M3 step 7b: throw the cargo over the side (faster)
   // Load the next broadsides with this kind of ammunition (keys 1 / 2 / 3).
   | { type: 'setAmmo'; shipId: number; ammo: AmmoType }
   // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).
-  | { type: 'setBot'; shipId: number; enemyId: number | null };
+  | { type: 'setBot'; shipId: number; enemyId: number | null; skilled?: boolean } // skilled: draw bot skills (M3 step 7c)
 
 /** Collisions and repair (data/damage.json). */
 export interface DamageParams {
