@@ -621,6 +621,7 @@ export class SeaScene extends Phaser.Scene {
     if (this.arena) {
       this.arenaHud.update(this.sim.world, poses, s, myShip.id, this.freeView === null, this.timeScale, clock(this.sim.world.tick * STEP_SECONDS), {
         ships: shipsOnScreen,
+        ship: this.hud.shipRect(),
         avoid: hudRects.target,
         seconds,
       });

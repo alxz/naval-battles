@@ -31,7 +31,7 @@ describe('inletWayOut', () => {
 
 describe('a brigantine and a caravel leave the Isla Verde harbour without grinding on the bend', () => {
   for (const shipClass of ['brigantine', 'caravel']) {
-    it(shipClass, () => {
+    it(shipClass, { timeout: 30000 }, () => {
       if (!inletPort?.path) return;
       const w = createArenaWorld(31, 4);
       const me = w.ships[0]!;

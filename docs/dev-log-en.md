@@ -4,6 +4,20 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (night) — M3 step 8b: your test of 8
+
+### Your test (battle log 1925, arena log 1949, iPad screenshot)
+- Arena, 3 h 17 min, 10 bots: **0 warnings**, 49 groundings in 3 h 17 min (about 15 an hour; 25 before step 8). Frigates 52 wins, caravels 0 wins (23 losses): the caravel is the weakest; a balance note for M5, not changed now (D37).
+- Battle: 4 bots, you were sunk by a brigantine after 4 min; the log is normal.
+- **iPad:** the arena buttons (NEXT, x8, LOG) sat at a fixed y = 66 and covered the bottom bars of my ship panel (the panel is 64 px high plus the 8 px margin). Now the buttons go under the real ship panel (`Hud.shipRect()`, also when the phone panel is open).
+- **Brainbox:** `step8.test.ts` (brigantine) took 5.7 s and hit the 5 s default. The two slow tests now have a 30 s timeout.
+
+### Changes
+`ArenaHud.ts` (`ArenaScreen.ship`), `Hud.ts` (`shipRect`), `SeaScene.ts`, `step8.test.ts`, version `M3 8b`. 454 tests, build green.
+
+### Decision
+D64 (survivors join the winner) **confirmed** by the developer; first version in M4.
+
 ## 20 Nov 2026 (evening) — M3 step 8: your test of 7f; the inlet; **M3 closed**
 
 ### Your test (battle log 1425, arena log 1817)

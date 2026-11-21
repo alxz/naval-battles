@@ -402,6 +402,11 @@ export class Hud {
     }
   }
 
+  /** My ship panel as it is now (a phone: mini or open), so the arena buttons can go under it. */
+  shipRect(): { x: number; y: number; w: number; h: number } {
+    return this.base ? { ...this.base.ship } : { x: 0, y: 0, w: 0, h: 0 };
+  }
+
   /** Put the help text (H) at this screen place (right of the arena table), or null for its usual place. */
   setDebugBeside(at: { x: number; y: number } | null): void {
     this.debugBeside = at;

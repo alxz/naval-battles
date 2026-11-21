@@ -19,6 +19,7 @@ const FADE_PER_SECOND = 6;
 /** What the arena table needs to know about the screen each frame. */
 export interface ArenaScreen {
   ships: readonly { x: number; y: number }[]; // ship centres on the screen (logical px)
+  ship: Rect; // my ship panel: on a touch screen the buttons go under it (the panel is 64 px high on an iPad)
   avoid: Rect; // the target card: the table moves below it when they would overlap (a narrow window)
   seconds: number;
 }
@@ -163,7 +164,7 @@ export class ArenaHud {
     const x = 8;
     this.speedButton.setText(`x${timeScale}`);
     let bx = x;
-    const by = this.touch ? 66 : 30;
+    const by = this.touch ? screen.ship.y + screen.ship.h + 4 : 30;
     for (const button of this.buttons) {
       button.setPosition(bx, by);
       bx += button.width + 6;
