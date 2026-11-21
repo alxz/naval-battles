@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cameraCircleRadius, circleCamera, nearest, smoothToward } from './combatCamera';
+import { cameraCircleRadius, circleCamera, nearest, smoothToward, leadOffset } from './combatCamera';
 
 
 describe('circleCamera (D43)', () => {
@@ -39,5 +39,20 @@ describe('smoothToward', () => {
 
   it('jumps straight to the goal with time constant 0', () => {
     expect(smoothToward({ x: 0, y: 0 }, { x: 7, y: 8 }, 0.016, 0)).toEqual({ x: 7, y: 8 });
+  });
+});
+
+describe('leadOffset (M3 step 8)', () => {
+  it('lying still: the ship is in the middle', () => {
+    expect(leadOffset(0, 0, 14, 36, 300, 200, 0.4)).toEqual({ x: 0, y: 0 });
+  });
+  it('at full speed: one hull length ahead, along the heading', () => {
+    const o = leadOffset(Math.PI / 2, 14, 14, 36, 300, 200, 0.4);
+    expect(o.x).toBeCloseTo(0, 6);
+    expect(o.y).toBeCloseTo(36, 6);
+  });
+  it('half speed: half the lead; a small screen caps it', () => {
+    expect(leadOffset(0, 7, 14, 36, 300, 200, 0.4).x).toBeCloseTo(18, 6);
+    expect(leadOffset(0, 14, 14, 84, 140, 60, 0.4).x).toBeCloseTo(24, 6);
   });
 });

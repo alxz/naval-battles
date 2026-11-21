@@ -117,5 +117,6 @@
   "traderCruiseSails": 0.85,
   "traderIslandOffsetM": 250,
   "fearNearMissWarship": 0.004,
-  "traderSafeM": 900
+  "traderSafeM": 900,
+  "traderMouthOffM": 200
 }

@@ -54,9 +54,11 @@ describe('ports for big and small ships', () => {
     expect(portsFor([inlet, open], sloop).map((p) => p.name)).toEqual(['Inlet', 'Open']);
     expect(portsFor([inlet, open], frigate).map((p) => p.name)).toEqual(['Open']);
   });
-  it('the way out: off the inlet mouth; from an open anchorage: beyond its safe water on the ship side', () => {
-    const out = portExit(inlet, at(1, 0, 0), 250);
+  it('the way out: off the inlet mouth (along the inlet when on it); from an open anchorage: beyond its safe water on the ship side', () => {
+    const out = portExit(inlet, at(1, 700, 300), 250);
     expect(out.x).toBeCloseTo(550, 6);
+    // M3 step 8: in the harbour or on the inlet, the next point of the middle line toward the mouth.
+    expect(portExit(inlet, at(1, 0, 0), 250)).toEqual({ x: 300, y: 0 });
     const away = portExit(open, at(1, 2000, 100), 250);
     expect(away.y).toBeCloseTo(DAMAGE.port.safeRange + 250, 6);
   });

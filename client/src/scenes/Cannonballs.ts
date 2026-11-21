@@ -10,7 +10,10 @@ const HEIGHT_SCALE = artJson.heightScale;
 const SPLASH_SECONDS = 0.7;
 const FLASH_SECONDS = 0.15;
 
-const SMOKE_SECONDS = 3.6;
+const SMOKE_SECONDS = 7; // M3 step 8: black powder: thick white smoke that hangs (was 3.6 s)
+const SMOKE_PUFFS = 3; // per gun (was 2)
+const SMOKE_GROW = 3.5; // it spreads to 4.5 times its first size (was 3)
+const MUZZLE_SECONDS = 0.16; // the tongue of fire out of the gun port
 const SMOKE_DRIFT = 8; // m/s at full wind strength
 const SMOKE_BLAST = 3; // m/s: the puff first leaves the gun port outward
 const SMOKE_OUT = 4; // metres outside the hull where it starts
@@ -60,11 +63,13 @@ export class Cannonballs {
       // M3 step 7b: a ball that struck a hill or a cliff throws up dust and earth.
       if (e.type === 'landHit') this.addFading('dust', e.x, e.y - e.z * HEIGHT_SCALE, s, SPLASH_SECONDS * 1.5, 2);
       if (e.type === 'gunFired') {
-        this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.5);
         // The smoke leaves the gun port outward (a blast), then the wind carries it away.
         const heading = headingOf(e.shipId);
         const out = heading === undefined ? downwind : sideAngleRad(heading, e.side);
-        for (let i = 0; i < 2; i++) {
+        // M3 step 8: a flash in the gun port and a tongue of fire out of it.
+        this.addFading('flash', e.x, e.y, s, FLASH_SECONDS, 1.2);
+        this.addFading('muzzle', e.x + Math.cos(out) * 4, e.y + Math.sin(out) * 4, s, MUZZLE_SECONDS, 0.6, { rotation: out });
+        for (let i = 0; i < SMOKE_PUFFS; i++) {
           const jitter = (Math.random() - 0.5) * 0.8;
           const speed = drift * (0.7 + Math.random() * 0.6);
           const blast = SMOKE_BLAST * (0.6 + Math.random() * 0.8);
@@ -74,11 +79,11 @@ export class Cannonballs {
             e.y + Math.sin(out) * SMOKE_OUT - 2 + (Math.random() - 0.5) * 3,
             s,
             SMOKE_SECONDS * (0.8 + Math.random() * 0.4),
-            2,
+            SMOKE_GROW,
             {
               vx: Math.cos(downwind + jitter) * speed + Math.cos(out) * blast,
               vy: Math.sin(downwind + jitter) * speed + Math.sin(out) * blast - 0.6, // and it rises a little (up the screen)
-              alpha: 0.45,
+              alpha: 0.6,
               delay: i * 0.05,
             },
           );
@@ -90,7 +95,7 @@ export class Cannonballs {
         for (let i = 0; i < 3; i++) {
           const jitter = (Math.random() - 0.5) * 0.8;
           const speed = drift * (0.7 + Math.random() * 0.6);
-          this.addFading('smoke', e.x + (Math.random() - 0.5) * 4, e.y - 3 + (Math.random() - 0.5) * 4, s, SMOKE_SECONDS * (0.9 + Math.random() * 0.5), 2.5, {
+          this.addFading('smoke', e.x + (Math.random() - 0.5) * 4, e.y - 3 + (Math.random() - 0.5) * 4, s, SMOKE_SECONDS * (0.9 + Math.random() * 0.5), SMOKE_GROW, {
             vx: Math.cos(downwind + jitter) * speed,
             vy: Math.sin(downwind + jitter) * speed - 0.6,
             alpha: 0.5,
@@ -169,10 +174,10 @@ export class Cannonballs {
     s: number,
     life: number,
     grow: number,
-    more: { vx?: number; vy?: number; alpha?: number; delay?: number } = {},
+    more: { vx?: number; vy?: number; alpha?: number; delay?: number; rotation?: number } = {},
   ): void {
     const delay = more.delay ?? 0;
-    const image = this.scene.add.image(x * s, y * s, key).setDepth(key === 'smoke' ? 3.5 : 3).setScale(Math.max(1, s)).setVisible(delay <= 0);
+    const image = this.scene.add.image(x * s, y * s, key).setDepth(key === 'smoke' ? 3.5 : 3).setScale(Math.max(1, s)).setVisible(delay <= 0).setRotation(more.rotation ?? 0);
     this.fading.push({ image, x, y, vx: more.vx ?? 0, vy: more.vy ?? 0, age: -delay, life, grow, alpha: more.alpha ?? 1 });
   }
 
@@ -228,12 +233,23 @@ export class Cannonballs {
     g.fillCircle(3, 3, 3);
     g.generateTexture('flash', 7, 7);
     g.clear();
+    // M3 step 8: the tongue of fire out of a gun port (points east; turned to the side that fired).
+    g.fillStyle(0xff7a1a, 1);
+    g.fillTriangle(0, 1, 0, 6, 10, 3.5);
+    g.fillStyle(0xffd34a, 1);
+    g.fillTriangle(0, 2, 0, 5, 7, 3.5);
+    g.fillStyle(0xfffbe0, 1);
+    g.fillRect(0, 3, 3, 1);
+    g.generateTexture('muzzle', 11, 7);
+    g.clear();
     // Gun smoke: a soft grey puff (a darker edge, a lighter middle).
     g.fillStyle(0xbfc3c7, 1);
-    g.fillCircle(5, 5, 5);
+    g.fillCircle(7, 7, 7);
     g.fillStyle(0xdfe2e4, 1);
-    g.fillCircle(4, 4, 3);
-    g.generateTexture('smoke', 11, 11);
+    g.fillCircle(6, 6, 5);
+    g.fillStyle(0xf2f3f4, 1);
+    g.fillCircle(5, 5, 2);
+    g.generateTexture('smoke', 15, 15);
     g.destroy();
   }
 }

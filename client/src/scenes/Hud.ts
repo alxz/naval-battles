@@ -556,7 +556,7 @@ export function debugLines(info: {
     `version ${VERSION}`,
     'A / D rudder     W / S sails',
     'Q / E fire port / starboard',
-    'Z bow chaser   1 2 3 ammo',
+    'SPACE bow chaser  1 2 3 ammo',
     '+ / - guns up / down',
     'Shift + / - or wheel: zoom',
     'M sound  C chart  ESC pause  H hide',

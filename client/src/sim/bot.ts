@@ -15,7 +15,7 @@ import { crewShare, gunsManned, sailShare } from './condition';
 import { courageOf, nextTradeStop, odds, tradeStops } from './morale';
 import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
-import { berthWaitSpot, berthsTaken, inHarbour, nearestPort, portWaypoint, portsCached, portsOf } from './port';
+import { berthWaitSpot, berthsTaken, inHarbour, inletWayOut, nearestPort, portWaypoint, portsCached, portsOf } from './port';
 import type { Port } from './port';
 import { degToRad, normalizeAngle, twaDeg } from './angles';
 import { BOTS, DAMAGE, GUNS, polarOf, SHIP_CLASSES, SKILLS, WORLD } from './data';
@@ -864,9 +864,12 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     goal = via(portExit(nearest.port, ship, 150));
   }
   if (!routed) delete bot.route; // a way planned earlier (for another goal) is not kept in the world state
-  let steer = steerWithTacks(goal, params, world.wind, bot, p);
+  // M3 step 8: where the harbour boats tow (a harbour, the inlet) a ship needs no tacks: it heads straight for its
+  // goal and the boats pull it (tacking in the narrow inlet put it on the banks again and again).
+  const towed = inHarbour(ship.x, ship.y, portsCached(islands));
+  let steer = towed ? goal : steerWithTacks(goal, params, world.wind, bot, p);
   // Beating along a shore (M3 step 6c): go about early when land is ahead on this tack.
-  if (bot.tack !== 0 && bot.tackSeconds >= p.shoreTackSeconds && landAhead(ship, params, islands, steer, Math.max(p.landLookaheadMinM, ship.speed * p.landLookaheadSeconds))) {
+  if (!towed && bot.tack !== 0 && bot.tackSeconds >= p.shoreTackSeconds && landAhead(ship, params, islands, steer, Math.max(p.landLookaheadMinM, ship.speed * p.landLookaheadSeconds))) {
     bot.tack = bot.tack === 1 ? -1 : 1;
     bot.tackSeconds = 0;
     steer = closeHauled(params, world.wind, bot.tack, p);
@@ -1060,7 +1063,8 @@ function leavePort(world: World, bot: BotState, ship: ShipState, params: ShipPar
   bot.mode = 'outlaw';
   bot.side = null;
   // Away from the port; out of a harbour up an inlet: out through the inlet's mouth (sim/path.ts).
-  let steer = steerWithTacks(headingVia(bot, ship, islands, portExit(port, ship, 400), p), params, world.wind, bot, p);
+  const outGoal = headingVia(bot, ship, islands, portExit(port, ship, 400), p);
+  let steer = inHarbour(ship.x, ship.y, [port]) ? outGoal : steerWithTacks(outGoal, params, world.wind, bot, p);
   const clear = avoidShips(ship, params, world.ships, steer, p);
   if (clear !== null) steer = clear;
   const away = avoidLand(ship, params, islands, steer, bot.route ? ROUTE_LOOK : p);
@@ -1075,9 +1079,13 @@ function leavePort(world: World, bot: BotState, ship: ShipState, params: ShipPar
 
 /**
  * A point to sail to when leaving a port (M3 step 6c): `distanceM` beyond the edge of its safe water
- * on the ship's side; for a harbour up an inlet, `distanceM` off the inlet's mouth.
+ * on the ship's side; for a harbour up an inlet, `distanceM` off the inlet's mouth (and on the inlet,
+ * the next point of its middle line toward the mouth, M3 step 8).
  */
 export function portExit(port: Port, ship: ShipState, distanceM: number): Point {
+  // M3 step 8: on the inlet itself, the next point of its middle line toward the mouth (the bends).
+  const along = inletWayOut(ship.x, ship.y, port);
+  if (along) return along;
   const mouth = port.path?.[0];
   const second = port.path?.[1];
   if (mouth && second) {

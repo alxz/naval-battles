@@ -117,7 +117,7 @@ export class TuningPanel {
       .add(v, 'logicalHeight', 160, 480, 20)
       .name('logical height')
       .onFinishChange((h: number) => callbacks.onLogicalHeight(h));
-    view.add(v, 'combatCamera').name('camera circle');
+    view.add(v, 'combatCamera').name('camera looks ahead');
     view.add(v, 'autoZoom').name('auto combat zoom');
     view.add(v, 'closeFightRange', 60, 250, 10).name('close fight (m)');
     view.add(v, 'rangeRings').name('range rings');

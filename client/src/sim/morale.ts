@@ -76,7 +76,21 @@ export function odds(ship: ShipState, enemy: ShipState): number {
  * stop to stop at random, so its run is not always the shortest one.
  */
 export function tradeStops(params: ShipParams, islands: readonly Island[], ports: readonly Port[], p: BotParams = BOTS): { x: number; y: number }[] {
-  const stops: { x: number; y: number }[] = ports.map((port) => ({ x: port.x, y: port.y }));
+  // A port up an inlet: the stop is off the inlet's mouth (M3 step 8: traders on a run ground at the mouth
+  // when they head for the harbour inside, which they do not enter unless they go there for repairs).
+  const stops: { x: number; y: number }[] = [];
+  for (const port of ports) {
+    const a = port.path?.[0];
+    const b = port.path?.[1];
+    if (!a || !b) {
+      stops.push({ x: port.x, y: port.y });
+      continue;
+    }
+    const l = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const off = { x: a.x + ((a.x - b.x) / l) * p.traderMouthOffM, y: a.y + ((a.y - b.y) / l) * p.traderMouthOffM };
+    const spot = nearestOpenWater(off.x, off.y, params, islands, WORLD, 400);
+    if (spot) stops.push(spot);
+  }
   const midX = (WORLD.minX + WORLD.maxX) / 2;
   const midY = (WORLD.minY + WORLD.maxY) / 2;
   for (const island of islands) {

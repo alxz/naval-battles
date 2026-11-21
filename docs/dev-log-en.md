@@ -4,6 +4,48 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (evening) — M3 step 8: your test of 7f; the inlet; **M3 closed**
+
+### Your test (battle log 1425, arena log 1817)
+
+Battle: you sank a sloop and a brigantine (2% hull left!); the caravel ran. Arena (1 h 21 min, 10 bots): frigates 18 wins / 13 losses, sloops 11 / 10 (11 escapes), brigantine 7 / 2, fluyt 0 / 10, caravel 0 / 1 (2 escapes); 225 bow chaser shots, 109 stern salvos, 0 warnings. **64 groundings, 42 of them at the Isla Verde inlet** (a brigantine 23 times, a caravel 19). (The "arena" file you named, battle log 1127, is the old one from the morning; I read arena log 1817, the newest in your folder.)
+
+### What changed (D65)
+
+- **Camera:** your ship (or the watched bot) stays in the middle of the screen; under way the view looks ahead along the heading, at most one hull length at full speed (`leadOffset` in `view/combatCamera.ts`, `view.json` `cameraLeadHulls` 1). The lead is smoothed; the ship itself is never left behind. Replaces the camera circle (D43). Panel: "camera looks ahead" off = exactly in the middle.
+- **Gun smoke** of black powder: 3 puffs a gun (was 2), bigger (15 px), lasting about 7 s (was 3.6), spreading to 4.5 times its size, thicker (0.6).
+- **Fire in the gun ports:** each gun shows a flash in its port and a tongue of fire out of it (0.16 s), turned to the side that fired.
+- **Space fires the bow chaser** in a battle (Z no more); in the arena Space is still NEXT.
+- **The inlet (step 8):** the causes were (1) ships leaving the harbour cut straight from the harbour to the mouth, across the inside of the inlet's bend, and ground there; (2) inside the inlet they tacked and hit the banks; (3) traders on a trade run headed for the Isla Verde anchorage inside the inlet but were kept out of harbours they do not use, so they ground at the mouth. Now: on the inlet a ship sails along its middle line toward the mouth (`inletWayOut`, used by every way out: `portExit`); where the harbour boats tow a bot needs no tacks and heads straight for its goal; the boats tow along the whole width of the channel (`towPathM` 40 → 60) and a little faster (`towMps` 1.5 → 2.5, for you too); a trade stop at a port up an inlet lies 200 m off its mouth (`traderMouthOffM`). Headless, same seed: inlet groundings 14 → 4 an hour (your log: 42 in 81 min).
+
+### Packs and allies (your question)
+
+There are no allies yet: every bot fights for himself (each ship is its own team). "Pack" (D60) only means a bot likes to join a hunt that others have started, "loner" one that avoids it, so you see several bots on one victim, but they may turn on each other afterwards. Real groups (pairs, packs with a leader, convoys) with shared names or a short union tag are the **Squadrons** milestone (D54). A tag now would show alliances that do not exist.
+
+### Checks
+
+454 tests (new: `step8.test.ts`: the way out along the inlet, a brigantine and a caravel leave the harbour with almost no grounding, trade stops off the mouth; the camera lead); `tsc`; build; test build; headless arena 60 min, 0 warnings; browser computer and iPhone (Space fires the bow chaser, smoke and port fire, camera), no errors.
+
+---
+
+## M3 review (16–20 Nov 2026)
+
+**Done when** (plan): "a pirate and a navy bot fight each other with no help from you, a trader runs and sometimes gets away, and the bot scenarios pass" — **met**: the arena runs for hours without help (10 bots, 0 warnings in all recent logs); traders run, throw cargo and get away (escapes 2–13 an hour); bot scenarios run in Vitest (`botStep6*.test.ts`, `step7*.test.ts`, `step8.test.ts`, headless arena).
+
+**Built:** bigger ships (D39); port law and shore guns (D40); sails, crew, three kinds of shot; collisions v2 and ramming (D44); bot seamanship (D45), ways round the land (A*), harbour boats; fluyt and caravel (D52, D53); courage, fear, running and stern chasers (D55, D56); a battle against bots with classes, flags and bars by distance and a battle log (D57); bow chasers (D58, by hand since D63); pause, END GAME and the winner (D59); bot skills (D60); the headless arena (D46) and the test build; speed work (6e); many screen fixes from your tests (D61–D63, D65).
+
+**Numbers now:** 454 tests; the arena 20–37 sinkings an hour with 10 bots; frigates and sloops win most, the fluyt never (by design it runs); hits per ball 0.3–0.5.
+
+**Moved out of M3:** crew fatigue → M6 (captain and crew); gun wear → M5 (shipyard); `tools/validate_data.py` → M3b (with the map tool); "a small random speed factor per ship" is done by seamanship (D60).
+
+**Known and left:** groundings along other shores (about 25 an hour, short); skills show little in wins and losses yet (few lives per level); the frigate is the strongest ship. Survivors joining the winner (D64) waits for M4.
+
+**Time:** about 6 weeks planned, built in 5 days (16–20 Nov) with long days.
+
+**Next:** your choice between **M3b "Caribbean Sea"** (D48, the new map, proposed) and **M4b "Eyes at Sea"** (D54: before M4). My advice: M4b first (it changes the bots, the map does not depend on it), then M3b, then M4.
+
+---
+
 ## 20 Nov 2026 (later) — M3 step 7f: your test of 7e; chasers by hand, arena table in one line, arena size
 
 ### Your test (battle logs 1212, 1219)

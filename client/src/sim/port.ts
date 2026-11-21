@@ -12,6 +12,7 @@ import { crewOf, sailsOf } from './condition';
 import { DAMAGE, ISLANDS, SHIP_CLASSES } from './data';
 import { nearestOpenWater } from './spawn';
 import type { DamageParams, Island, ShipParams, ShipState, World } from './types';
+import type { Point } from './path';
 
 export interface Port {
   name: string; // the island's name
@@ -97,6 +98,31 @@ export function portWaypoint(x: number, y: number, port: Port): { x: number; y: 
   }
   const next = path[Math.min(path.length - 1, best + 2)]!;
   return { x: next.x, y: next.y, inside };
+}
+
+/**
+ * The way out of a harbour up an inlet (M3 step 8): a ship on the inlet (within `onPathM` of its middle line,
+ * or in the round harbour at its head) heads for the point of the middle line two steps nearer the mouth, so it
+ * follows the bends out instead of cutting the inside of a bend (the arena logs: 42 of 64 groundings at the
+ * Isla Verde inlet's bend, on a straight line from the harbour to the mouth). Null when the ship is not on the
+ * inlet, or is already at the mouth (then it sails straight out).
+ */
+export function inletWayOut(x: number, y: number, port: Port, onPathM = 90): Point | null {
+  const path = port.path;
+  if (!path || path.length < 3) return null;
+  let best = -1;
+  let bestD = Infinity;
+  path.forEach((q, i) => {
+    const d = Math.hypot(q.x - x, q.y - y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  const inHarbourBasin = port.harbourR !== undefined && Math.hypot(port.x - x, port.y - y) <= port.harbourR;
+  if ((bestD > onPathM && !inHarbourBasin) || best <= 1) return null;
+  const next = path[best - 2]!;
+  return { x: next.x, y: next.y };
 }
 
 /**

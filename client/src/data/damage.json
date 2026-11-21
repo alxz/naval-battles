@@ -38,8 +38,8 @@
     "crewPerSecond": 1.0,
     "berths": 3,
     "berthsInlet": 2,
-    "towMps": 1.5,
-    "towPathM": 40
+    "towMps": 2.5,
+    "towPathM": 60
   },
   "slowdown": {
     "startShare": 0.5,

@@ -47,3 +47,14 @@ export function smoothToward(current: Point, goal: Point, dt: number, timeConsta
   const k = timeConstant <= 0 ? 1 : 1 - Math.exp(-dt / timeConstant);
   return { x: current.x + (goal.x - current.x) * k, y: current.y + (goal.y - current.y) * k };
 }
+
+/**
+ * M3 step 8 (developer's wish: keep my ship in the middle): the camera looks a little ahead of the ship, along its
+ * heading, at most `maxLeadM` (one hull length) and in proportion to the speed; never more than `maxShare` of the
+ * smaller half of the screen. The offset from the ship's centre is returned (the scene smooths it).
+ */
+export function leadOffset(headingRad: number, speedMps: number, maxSpeedMps: number, maxLeadM: number, halfWidthM: number, halfHeightM: number, maxShare: number): Point {
+  const share = maxSpeedMps > 0 ? Math.max(0, Math.min(1, speedMps / maxSpeedMps)) : 0;
+  const lead = Math.min(maxLeadM, maxShare * Math.min(halfWidthM, halfHeightM)) * share;
+  return { x: Math.cos(headingRad) * lead, y: Math.sin(headingRad) * lead };
+}

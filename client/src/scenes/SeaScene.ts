@@ -40,7 +40,7 @@ import { wheelAction } from '../view/wheelZoom';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
-import { cameraCircleRadius, circleCamera, nearest, smoothToward } from '../view/combatCamera';
+import { leadOffset, nearest, smoothToward } from '../view/combatCamera';
 import type { Point } from '../view/combatCamera';
 import type { PixelLayout } from '../view/pixelLayout';
 import { Cannonballs } from './Cannonballs';
@@ -162,6 +162,7 @@ export class SeaScene extends Phaser.Scene {
   private shownZoom = 1; // the zoom on the screen now (between steps only while changing)
   private targetCircle: Circle | null = null; // the circle the moving target sails round
   private ballsFired = 0; // your balls since the last reset (for the hit count)
+  private cameraLead = { x: 0, y: 0 }; // the smoothed look-ahead of the camera (M3 step 8)
   private wreckAge: number[] = []; // seconds each sunk ship has been a wreck (0 = afloat)
   private sunkBy = 0; // the ship that sank you (for the banner)
   private enemyBalls = 0; // the enemy's balls this duel (for the banner)
@@ -491,23 +492,22 @@ export class SeaScene extends Phaser.Scene {
     const myParams = SHIP_CLASSES[myShip.shipClass];
     if (myParams) this.markers2.update(myShip, myParams, s, this.sim.world.wind.strength, seconds);
 
-    // 4. The camera circle (D43): your ship (or the watched bot) sails freely inside a circle round the
-    // middle of the screen; the camera follows only when it would leave it. The spyglass (or the
-    // panel's "camera circle" off) centres the view on the ship, smoothly.
+    // 4. The camera (M3 step 8, replaces the camera circle of D43): your ship (or the watched bot) stays in the
+    // middle of the screen; under way the view looks ahead along its heading, at most one hull length at full
+    // speed (view/combatCamera.ts leadOffset). The lead is smoothed, the ship itself is never left behind.
+    // The spyglass (or the panel's "look ahead" off) puts the ship exactly in the middle.
     const spyglassOn = this.spyglassLeft > 0;
-    const radius =
-      v.combatCamera && !spyglassOn
-        ? cameraCircleRadius(SHIP_CLASSES[myShip.shipClass]?.length ?? 36, halfW, halfH, viewJson.cameraCircleHulls, viewJson.cameraCircleMaxShare)
-        : 0;
+    const myClass = SHIP_CLASSES[myShip.shipClass];
+    const goalLead =
+      v.combatCamera && !spyglassOn && myClass
+        ? leadOffset(me.headingRad, myShip.speed, myClass.maxSpeed, myClass.length * viewJson.cameraLeadHulls, halfW, halfH, viewJson.cameraCircleMaxShare)
+        : { x: 0, y: 0 };
+    this.cameraLead = smoothToward(this.cameraLead, goalLead, seconds, viewJson.combatCameraSmoothing * 3);
     if (this.freeView) {
       // The arena's free view: W A S D / arrows move it too.
       this.cameraCentre = this.freeView;
-    } else if (!this.cameraCentre) {
-      this.cameraCentre = { x: me.x, y: me.y };
     } else {
-      // Pulled along by the circle; then smoothly toward the ship if it is still outside (a new circle size, the spyglass).
-      const pulled = circleCamera(this.cameraCentre, me, radius + viewJson.cameraCircleSlackM);
-      this.cameraCentre = smoothToward(pulled, circleCamera(pulled, me, radius), seconds, viewJson.combatCameraSmoothing);
+      this.cameraCentre = { x: me.x + this.cameraLead.x, y: me.y + this.cameraLead.y };
     }
     cam.centerOn(this.cameraCentre.x * s, this.cameraCentre.y * s);
 
@@ -690,7 +690,7 @@ export class SeaScene extends Phaser.Scene {
     else {
       // Read (and forget) the presses, so a key pressed while sunk does not act after "Sail again".
       const KD = Phaser.Input.Keyboard;
-      [this.keys.Q, this.keys.E, this.keys.Z, this.keys.W, this.keys.S, this.cursors.up, this.cursors.down, ...this.ammoKeys].forEach((k) => k && KD.JustDown(k));
+      [this.keys.Q, this.keys.E, this.keys.Z, this.keys.SPACE, this.keys.W, this.keys.S, this.cursors.up, this.cursors.down, ...this.ammoKeys].forEach((k) => k && KD.JustDown(k));
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
@@ -731,7 +731,7 @@ export class SeaScene extends Phaser.Scene {
     });
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) this.firePlayer('port');
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.firePlayer('starboard');
-    if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) this.firePlayer('bow');
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) this.firePlayer('bow');
     const shift = this.keys.SHIFT.isDown; // Shift + / Shift - zoom (M3 step 7c)
     const up = this.keys.R.isDown || (!shift && this.raiseKeys.some((k) => k.isDown)) || this.hud.raise || (this.touch?.raise ?? false);
     const down = this.keys.F.isDown || (!shift && this.lowerKeys.some((k) => k.isDown)) || this.hud.lower || (this.touch?.lower ?? false);
