@@ -100,7 +100,7 @@ describe('ports', () => {
     world.bots = [newBot(botShip!.id, me!.id, world)];
     let docked = false;
     let best = botShip!.hull;
-    for (let i = 0; i < 30 * 400 && !(docked && world.bots[0]!.mode === 'chase'); i++) {
+    for (let i = 0; i < 30 * 400 && !(docked && world.bots[0]!.mode === 'trade'); i++) {
       for (const c of thinkBots(world, ISLANDS)) applyCommand(world, c);
       stepWorld(world);
       if (world.bots[0]!.mode === 'port' && isDocked(botShip!)) docked = true;
@@ -108,7 +108,8 @@ describe('ports', () => {
     }
     expect(docked).toBe(true);
     expect(best).toBeGreaterThanOrEqual(full * DAMAGE.port.maxShare - 0.01);
-    expect(world.bots[0]!.mode).toBe('chase');
+    // M4b step 2: the enemy is far out of sight, so a mended bot comes out and sails on (a search), it does not know where the enemy is.
+    expect(world.bots[0]!.mode).toBe('trade');
   });
 
   it('a sensible bot does not fire at a sound enemy in safe water (no reckless finishing attack)', () => {

@@ -4,6 +4,22 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (night, later) — M4b step 2: bots act on what they know (D67)
+
+### Idea
+Until now a bot read its enemy straight from the world: place, course, hull, crew, even through an island and 3 km away. Now the enemy is the bot's *belief*: built from its contact list (`believedShip` in `sim/perception.ts`). In view: the latest place and, as far as the sight level allows, course and speed (silhouette, 600 m) and hull and crew (within 200 m); farther off the enemy is taken as sound. Out of view: it stays at the last known place and does not move.
+
+### Done
+- `bot.ts`: the enemy of `thinkBot` is the belief; an enemy out of view is sought at its last known place (mode chase, no broadside, no ram, no finishing blow) and **no shot is fired at what cannot be seen**. With nobody known a sound bot **cruises** (`cruise`: the trade run, like a trader; mode `trade`) instead of lying still; a hurt one goes to a port within `portSeekRange` or mends where it is. A cruising bot that finds an enemy gives chase.
+- `arena.ts` (`chooseTargets`): a new target must be a ship in view; the old target may be a last known place; hull is weighed only where known.
+- `perception.ts`: `believedShip`, `Contact.levelNow`; a sunk ship leaves a list at once only if the watcher saw it a moment before.
+- Tests: `perceptionBots.test.ts` (7: belief, no shot at the unseen, search at the last place, a hidden ship is not chosen) and three old tests changed on purpose: a bot whose enemy is sunk now sails on; a mended bot comes out in `trade` mode.
+- Headless arena, 60 game minutes, seed 5150: 27 wins, 28 sinkings, 0 warnings, 14 groundings; a ship sees 3.7 others on average. A solo battle: the ships start within 1000 m of each other, so nothing changes at the start.
+- Version `M4b 2`. 473 tests, build and build:test green.
+
+### What to look at in your test
+Bots now lose you behind an island or beyond ~1000 m and look for you at the last place they saw you; far from everybody they sail along trade runs. Please check that a bot you slip away from really loses you, and that no bot stands idle.
+
 ## 20 Nov 2026 (night, later) — M4b step 1: what a ship sees (D66)
 
 ### Idea

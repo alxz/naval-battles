@@ -17,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M4b step 1 (perception: every ship keeps a list of the ships it has seen, counted in the log; nothing uses it yet); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
+export const BUILD_LABEL = 'M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */

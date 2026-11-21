@@ -13,6 +13,7 @@
 import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
 import { crewShare, gunsManned, sailShare } from './condition';
 import { courageOf, nextTradeStop, odds, tradeStops } from './morale';
+import { believedShip, contactOf } from './perception';
 import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
 import { berthWaitSpot, berthsTaken, inHarbour, inletWayOut, nearestPort, portWaypoint, portsCached, portsOf } from './port';
@@ -568,7 +569,9 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   if (bot.route) bot.route.ageSeconds += thinkSeconds;
   const commands: Command[] = [];
   const id = ship.id;
-  const enemy = world.ships.find((s) => s.id === bot.enemyId);
+  // M4b step 2: the enemy is what this ship believes about it (its contact), not the real ship of the world.
+  const enemy = believedShip(world, id, bot.enemyId, ship.shipClass);
+  const seen = !world.sight || !!contactOf(world, id, bot.enemyId)?.visible; // in view right now (else: the last known place)
 
   // --- Stuck? (M3 step 4c) A bot that wanted to move but did not get anywhere works free first. ---
   const working = workFree(world, bot, ship, params, islands, thinkSeconds, p);
@@ -602,7 +605,10 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   if (!enemy || enemy.sunk) {
     const full = params.hullPoints;
     const port = nearestPort(ship.x, ship.y, portsFor(portsOf(islands), params, p));
-    if (port && ship.hull < full * DAMAGE.port.maxShare - 1e-6 && world.arena) return sailToPort(world, bot, ship, params, islands, port, p);
+    if (port && ship.hull < full * DAMAGE.port.maxShare - 1e-6 && (world.arena || port.distance <= p.portSeekRange)) return sailToPort(world, bot, ship, params, islands, port, p);
+    // M4b step 2: nobody in view and none remembered: a sound ship goes on its way (a search), a hurt one lies still and mends.
+    const sound = ship.hull >= full * DAMAGE.repair.seaMaxShare - 1e-6;
+    if (world.sight && !world.arena?.peace && sound && !ship.offender) return cruise(world, bot, ship, params, islands, p);
     bot.mode = 'idle';
     if (ship.sailLevel !== 0) commands.push({ type: 'setSails', shipId: id, value: 0 });
     if (ship.rudder !== 0) commands.push({ type: 'setRudder', shipId: id, value: 0 });
@@ -666,7 +672,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     traderMode(world, bot, ship, enemy, distance, hullShare, courage, ports, p);
     if ((bot.mode === 'flee' || bot.mode === 'repair') && port && port.distance <= p.portSeekRange && hullShare < DAMAGE.port.maxShare - 1e-6) bot.mode = 'port';
   } else {
-    if (bot.mode === 'finish') bot.mode = 'chase';
+    if (bot.mode === 'finish' || bot.mode === 'trade') startChase(bot, distance); // (a cruising ship that finds an enemy gives chase)
     updateMode(bot, distance, thinkSeconds, p, hullShare);
     // Badly hurt and a port is within reach: run for the port instead of the open sea.
     if ((bot.mode === 'flee' || bot.mode === 'repair') && port && port.distance <= p.portSeekRange) bot.mode = 'port';
@@ -748,6 +754,14 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       commands.push({ type: 'jettison', shipId: id });
     }
     bot.weighDistance = distance;
+  }
+
+  // M4b step 2: an enemy out of view is sought at the last place it was seen: no broadside, no ram, no finishing blow.
+  if (!seen && (bot.mode === 'engage' || bot.mode === 'ram' || bot.mode === 'finish')) {
+    bot.mode = 'chase';
+    delete bot.ramLeft;
+    delete bot.finishLeft;
+    ramming = false;
   }
 
   // --- Course and sails. ---
@@ -908,7 +922,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // Ammunition (M3 step 4): grape at close range, chain at a faster enemy whose sails still draw,
   // round shot for everything else. Takes effect from the next think (the aim uses the loaded kind).
   // A trader on its run (M3 step 7b) does not start a fight: its guns are for defence.
-  if (bot.mode === 'trade') return commands;
+  if (bot.mode === 'trade' || !seen) return commands; // (no shot at a ship that cannot be seen)
   const ammo = chooseAmmo(ship, params, enemy, distance, p, bot.rammer === true);
   if (ammo !== ammoOf(ship)) commands.push({ type: 'setAmmo', shipId: id, ammo });
   if (enemySafe && !goIn) return commands;
@@ -949,6 +963,63 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
       bot.aimErrorDeg = nextGaussian(world) * bot.personality.aimErrorSigmaDeg; // a new misjudgement for the next broadside
     }
   }
+  return commands;
+}
+
+/**
+ * M4b step 2: nobody in view and none remembered. The ship sails on along a trade run (the next stop: a port or a big
+ * island), like a trader, so that ships meet and find each other, instead of lying still. (First version: no better
+ * search; patrol routes and renegades come later in M4b.)
+ */
+function cruise(world: World, bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams): Command[] {
+  bot.mode = 'trade';
+  bot.side = null;
+  delete bot.quietSeconds;
+  if (!bot.tradeTo || Math.hypot(bot.tradeTo.x - ship.x, bot.tradeTo.y - ship.y) < p.traderArriveM) {
+    const next = nextTradeStop(world, ship, tradeStopsFor(ship.shipClass, params, islands, p), p);
+    if (next) bot.tradeTo = next;
+    else delete bot.tradeTo;
+  }
+  let routed = false;
+  let goal = ship.headingRad;
+  if (bot.tradeTo) {
+    goal = headingVia(bot, ship, islands, bot.tradeTo, p);
+    if (bot.route) routed = true;
+  }
+  const nearest = nearestPort(ship.x, ship.y, portsOf(islands));
+  if (nearest?.port.path && inHarbour(ship.x, ship.y, [nearest.port])) {
+    goal = headingVia(bot, ship, islands, portExit(nearest.port, ship, 150), p);
+    if (bot.route) routed = true;
+  }
+  if (!routed) delete bot.route;
+  const towed = inHarbour(ship.x, ship.y, portsCached(islands));
+  let steer = towed ? goal : steerWithTacks(goal, params, world.wind, bot, p);
+  if (!towed && bot.tack !== 0 && bot.tackSeconds >= p.shoreTackSeconds && landAhead(ship, params, islands, steer, Math.max(p.landLookaheadMinM, ship.speed * p.landLookaheadSeconds))) {
+    bot.tack = bot.tack === 1 ? -1 : 1;
+    bot.tackSeconds = 0;
+    steer = closeHauled(params, world.wind, bot.tack, p);
+  }
+  let sails = p.traderCruiseSails;
+  const clear = avoidShips(ship, params, world.ships, steer, p);
+  if (clear !== null) steer = clear;
+  const touched = contactWith(world, ship.id);
+  if (touched !== null) {
+    const other = world.ships.find((s) => s.id === touched);
+    if (other) {
+      const off = normalizeAngle(Math.atan2(other.y - ship.y, other.x - ship.x) - ship.headingRad);
+      steer = normalizeAngle(ship.headingRad + (off >= 0 ? -1 : 1) * degToRad(p.contactTurnDeg));
+      sails = Math.min(sails, p.minSails);
+    }
+  }
+  const away = avoidLand(ship, params, islands, steer, routed ? ROUTE_LOOK : p);
+  if (away !== null) steer = away;
+  const keepOut = avoidHarbour(ship, islands, steer);
+  if (keepOut !== null) steer = keepOut;
+  const commands: Command[] = [];
+  const rudder = rudderFor(ship, params, steer, world.wind, p, onLeeShore(ship, params, islands, world.wind));
+  if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
+  sails = harbourSails(ship, params, world.wind, islands, sails, p);
+  if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;
 }
 

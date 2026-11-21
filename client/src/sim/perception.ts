@@ -104,7 +104,7 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       const first = !c;
       const better = !!c && level > c.level;
       if (!c) {
-        c = { id: target.id, level, visible: true, x: target.x, y: target.y, seenTick: world.tick, firstTick: world.tick };
+        c = { id: target.id, level, levelNow: level, visible: true, x: target.x, y: target.y, seenTick: world.tick, firstTick: world.tick };
         sight.contacts.push(c);
       }
       const wasVisible = c.visible && !first;
@@ -113,6 +113,7 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       c.x = target.x;
       c.y = target.y;
       if (level > c.level) c.level = level;
+      c.levelNow = level;
       if (level >= 2) {
         c.headingRad = target.headingRad;
         c.speed = target.speed;
@@ -126,14 +127,60 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
     for (const c of [...sight.contacts]) {
       if (seenNow.has(c.id)) continue;
       const gone = !alive.has(c.id);
+      const sawIt = c.visible; // in view at the last update: the watcher saw it go down
       if (c.visible) {
         c.visible = false;
         if (!gone) world.events.push({ type: 'lostSight', shipId: watcher.id, otherId: c.id, x: Math.round(c.x), y: Math.round(c.y) });
       }
-      if (gone || world.tick - c.seenTick >= forgetTicks) {
+      if ((gone && sawIt) || world.tick - c.seenTick >= forgetTicks) {
         sight.contacts.splice(sight.contacts.indexOf(c), 1);
         world.events.push({ type: 'forgotten', shipId: watcher.id, otherId: c.id, x: Math.round(c.x), y: Math.round(c.y) });
       }
     }
   }
+}
+
+/**
+ * M4b step 2: the other ship as the watcher believes it to be: a ShipState built from its contact, for the bot's
+ * decisions. A ship in view is taken live (the latest place, course and speed, as far as the level allows: the
+ * course and speed from the silhouette level, the hull and crew only from close by); a ship out of view stays
+ * at the last known place and is taken as not moving. What the watcher cannot know is filled in as "as good as
+ * new". `undefined` = no contact (never seen, or forgotten). With no lists in the world at all (perception has
+ * not run yet, or a unit test of the old rules) the real ship is returned.
+ */
+export function believedShip(world: World, watcherId: number, otherId: number, fallbackClass: string): ShipState | undefined {
+  const real = world.ships.find((s) => s.id === otherId);
+  if (!world.sight) return real;
+  const c = contactOf(world, watcherId, otherId);
+  if (!c) return undefined;
+  const live = c.visible && real && !real.sunk ? real : undefined;
+  const shipClass = c.shipClass ?? fallbackClass;
+  const params = SHIP_CLASSES[shipClass];
+  const full = params?.hullPoints ?? 1;
+  const know2 = !!live && c.levelNow >= 2;
+  const know4 = !!live && c.levelNow >= 4;
+  const ship: ShipState = {
+    id: otherId,
+    shipClass,
+    x: live ? live.x : c.x,
+    y: live ? live.y : c.y,
+    headingRad: know2 ? live.headingRad : c.headingRad ?? 0,
+    speed: know2 ? live.speed : c.visible ? c.speed ?? 0 : 0,
+    rudder: 0,
+    sailLevel: 1,
+    aground: false,
+    elevationDeg: 0,
+    reloadPort: 0,
+    reloadStarboard: 0,
+    hull: know4 ? live.hull : (c.hullShare ?? 1) * full,
+    sunk: false,
+    battleSkill: 4,
+    team: real?.team ?? 1,
+    repairing: false,
+  };
+  if (c.nation) ship.nation = c.nation;
+  if (live && c.levelNow >= 3 && live.offender) ship.offender = live.offender; // the flag level: a WANTED ship is known
+  if (know4 && live.crew !== undefined) ship.crew = live.crew;
+  if (know4 && live.sails !== undefined) ship.sails = live.sails;
+  return ship;
 }

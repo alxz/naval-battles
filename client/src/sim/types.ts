@@ -190,6 +190,7 @@ export type SightLevel = 1 | 2 | 3 | 4;
 export interface Contact {
   id: number; // the other ship
   level: SightLevel; // the best level reached so far (what it has learned stays known)
+  levelNow: SightLevel; // the level at the last sighting (what can be seen of it at this moment)
   visible: boolean; // seen at the last update (false = last known place only)
   x: number; // where it was when last seen
   y: number;

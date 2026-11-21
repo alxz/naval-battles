@@ -181,12 +181,12 @@ describe('bot scenarios (headless)', () => {
     expect(aground).toBe(0);
   });
 
-  it('lies still once the enemy is sunk', () => {
+  it('M4b step 2: once the enemy is sunk the bot sails on (a search along a trade run) instead of lying still', () => {
     const w = duel(-150, 0, 0);
     w.ships[0]!.sunk = true;
     run(w, 10);
-    expect(w.bots[0]!.mode).toBe('idle');
-    expect(w.ships[1]!.sailLevel).toBe(0);
+    expect(w.bots[0]!.mode).toBe('trade');
+    expect(w.ships[1]!.sailLevel).toBeGreaterThan(0);
   });
 
   it('the same seed gives the same fight', () => {
