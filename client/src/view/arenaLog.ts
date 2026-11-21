@@ -17,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M3 step 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
+export const BUILD_LABEL = 'M4b step 1 (perception: every ship keeps a list of the ships it has seen, counted in the log; nothing uses it yet); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -140,6 +140,13 @@ export class ArenaLog {
   /** M3 step 7c: wins and losses by skill level (low / mid / high seamanship and gunnery). */
   private readonly skillWins: Record<string, { wins: number; losses: number }> = {};
   private landHits = 0;
+  // M4b step 1 (perception): how often ships saw, lost and forgot each other (counted, not written line by line).
+  private sightFirst = 0;
+  private sightBetter = 0;
+  private sightLost = 0;
+  private sightForgotten = 0;
+  private sightSamples = 0; // how many updates of the lists were counted
+  private sightVisible = 0; // ... and how many ships were in view in all of them
   private escapePoints = 0;
   // M3 step 7d (a battle against bots): balls and hull hits per ship, and the result
   private shots = new Map<number, { balls: number; hits: number; hullLost: number }>();
@@ -190,6 +197,12 @@ export class ArenaLog {
   record(world: World, events: readonly SimEvent[]): void {
     const now = world.tick * (1 / 30);
     const arena = world.arena;
+    if (world.sight && world.tick % 10 === 0) {
+      for (const s of world.sight) {
+        this.sightSamples++;
+        this.sightVisible += s.contacts.filter((c) => c.visible).length;
+      }
+    }
     for (const e of events) {
       if (e.type === 'hit') {
         this.ammoHits[e.ammo] = (this.ammoHits[e.ammo] ?? 0) + 1;
@@ -204,6 +217,9 @@ export class ArenaLog {
         if (e.side === 'bow') this.bowShots++;
       }
       if (e.type === 'landHit') this.landHits++;
+      if (e.type === 'sighted') e.first ? this.sightFirst++ : this.sightBetter++;
+      if (e.type === 'lostSight') this.sightLost++;
+      if (e.type === 'forgotten') this.sightForgotten++;
       if (e.type === 'targetChosen') {
         // A trader (M3 step 7b) does not hunt: it keeps an eye on the nearest danger.
         const trader = SHIP_CLASSES[world.ships.find((x) => x.id === e.shipId)?.shipClass ?? '']?.trader === true;
@@ -416,6 +432,7 @@ export class ArenaLog {
     });
     out.push(`   skills (wins/losses): ${levels.join('; ')}  (sea low < 0.97 < mid < 1.08 < high; gun low < 4 < mid < 6 < high)`);
     out.push(`   spirit: left a fight ${this.leaves['fear'] ?? 0}x from fear, ${this.leaves['odds'] ?? 0}x on poor odds, traders ran ${this.leaves['trader'] ?? 0}x; desperate rams ${this.desperateRams}; cargo thrown over the side ${this.jettisons}x; stern salvos ${this.sternSalvos}; bow chaser shots ${this.bowShots}; balls stopped by the land ${this.landHits}; escape points ${this.escapePoints.toFixed(2)}`);
+    out.push(`   sight (M4b): ships sighted ${this.sightFirst}x (a better level ${this.sightBetter}x), lost from view ${this.sightLost}x, forgotten ${this.sightForgotten}x; a ship had on average ${(this.sightSamples > 0 ? this.sightVisible / this.sightSamples : 0).toFixed(1)} others in view`);
     return out;
   }
 

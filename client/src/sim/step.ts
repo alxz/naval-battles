@@ -1,3 +1,4 @@
+import { stepPerception } from './perception';
 import { cargoSpeedFactor, crewAccelFactor, crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
 import { collideShips } from './collide';
 import { stepRepair } from './repair';
@@ -176,5 +177,6 @@ export function stepWorld(
   stepLaw(world, dt); // port law: offenders that stayed away long enough are pardoned
   stepShore(world, dt); // the shore guns fire at offenders
   stepGunsAndBalls(world, dt, undefined, islands);
+  stepPerception(world, islands); // M4b: every ship's list of what it has seen (3 times a second)
   world.tick += 1;
 }

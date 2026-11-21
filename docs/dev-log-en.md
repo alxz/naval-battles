@@ -4,6 +4,20 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 20 Nov 2026 (night, later) — M4b step 1: what a ship sees (D66)
+
+### Idea
+Every ship keeps a list of the ships it has seen (a *contact*): the best level reached (1 something is there, 2 silhouette, 3 flag, 4 hull / sails / crew), the last place, course and speed, when it was seen first and last. The list is updated 3 times a second. Land hides ships: the line from the watcher's lookout to the other's masthead is checked against the land height (the same terrain grid that stops cannon balls).
+
+### Done
+- `sim/perception.ts` (`levelAt`, `mastScale`, `lineOfSightClear`, `stepPerception`, `contactOf`, `visibleContacts`), `data/sight.json`, types `Contact`, `ShipSight`, `world.sight`, events `sighted`, `lostSight`, `forgotten`; called at the end of `stepWorld`. No random numbers.
+- 12 tests (`perception.test.ts`): ranges, tall masts, bad visibility, what stays known, lost and forgotten after 60 s, a sunk ship, an island hides a ship.
+- Arena log: one line "sight (M4b)" in the summary (counts and the mean number of ships in view). In a 30-minute headless run (seed 5150): 265 first sightings, 243 losses from view, a ship sees 4.2 others on average, 0 warnings; 30 game minutes in 16 s.
+- Nothing reads the lists yet: bots and screen behave as before. Version `M4b 1`. 466 tests, build and build:test green.
+
+### Next
+Step 2: bots choose targets, aim, chase and flee only from their contacts; a lost enemy is searched for at its last known place.
+
 ## 20 Nov 2026 (night) — M3 step 8b: your test of 8
 
 ### Your test (battle log 1925, arena log 1949, iPad screenshot)

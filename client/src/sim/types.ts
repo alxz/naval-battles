@@ -123,7 +123,11 @@ export type SimEvent =
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
-  | { type: 'rammerLearned'; shipId: number; enemyId: number };
+  | { type: 'rammerLearned'; shipId: number; enemyId: number }
+  // M4b perception (sim/perception.ts): `shipId` is the watcher, `otherId` the ship it saw / lost / forgot.
+  | { type: 'sighted'; shipId: number; otherId: number; level: SightLevel; distance: number; first: boolean }
+  | { type: 'lostSight'; shipId: number; otherId: number; x: number; y: number }
+  | { type: 'forgotten'; shipId: number; otherId: number; x: number; y: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */
 export interface PolarPoint {
@@ -174,6 +178,34 @@ export interface ShipState {
   cargo?: number; // M3 step 7a: how full the hold is, 0..1 (traders only; absent = empty)
   ammo?: AmmoType; // what the next broadside is loaded with
   ammoLeft?: { chain: number; grape: number }; // broadsides of each left; round shot is not counted yet (bought in port in M5)
+}
+
+/**
+ * M4b (D41): what a ship knows about another ship it has seen. Level 1 = something is there (a place only),
+ * 2 = a silhouette (the class, course and speed), 3 = the flag, 4 = close enough to see hull, sails and crew.
+ * Bots decide only from these lists (step 2 of M4b); they do not read the world.
+ */
+export type SightLevel = 1 | 2 | 3 | 4;
+
+export interface Contact {
+  id: number; // the other ship
+  level: SightLevel; // the best level reached so far (what it has learned stays known)
+  visible: boolean; // seen at the last update (false = last known place only)
+  x: number; // where it was when last seen
+  y: number;
+  headingRad?: number; // from level 2
+  speed?: number;
+  shipClass?: string;
+  nation?: string; // from level 3
+  hullShare?: number; // level 4: hull left, 0..1
+  seenTick: number; // the world tick of the last sighting
+  firstTick: number; // the tick of the first sighting
+}
+
+/** One ship's list of contacts (plain data in the world: `world.sight`). */
+export interface ShipSight {
+  shipId: number;
+  contacts: Contact[];
 }
 
 /** The wind as a ship feels it right now. */
@@ -245,6 +277,8 @@ export interface World {
   arena?: ArenaState;
   /** M3 step 6 (D44): pairs of ships that just collided: no new damage between them before `untilTick`. Absent = none. */
   contacts?: { a: number; b: number; untilTick: number; avoidUntilTick?: number }[];
+  /** M4b (D41): what every ship has seen of the others (sim/perception.ts). Made at the first update if absent. */
+  sight?: ShipSight[];
 }
 
 /** The changing state of one port's shore battery (plain data, like everything in the world). */

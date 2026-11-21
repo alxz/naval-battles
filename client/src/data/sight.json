@@ -1,0 +1,15 @@
+{
+  "updateEveryTicks": 10,
+  "levels": {
+    "contactM": 1000,
+    "silhouetteM": 600,
+    "flagM": 400,
+    "detailM": 200
+  },
+  "referenceMastM": 26.4,
+  "mastExponent": 0.5,
+  "mastScaleMin": 0.75,
+  "mastScaleMax": 1.35,
+  "eyeShareOfMast": 0.8,
+  "forgetSeconds": 60
+}
