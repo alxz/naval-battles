@@ -430,6 +430,10 @@ What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b),
 - **Setting a ship on fire** (developer's idea). History: heated shot (balls heated red in a furnace, mostly from shore batteries), fire pots and fireships (an old ship filled with tar and powder, sailed into an enemy fleet). First version, simple: a hit has a small chance to start a fire (more for heated shot from shore guns); a fire burns hull and sails each second until the crew puts it out (the more men, the faster); a fire near the powder can blow the ship up. Bots fear a burning ship nearby. Later: fireships as a tactic; fire spreads to ships alongside. Suggested: after M4 (it needs crew work and morale), a small step of its own.
 - **Islands with more objects** (developer's idea): rocks, cliffs, forts, villages, wrecks on the shore, lighthouses, palm groves; tall ones (cliffs, forts, a church) as terrain heights that stop balls (D56). Suggested: with the new map in M3b, where islands are drawn from the mockup.
 
+## 14. Idea of 23 Nov: your route on the chart (D73, M3b step 1)
+
+Set up to 4 points on the chart; the ship follows them by itself. **First version:** straight legs from the ship to point 1, 2, 3, 4; a fifth point wipes the oldest; the autopilot steers only (sails are yours) and stops when you touch the rudder; against a headwind it beats in tacks at any moment of the route (the wind shifts) and says so on the screen (`HEADWIND - TACKING` next to `AUTO`); no avoidance: land and shoals stop the ship by the usual rules. **Later:** a way round islands and shoals on the M3b navigation grid; stop when an enemy is sighted; time acceleration on long passages (M5); routes in saves (M6).
+
 ## History
 
 | Date | What |
@@ -439,3 +443,4 @@ What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b),
 | 18 Nov 2026 | Ideas from the test of step 4 (section 11): finishing shot, port capacity, detail by distance, flags, damage pictures, island placement |
 | 19 Nov 2026 | Section 12: traders, fear, squadrons, skills; staged by D52–D54 |
 | 19 Nov 2026 (late) | Section 13: fire, island objects |
+| 23 Nov 2026 | Section 14: your route on the chart (D73) |

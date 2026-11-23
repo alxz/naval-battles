@@ -4,6 +4,9 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 23 Nov 2026 (afternoon) — D73: your route and autopilot (proposal accepted)
+- Your idea: up to 4 route points on the chart, the ship follows them; land and shoals are not avoided in the first version. Agreed: first step of M3b (not in M4b, D37). Headwind: option (b), the ship beats in tacks at any moment of the route and the screen says `HEADWIND - TACKING` next to `AUTO`. Details: plan D73, `world-ideas-en.md` section 14.
+
 ## 23 Nov 2026 (morning) — your test of step 5a; M4b step 5c: rams, shore guns' eyes, the helm (D72)
 
 ### Your logs (battle 0808, arena 0828)
