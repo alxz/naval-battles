@@ -11,5 +11,10 @@
   "mastScaleMin": 0.75,
   "mastScaleMax": 1.35,
   "eyeShareOfMast": 0.8,
-  "forgetSeconds": 60
+  "forgetSeconds": 60,
+  "keepFactor": 1.1,
+  "revealM": 1200,
+  "revealSeconds": 5,
+  "hullGlimpseM": 450,
+  "hullGlimpseSteps": 4
 }

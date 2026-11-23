@@ -4,6 +4,7 @@
 import sightJson from '../data/sight.json';
 import { ISLANDS, SHIP_CLASSES } from './data';
 import { terrainFor, ballBlocked } from './terrain';
+import { fogBetween, fogVisibility } from './fog';
 import type { Contact, Island, ShipParams, ShipSight, ShipState, SightLevel, World } from './types';
 
 export interface SightParams {
@@ -15,6 +16,11 @@ export interface SightParams {
   mastScaleMax: number;
   eyeShareOfMast: number;
   forgetSeconds: number;
+  keepFactor: number; // M4b step 5a: a ship in view is lost only beyond this share of its range (no blinking)
+  revealM: number; // M4b step 5a: a ship that fires is heard and its smoke seen this far, through fog and over land
+  revealSeconds: number; // ... for this long after its last shot
+  hullGlimpseM: number; // M4b step 5a: within this range the hull is seen roughly (the screen's one overall bar)
+  hullGlimpseSteps: number; // ... in this many steps (4 = quarters)
 }
 
 export const SIGHT: SightParams = sightJson;
@@ -106,13 +112,22 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       if (!tParams) continue;
       const distance = Math.hypot(target.x - watcher.x, target.y - watcher.y);
       if (distance > reach) continue;
+      // M4b step 5a: fog on the line between the two (or around either) shrinks every range.
+      const vis = visibility * fogVisibility(fogBetween(world.fog, world.wind, watcher.x, watcher.y, target.x, target.y));
       // The watcher's own height counts too (a lookout high up sees over a longer horizon), within mastScaleMax (D69).
-      const level = levelForMasts(distance, mastScale(tParams.mastHeight, p) * Math.max(1, mastScale(wParams.mastHeight, p)), visibility, p);
-      if (level === 0) continue;
-      if (!lineOfSightClear(watcher, wParams, target, tParams, islands, p)) {
+      const mastK = mastScale(tParams.mastHeight, p) * Math.max(1, mastScale(wParams.mastHeight, p));
+      let level: 0 | SightLevel = levelForMasts(distance, mastK, vis, p);
+      // M4b step 5a: a ship in view is kept a little longer (keepFactor) before it is lost, so a ship at the edge of
+      // sight or of a fog bank does not blink in and out of view three times a second.
+      if (level === 0 && sight.contacts.some((q) => q.id === target.id && q.visible) && levelForMasts(distance, mastK, vis * p.keepFactor, p) > 0) level = 1;
+      if (level > 0 && !lineOfSightClear(watcher, wParams, target, tParams, islands, p)) {
         hiddenByLand.add(target.id);
-        continue;
+        level = 0;
       }
+      // M4b step 5a: a ship that fired lately is heard, and its smoke seen, through fog and over land: level 1.
+      const heard = level === 0 && distance <= p.revealM && firedLately(world, target.id);
+      if (heard) level = 1;
+      if (level === 0) continue;
       seenNow.add(target.id);
       let c = sight.contacts.find((q) => q.id === target.id);
       const first = !c;
@@ -134,8 +149,10 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
         c.shipClass = target.shipClass;
       }
       if (level >= 3 && target.nation) c.nation = target.nation;
-      if (level >= 4) c.hullShare = Math.max(0, Math.min(1, target.hull / tParams.hullPoints));
-      if (first || better || !wasVisible) world.events.push({ type: 'sighted', shipId: watcher.id, otherId: target.id, level: c.level, distance: Math.round(distance), first, again: !first && !wasVisible, levelNow: level });
+      const share = Math.max(0, Math.min(1, target.hull / tParams.hullPoints));
+      if (level >= 4) c.hullShare = share;
+      else if (level >= 2 && distance <= p.hullGlimpseM * vis) c.hullShare = roughHull(share, p); // M4b step 5a: the overall look of the ship
+      if (first || better || !wasVisible) world.events.push({ type: 'sighted', shipId: watcher.id, otherId: target.id, level: c.level, distance: Math.round(distance), first, again: !first && !wasVisible, levelNow: level, ...(heard ? { heard: true } : {}) });
     }
     // Not seen now: remember the last place, then forget.
     for (const c of [...sight.contacts]) {
@@ -153,6 +170,62 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
         sight.contacts.splice(sight.contacts.indexOf(c), 1);
         world.events.push({ type: 'forgotten', shipId: watcher.id, otherId: c.id, x: Math.round(c.x), y: Math.round(c.y) });
       }
+    }
+  }
+}
+
+/** M4b step 5a: the hull as it looks from 200-450 m: rounded up to quarters (a ship afloat never looks like 0). */
+export function roughHull(share: number, p: SightParams = SIGHT): number {
+  const n = Math.max(1, p.hullGlimpseSteps);
+  return Math.min(1, Math.max(0, Math.ceil(share * n - 1e-9)) / n);
+}
+
+/** Has this ship fired within revealSeconds? (world.gunfire, kept by noteGunfire) */
+export function firedLately(world: World, shipId: number): boolean {
+  return !!world.gunfire?.some((g) => g.shipId === shipId && g.untilTick > world.tick);
+}
+
+/**
+ * M4b step 5a: a shot gives the shooter away. Called every step after the guns: each ship that fired is marked for
+ * revealSeconds, and every ship within revealM that did not have it in view gets it at once as "something there"
+ * (level 1, its place), so a bot can turn toward the gunfire and the screen may show the smoke. The 3-a-second
+ * update (stepPerception) keeps it in view while the mark lasts.
+ */
+export function noteGunfire(world: World, p: SightParams = SIGHT): void {
+  const shooters = new Set<number>();
+  for (const e of world.events) if (e.type === 'gunFired') shooters.add(e.shipId);
+  if (world.gunfire) world.gunfire = world.gunfire.filter((g) => g.untilTick > world.tick);
+  if (shooters.size === 0) return;
+  const until = world.tick + Math.round(p.revealSeconds / STEP_SECONDS);
+  world.gunfire ??= [];
+  for (const id of shooters) {
+    const mark = world.gunfire.find((g) => g.shipId === id);
+    if (mark) mark.untilTick = until;
+    else world.gunfire.push({ shipId: id, untilTick: until });
+    const shooter = world.ships.find((s) => s.id === id);
+    if (!shooter || shooter.sunk || !world.sight) continue;
+    for (const watcher of world.ships) {
+      if (watcher.id === id || watcher.sunk) continue;
+      const distance = Math.hypot(shooter.x - watcher.x, shooter.y - watcher.y);
+      if (distance > p.revealM) continue;
+      let sight = world.sight.find((s) => s.shipId === watcher.id);
+      if (!sight) {
+        sight = { shipId: watcher.id, contacts: [] };
+        world.sight.push(sight);
+      }
+      let c = sight.contacts.find((q) => q.id === id);
+      if (c?.visible) continue;
+      const first = !c;
+      if (!c) {
+        c = { id, level: 1, levelNow: 1, visible: true, x: shooter.x, y: shooter.y, seenTick: world.tick, firstTick: world.tick };
+        sight.contacts.push(c);
+      }
+      c.visible = true;
+      c.levelNow = 1;
+      c.seenTick = world.tick;
+      c.x = shooter.x;
+      c.y = shooter.y;
+      world.events.push({ type: 'sighted', shipId: watcher.id, otherId: id, level: c.level, distance: Math.round(distance), first, again: !first, levelNow: 1, heard: true });
     }
   }
 }

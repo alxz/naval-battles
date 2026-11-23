@@ -13,9 +13,6 @@
     "fluyt": 2,
     "frigate": 1
   },
-  "detailFullM": 200,
-  "detailHullM": 450,
-  "flagSightM": 400,
   "terrain": {
     "cellM": 10,
     "slope": 0.3,

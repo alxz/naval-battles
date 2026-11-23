@@ -14,6 +14,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createArenaWorld } from '../src/sim/arena';
+import { makeFog } from '../src/sim/fog';
 import { Simulation } from '../src/sim/simulation';
 import { STEP_SECONDS } from '../src/sim/step';
 import { ArenaLog, BUILD_LABEL, headerLines } from '../src/view/arenaLog';
@@ -55,6 +56,7 @@ function stamp(d = new Date()): string {
 function run(seed: number, index: number): Promise<string> {
   return new Promise((done) => {
     const sim = new Simulation(createArenaWorld(seed));
+    sim.world.fog = makeFog(seed); // M4b step 5a: fog banks for the rules, as in the game
     const log = new ArenaLog(200000);
     for (const line of headerLines(sim.world, seed)) log.add(0, line);
     log.add(0, `headless arena: run ${index + 1}${opt.runs > 0 ? ` of ${opt.runs}` : ''}, ${opt.minutes} game minutes, seed ${seed}`);

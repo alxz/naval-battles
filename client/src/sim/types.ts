@@ -125,7 +125,7 @@ export type SimEvent =
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number }
   // M4b perception (sim/perception.ts): `shipId` is the watcher, `otherId` the ship it saw / lost / forgot.
-  | { type: 'sighted'; shipId: number; otherId: number; level: SightLevel; distance: number; first: boolean; again?: boolean; levelNow?: SightLevel }
+  | { type: 'sighted'; shipId: number; otherId: number; level: SightLevel; distance: number; first: boolean; again?: boolean; levelNow?: SightLevel; heard?: boolean }
   // M4b step 4: `distance` from the watcher to the last known place; `why` = 'land' (in range, an island in the
   // way) or 'range' (too far, or gone from the watcher's reach).
   | { type: 'lostSight'; shipId: number; otherId: number; x: number; y: number; distance?: number; why?: 'land' | 'range' }
@@ -282,6 +282,23 @@ export interface World {
   contacts?: { a: number; b: number; untilTick: number; avoidUntilTick?: number }[];
   /** M4b (D41): what every ship has seen of the others (sim/perception.ts). Made at the first update if absent. */
   sight?: ShipSight[];
+  /** M4b step 5a: fog banks for the rules (sim/fog.ts). Absent = clear air everywhere. */
+  fog?: FogState;
+  /** M4b step 5a: ships that fired lately: heard and seen by their smoke within revealM until `untilTick`. */
+  gunfire?: { shipId: number; untilTick: number }[];
+}
+
+/** One fog bank: a band of puffs lying along the wind (sim/fog.ts). Puff places are relative to the bank's middle. */
+export interface FogBank {
+  x: number; // metres, the middle of the bank
+  y: number;
+  speed: number; // the bank drifts at this share of the drift speed
+  reachM: number; // no puff reaches farther than this from the middle (a quick cut-off)
+  puffs: { along: number; across: number; size: number }[]; // along = metres down the wind, across = to the side, size = diameter
+}
+
+export interface FogState {
+  banks: FogBank[];
 }
 
 /** The changing state of one port's shore battery (plain data, like everything in the world). */

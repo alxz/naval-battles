@@ -4,6 +4,26 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 22 Nov 2026 (night, later) — your test of step 4; M4b step 5a: fog for the rules, gunfire gives the shooter away (D71)
+
+### Your logs (battle 2330, arena 2338 on M4b 4; arena 2300 on M4b 3r)
+- Arena 2338 (43 min, 10 bots): 0 warnings; 418 SIGHTED and 256 LOST SIGHT lines (about 940 an hour), the summary counts match. Groundings 36 in 43 min, 15 of them one brigantine (Sea Wolf) bumping the Empty Barrel Land quay within two minutes while going to port; the 2300 log had 58 in 2 hours. A map and berth matter → M3b.
+- Battle 2330: you were sunk after 71 s, but only 90 of your 264 hull points went to balls: 173 went in six collisions with FLUYT 4 between 00:54 and 01:04 (79, 46, 15, 16, 12, 5). Your sloop sailed into the fluyt (much heavier) again and again; by D44 the lighter ship takes most of a ram. Left as it is; a question for you (see the reply).
+
+### Done (step 5a)
+- **Fog for the rules** (`sim/fog.ts`, `data/fog.json`, `world.fog`): the same 5 banks as the picture, made from the game's seed and drifting down the wind in the world. Fog on the line between two ships (or round either) multiplies every sight range by down to 0.35. The picture (`scenes/Fog.ts`) now draws the world's banks; the panel's "fog" switch adds or removes them. The headless arena has fog too.
+- **A shot gives the shooter away:** within 1,200 m, for 5 s after each shot, through fog and over land, as "something there" (level 1, its place). Log: `SIGHTED: A hears the guns of B: gunfire, 900 m`.
+- **Rough hull at 200–450 m** (`roughHull`, quarters rounded up): the bots' lists and the screen bars and target card use the same rule; the exact hull only at the deck level (200 m). The flag and WANTED come from the flag level, so fog hides them too.
+- **No blinking:** a ship in view is lost only beyond 1.1 × its range (`keepFactor`).
+- **Screen:** no smoke, flash, sound or balls of a ship you cannot see or hear; a wreck behind land is not drawn; the auto zoom in the arena follows SEE ALL / SEE BOT.
+- `world.json` lost the old screen numbers `flagSightM`, `detailHullM`, `detailFullM` (the sight lists decide now).
+
+### Checks
+505 tests (13 new: `sim/fog.test.ts`); build and build:test green. Headless arena 60 min (seed 5150): 26 wins (29 without fog), 0 warnings, 22 groundings, 25 s; lost from view 862 (404 without fog; 137 of the quick regains are gunfire heard again), 320 "hears the guns" lines; about 3,200 log lines an hour, so the log keeps about 3.8 hours. Browser (computer, iPhone 13): fog banks drawn from the world, a ship in a bank kept only as far as the rules allow, no errors.
+
+### Next
+Step 5b: default routes, renegades, false flags, patrol routes.
+
 ## 22 Nov 2026 (night) — M4b step 4: what the watched bot sees; sight lines in the log (D70)
 
 ### Done

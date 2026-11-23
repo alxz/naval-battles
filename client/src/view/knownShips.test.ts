@@ -15,19 +15,19 @@ const open = { speedScale: 1, windDrift: false };
 describe('knownShips', () => {
   it('the viewer and (until the lists exist) everything is shown', () => {
     const w = pair(5000);
-    expect(knownShips(w, 1, false)).toEqual([{ shown: true, dot: false }, { shown: true, dot: false }]);
+    expect(knownShips(w, 1, false)).toMatchObject([{ shown: true, dot: false }, { shown: true, dot: false }]);
   });
   it('far away: not drawn; at the edge of sight: a dot; from the silhouette level: drawn', () => {
     for (const [gap, shown, dot] of [[2500, false, false], [900, false, true], [500, true, false], [100, true, false]] as const) {
       const w = pair(gap);
       stepWorld(w, 1 / 30, open, []);
-      expect(knownShips(w, 1, false)[1]).toEqual({ shown, dot });
+      expect(knownShips(w, 1, false)[1]).toMatchObject({ shown, dot });
     }
   });
   it('the arena observer sees everything', () => {
     const w = pair(2500);
     stepWorld(w, 1 / 30, open, []);
-    expect(knownShips(w, 1, true)[1]).toEqual({ shown: true, dot: false });
+    expect(knownShips(w, 1, true)[1]).toMatchObject({ shown: true, dot: false });
   });
   it('a wreck is shown while it is within the longest sight', () => {
     const w = pair(700);

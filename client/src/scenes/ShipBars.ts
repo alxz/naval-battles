@@ -1,3 +1,4 @@
+import { roughHull } from '../sim/perception';
 import Phaser from 'phaser';
 import { SHIP_CLASSES } from '../sim/data';
 import type { ShipState } from '../sim/types';
@@ -91,7 +92,8 @@ export class ShipBars {
       // M3 step 7d (D41 numbers): 0 = too far to tell, 1 = only the hull bar, 2 = hull, sails and crew.
       const level = detail(i);
       if (!pose || !params || ship.sunk || hidden(i) || level === 0) return;
-      const share = ship.hull / params.hullPoints;
+      // M4b step 5a: from 200-450 m only the overall look of the ship (quarters), as the bots see it.
+      const share = level === 1 ? roughHull(ship.hull / params.hullPoints) : ship.hull / params.hullPoints;
       const bar = shipBar(params, pose.x, pose.y, pose.headingRad, share, s);
       g.fillStyle(0x10161c, 0.75).fillRect(bar.x - 1, bar.y - 1, bar.width + 2, BAR_HEIGHT_PX + 2);
       if (bar.filled > 0) g.fillStyle(barColour(share), 1).fillRect(bar.x, bar.y, bar.filled, BAR_HEIGHT_PX);

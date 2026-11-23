@@ -27,21 +27,15 @@ import { gunsOn, predictLanding, reloadLeft } from '../sim/guns';
 import { turnAbout } from '../view/chaserAim';
 import type { ShipParams, ShipState, Side, SimEvent } from '../sim/types';
 import { battleClasses, createWorld, enemiesFor } from '../sim/world';
-import worldJson from '../data/world.json';
 
 /** M3 step 7d: a trader this far from you has got away (the battle can end without it). */
 const TRADER_GONE_M = 1500;
 
-/** M3 step 7d (D41 numbers): how far you can tell a ship's flag and its state in a battle. */
-const SIGHT = { flagSightM: worldJson.flagSightM, detailFullM: worldJson.detailFullM, detailHullM: worldJson.detailHullM };
-/** What can be seen of a ship at this distance: 0 = class only, 1 = the hull bar, 2 = sails and crew too (the same numbers as the bars over the ships). */
-function distanceDetail(distance: number): 0 | 1 | 2 {
-  return distance <= SIGHT.detailFullM ? 2 : distance <= SIGHT.detailHullM ? 1 : 0;
-}
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
-import { knownShips, observerSeesAll } from '../view/knownShips';
+import { knownShips, observerSeesAll, shotSeen } from '../view/knownShips';
+import { makeFog } from '../sim/fog';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
@@ -449,26 +443,24 @@ export class SeaScene extends Phaser.Scene {
     // (The arena draws its own names, with the same WANTED rule, in ArenaHud.)
     const wanted = (i: number): ShipLabel => {
       const sh = ships[i];
-      return !this.arena && sh && known[i]?.shown && range(i) <= SIGHT.flagSightM && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
+      return !this.arena && sh && known[i]?.shown && (known[i]?.level ?? 0) >= 3 && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
     };
-    // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41
-    // numbers): the flag up to flagSightM from your ship, the hull bar up to detailHullM, sails and
-    // crew up to detailFullM; farther than that you cannot tell.
-    const viewer = ships[this.focusIndex];
-    const range = (i: number): number => (viewer && ships[i] ? Math.hypot(ships[i]!.x - viewer.x, ships[i]!.y - viewer.y) : Infinity);
+    // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41,
+    // since M4b step 5a by the sight lists): the flag from level 3 (400 m), the rough hull bar to hullGlimpseM
+    // (450 m), sails and crew at level 4 (200 m); fog shrinks them; farther than that you cannot tell.
     const nationOf = (i: number): Nation => (ships[i]!.nation as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
-    const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : seeAll || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
-    const detail = (i: number): 0 | 1 | 2 => {
-      if (seeAll) return 2;
-      if (!known[i]?.shown) return 0; // out of sight: nothing is known
-      const d = range(i);
-      return d <= SIGHT.detailFullM ? 2 : d <= SIGHT.detailHullM ? 1 : 0;
-    };
+    // M4b step 5a: the flag from the flag level, the bars by the same rule as the bots' lists (knownShips: rough hull
+    // at 200-450 m, everything at the deck level), all of it shrunk by fog.
+    const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : seeAll || (known[i]?.level ?? 0) >= 3 ? nationOf(i) : null);
+    const detail = (i: number): 0 | 1 | 2 => (known[i]?.shown ? known[i]!.detail : 0);
     this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag, detail, (i) => known[i]?.dot ?? false);
     this.islands.update(s);
     const watched = this.sim.world.ships[this.focusIndex];
     this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);
-    this.fog.update(seconds, this.sim.world.wind, s, v.fog);
+    // M4b step 5a: fog is in the rules now (world.fog); the panel's "fog" switch adds or takes away the banks.
+    if (!v.fog && this.sim.world.fog) delete this.sim.world.fog;
+    if (v.fog && !this.sim.world.fog) this.sim.world.fog = makeFog(this.arenaSeed + this.sim.world.tick);
+    this.fog.update(this.sim.world.fog, this.sim.world.wind, s, v.fog);
     const events = this.sim.takeEvents();
     if (this.arena) this.recordArena(events, seconds);
     else if (this.started) this.recordBattle(events);
@@ -481,9 +473,12 @@ export class SeaScene extends Phaser.Scene {
       if (e.type === 'sunk' && e.shipId === PLAYER_ID) this.sunkBy = e.byShipId;
       if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.myDuelHullHits++;
     }
-    this.playJuice(events, halfW);
-    this.cannonballs.play(events, s, this.sim.world.wind, (id) => this.ship(id)?.headingRad);
-    this.cannonballs.update(this.sim.world.balls, alpha * STEP_SECONDS, s, seconds);
+    // M4b step 5a: no smoke, flash, sound or balls of a ship you cannot see or hear (a shot reveals the shooter
+    // within revealM, so this hides only far-off gunfire).
+    const seenEvents = events.filter((e) => e.type !== 'gunFired' || shotSeen(known, this.sim.world, e.shipId, seeAll));
+    this.playJuice(seenEvents, halfW);
+    this.cannonballs.play(seenEvents, s, this.sim.world.wind, (id) => this.ship(id)?.headingRad);
+    this.cannonballs.update(this.sim.world.balls.filter((b) => shotSeen(known, this.sim.world, b.shipId, seeAll)), alpha * STEP_SECONDS, s, seconds);
 
     const me = poses[this.focusIndex];
     const myShip = this.sim.world.ships[this.focusIndex];
@@ -611,7 +606,7 @@ export class SeaScene extends Phaser.Scene {
             sailShare: sailShare(target),
             crewShare: crewShare(target),
             // M4b step 3: the card shows only what can be seen from here (class and distance; the hull bar within 450 m; sails and crew within 200 m).
-            detail: this.arena ? 2 : distanceDetail(Math.hypot(target.x - myShip.x, target.y - myShip.y)),
+            detail: known[this.sim.world.ships.indexOf(target)]?.detail ?? 0, // M4b step 5a: the same rule as the ship bars
           }
         : null,
       debug: v.debugText,
@@ -669,7 +664,7 @@ export class SeaScene extends Phaser.Scene {
     const v = this.panel.values;
     const me = this.sim.world.ships[this.focusIndex];
     if (!v.autoZoom || !me || this.freeView) return v.zoom;
-    const seen = knownShips(this.sim.world, me.id, this.arena);
+    const seen = knownShips(this.sim.world, me.id, observerSeesAll(this.arena, v.botEyes));
     const others = this.sim.world.ships.filter((sh, i) => sh.id !== me.id && !sh.sunk && (seen[i]?.shown ?? true)); // (M4b step 3: the camera does not frame a ship you cannot see)
     const enemy = nearest(me, others);
     if (!enemy || Math.hypot(enemy.x - me.x, enemy.y - me.y) > viewJson.combatCameraRange) return v.zoom;
@@ -962,6 +957,7 @@ export class SeaScene extends Phaser.Scene {
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.storeBattleLog(); // the battle that just ended stays downloadable (L) until the next one ends
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
+    if (v.fog) this.sim.world.fog = makeFog(seed); // M4b step 5a
     // M3 step 7d: the classes of the bots (the panel's "bot classes": a mix, or one class for all).
     const classes = battleClasses(seed, this.sim.world.ships.length - 1, botMode ? v.botClasses : v.targetClass);
     this.sim.tuning.speedScale = speedScaleFor(v.speedScale, false, viewJson.soloSpeedScale);
@@ -1203,6 +1199,7 @@ export class SeaScene extends Phaser.Scene {
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.arenaSeed = seed;
     this.sim = new Simulation(createArenaWorld(seed, v.arenaBots));
+    if (v.fog) this.sim.world.fog = makeFog(seed); // M4b step 5a
     this.sim.tuning.speedScale = speedScaleFor(v.speedScale, true, viewJson.soloSpeedScale);
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.update(0.05);

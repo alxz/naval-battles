@@ -1,0 +1,17 @@
+{
+  "banks": 5,
+  "puffs": 16,
+  "lengthMinM": 900,
+  "lengthRangeM": 700,
+  "acrossM": 220,
+  "puffSizeMinM": 260,
+  "puffSizeRangeM": 200,
+  "speedMin": 0.7,
+  "speedRange": 0.6,
+  "driftBaseMps": 3,
+  "driftPerWindMps": 7,
+  "marginM": 900,
+  "visibilityInFog": 0.35,
+  "thickCore": 1.5,
+  "lineSamples": 5
+}

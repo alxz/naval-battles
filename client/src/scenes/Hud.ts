@@ -1,3 +1,4 @@
+import { roughHull } from '../sim/perception';
 import { gunsOn, reloadLeft, reloadSecondsOf } from '../sim/guns';
 import { chaserBars, type ChaserGun } from '../view/chaserBar';
 import Phaser from 'phaser';
@@ -354,7 +355,8 @@ export class Hud {
       const detail = tg.sunk ? 1 : tg.detail ?? 2;
       if (detail >= 1) {
         const hb = this.withIcon(this.gfx.target, 'hull', row);
-        this.bar(this.gfx.target, hb, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+        const share = tg.hull / Math.max(1, tg.hullMax);
+        this.bar(this.gfx.target, hb, tg.sunk ? 0 : detail === 1 ? roughHull(share) : share); // M4b step 5a: 200-450 m = the rough look
       }
       if (!tg.sunk && detail >= 2) this.conditionBars(this.gfx.target, { x: row.x, y: row.y + row.h + 2, w: row.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
     }

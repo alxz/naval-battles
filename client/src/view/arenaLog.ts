@@ -17,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M4b step 4 (arena switch: everything / what the watched bot sees, key B; log lines SIGHTED / LOST SIGHT for every pair); M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
+export const BUILD_LABEL = 'M4b step 5a (fog banks for the rules, a shot reveals the shooter within 1200 m, rough hull at 200-450 m, no smoke of unseen ships, wrecks hidden by land); M4b step 4 (arena switch: everything / what the watched bot sees, key B; log lines SIGHTED / LOST SIGHT for every pair); M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -32,8 +32,9 @@ export const STANDINGS_EVERY_SECONDS = 120;
 export const SIGHT_LEVEL_WORDS = ['', 'a sail', 'silhouette', 'flag', 'deck'] as const;
 
 /** "SIGHTED: #1 A (sloop) sees #4 B (frigate): silhouette, 870 m" (`again`: it was in view before). */
-export function sightedLine(world: World, watcherId: number, otherId: number, level: number, distance: number, again: boolean): string {
-  return `SIGHTED${again ? ' again' : ''}: ${who(world, watcherId)} sees ${who(world, otherId)}: ${SIGHT_LEVEL_WORDS[level] ?? '?'}, ${Math.round(distance)} m`;
+export function sightedLine(world: World, watcherId: number, otherId: number, level: number, distance: number, again: boolean, heard = false): string {
+  // M4b step 5a: `heard` = it gave itself away by firing (behind land or in fog).
+  return `SIGHTED${again ? ' again' : ''}: ${who(world, watcherId)} ${heard ? 'hears the guns of' : 'sees'} ${who(world, otherId)}: ${heard ? 'gunfire' : SIGHT_LEVEL_WORDS[level] ?? '?'}, ${Math.round(distance)} m`;
 }
 
 /** "LOST SIGHT: #1 A (sloop) loses #4 B (frigate) behind land, 520 m, last seen at (x, y)". */
@@ -237,7 +238,7 @@ export class ArenaLog {
         else if (e.again) this.sightAgain++;
         else this.sightBetter++;
         // M4b step 4: a line when a ship comes into view (first time or again), not for a better level.
-        if (e.first || e.again) this.add(now, sightedLine(world, e.shipId, e.otherId, e.levelNow ?? e.level, e.distance, !e.first));
+        if (e.first || e.again) this.add(now, sightedLine(world, e.shipId, e.otherId, e.levelNow ?? e.level, e.distance, !e.first, e.heard));
       }
       if (e.type === 'lostSight') {
         this.sightLost++;
