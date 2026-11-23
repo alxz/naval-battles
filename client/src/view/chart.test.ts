@@ -91,4 +91,13 @@ describe('forget', () => {
     forget(chart, []);
     expect(chart.sightings).toHaveLength(1);
   });
+
+  it('M4b step 3: with a "seen" rule of its own, a ship far off the screen can still be in sight', () => {
+    const chart = newChart();
+    updateSightings(chart, [ship(2, 9000, 9000)], view, () => true);
+    expect(chart.sightings[0]!.inSight).toBe(true);
+    updateSightings(chart, [ship(2, 9100, 9000)], view, () => false);
+    expect(chart.sightings[0]!.inSight).toBe(false);
+    expect(chart.sightings[0]!.x).toBe(9000); // the old mark stays where it was last seen
+  });
 });

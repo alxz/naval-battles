@@ -34,9 +34,14 @@ const TRADER_GONE_M = 1500;
 
 /** M3 step 7d (D41 numbers): how far you can tell a ship's flag and its state in a battle. */
 const SIGHT = { flagSightM: worldJson.flagSightM, detailFullM: worldJson.detailFullM, detailHullM: worldJson.detailHullM };
+/** What can be seen of a ship at this distance: 0 = class only, 1 = the hull bar, 2 = sails and crew too (the same numbers as the bars over the ships). */
+function distanceDetail(distance: number): 0 | 1 | 2 {
+  return distance <= SIGHT.detailFullM ? 2 : distance <= SIGHT.detailHullM ? 1 : 0;
+}
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
+import { knownShips } from '../view/knownShips';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
@@ -414,6 +419,8 @@ export class SeaScene extends Phaser.Scene {
 
     // 3. Draw every ship between the last two steps, so the motion looks smooth.
     const poses = this.sim.world.ships.map((_ship, i) => this.sim.pose(i, alpha));
+    // M4b step 3: the screen shows only what the viewer's ship knows (the arena observer sees everything).
+    const known = knownShips(this.sim.world, this.sim.world.ships[this.focusIndex]?.id ?? PLAYER_ID, this.arena);
     this.sim.world.ships.forEach((ship, i) => {
       const pose = poses[i];
       const image = this.shipImages[i];
@@ -424,7 +431,7 @@ export class SeaScene extends Phaser.Scene {
       // a placed one is solid again.
       this.wreckAge[i] = ship.sunk ? (this.wreckAge[i] ?? 0) + seconds : 0;
       const age = this.wreckAge[i] ?? 0;
-      image.setAlpha(ship.sunk ? wreckAlpha(age, viewJson.wreck) : 1).setVisible(!(ship.sunk && wreckGone(age, viewJson.wreck)));
+      image.setAlpha(ship.sunk ? wreckAlpha(age, viewJson.wreck) : 1).setVisible(!(ship.sunk && wreckGone(age, viewJson.wreck)) && (known[i]?.shown ?? true));
       // A hit ship flashes white for a moment (fill tint), then shows its colours again.
       const flash = (this.hitFlash[i] ?? 0) - seconds;
       this.hitFlash[i] = flash;
@@ -438,7 +445,7 @@ export class SeaScene extends Phaser.Scene {
     // (The arena draws its own names, with the same WANTED rule, in ArenaHud.)
     const wanted = (i: number): ShipLabel => {
       const sh = ships[i];
-      return !this.arena && sh && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
+      return !this.arena && sh && known[i]?.shown && range(i) <= SIGHT.flagSightM && isWanted(sh) ? shipLabel(sh, battleName(sh, PLAYER_ID), '#ffffff') : null;
     };
     // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41
     // numbers): the flag up to flagSightM from your ship, the hull bar up to detailHullM, sails and
@@ -446,13 +453,14 @@ export class SeaScene extends Phaser.Scene {
     const viewer = ships[this.focusIndex];
     const range = (i: number): number => (viewer && ships[i] ? Math.hypot(ships[i]!.x - viewer.x, ships[i]!.y - viewer.y) : Infinity);
     const nationOf = (i: number): Nation => (ships[i]!.nation as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
-    const flag = (i: number): Nation | null => (!ships[i] ? null : this.arena || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
+    const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : this.arena || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
     const detail = (i: number): 0 | 1 | 2 => {
       if (this.arena) return 2;
+      if (!known[i]?.shown) return 0; // out of sight: nothing is known
       const d = range(i);
       return d <= SIGHT.detailFullM ? 2 : d <= SIGHT.detailHullM ? 1 : 0;
     };
-    this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag, detail);
+    this.shipBars.update(ships, poses, s, v.shipBars, (i) => !this.arena && i === this.focusIndex, wanted, flag, detail, (i) => known[i]?.dot ?? false);
     this.islands.update(s);
     const watched = this.sim.world.ships[this.focusIndex];
     this.portMarks.update(s, this.time.now / 1000, watched?.offender && !watched.sunk ? watched.offender.port : -1);
@@ -480,7 +488,7 @@ export class SeaScene extends Phaser.Scene {
     const wakeShips = this.sim.world.ships.flatMap((ship, i) => {
       const pose = poses[i];
       const cls = SHIP_CLASSES[ship.shipClass];
-      if (!pose || !cls || ship.sunk) return [];
+      if (!pose || !cls || ship.sunk || !(known[i]?.shown ?? true)) return []; // (what is not seen leaves no wake on the screen)
       return [{ id: ship.id, x: pose.x, y: pose.y, headingRad: pose.headingRad, speed: ship.speed, length: cls.length, beam: cls.beam }];
     });
     this.wake.update(seconds, wakeShips, s);
@@ -527,16 +535,23 @@ export class SeaScene extends Phaser.Scene {
     discover(this.chartState, ISLANDS, seaView);
     // A wreck that has melted away is off the chart too.
     const gone = this.sim.world.ships.filter((sh, i) => sh.sunk && wreckGone(this.wreckAge[i] ?? 0, viewJson.wreck)).map((sh) => sh.id);
-    updateSightings(this.chartState, this.sim.world.ships.filter((sh, i) => i !== this.focusIndex && !gone.includes(sh.id)), seaView);
+    updateSightings(
+      this.chartState,
+      this.sim.world.ships.filter((sh, i) => i !== this.focusIndex && !gone.includes(sh.id)),
+      seaView,
+      // M4b step 3: in a battle a ship is "in sight" when the viewer's ship has it in view (also off the screen), not when it is on the screen.
+      this.arena ? undefined : (sh) => known[this.sim.world.ships.indexOf(sh)] !== undefined && (known[this.sim.world.ships.indexOf(sh)]!.shown || known[this.sim.world.ships.indexOf(sh)]!.dot),
+    );
     forget(this.chartState, gone);
     this.chart.update(this.chartState, myShip, this.sim.world.wind);
 
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
-    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk);
+    // (M4b step 3: in a battle, the ships in view of your ship, at whatever distance it can see them.)
+    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk && (this.arena || known[i]?.shown || known[i]?.dot));
     for (const p of enemies) {
       const distance = Math.hypot(p.x - me.x, p.y - me.y);
-      if (distance > viewJson.sightingRange) continue;
+      if (this.arena && distance > viewJson.sightingRange) continue;
       contacts.push({ screenX: p.x * s - cam.scrollX, screenY: p.y * s - cam.scrollY, distance });
     }
     const hudRects = hudLayout(cam.width, cam.height, this.touch !== null);
@@ -551,11 +566,11 @@ export class SeaScene extends Phaser.Scene {
     const wind = this.sim.world.wind;
     const params = SHIP_CLASSES[myShip.shipClass];
     const sailing = params ? sailingInfo(myShip, params, wind) : { twaDeg: 0, share: 0, noGoDeg: 0 };
-    const target = this.nearestEnemy(myShip) ?? this.ship(TARGET_ID);
+    const target = this.nearestEnemy(myShip, known) ?? this.leftTarget();
     const rangeM = params ? gunRange(myShip, params) : 0;
     // Ship centres on the screen: a HUD panel over one of them turns see-through.
     // A wreck never makes a panel see-through: only ships that float count.
-    const shipsOnScreen = poses.flatMap((p, i) => (this.sim.world.ships[i]?.sunk ? [] : [{ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }]));
+    const shipsOnScreen = poses.flatMap((p, i) => (this.sim.world.ships[i]?.sunk || !(known[i]?.shown ?? true) ? [] : [{ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }]));
     const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
     this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
     this.hud.setDebugBeside(this.arena && this.arenaHud.right() > 0 ? { x: this.arenaHud.right() + 10, y: this.arenaHud.top() + 3 } : null);
@@ -590,6 +605,8 @@ export class SeaScene extends Phaser.Scene {
             repairing: target.repairing,
             sailShare: sailShare(target),
             crewShare: crewShare(target),
+            // M4b step 3: the card shows only what can be seen from here (class and distance; the hull bar within 450 m; sails and crew within 200 m).
+            detail: this.arena ? 2 : distanceDetail(Math.hypot(target.x - myShip.x, target.y - myShip.y)),
           }
         : null,
       debug: v.debugText,
@@ -645,7 +662,8 @@ export class SeaScene extends Phaser.Scene {
     const v = this.panel.values;
     const me = this.sim.world.ships[this.focusIndex];
     if (!v.autoZoom || !me || this.freeView) return v.zoom;
-    const others = this.sim.world.ships.filter((sh) => sh.id !== me.id && !sh.sunk);
+    const seen = knownShips(this.sim.world, me.id, this.arena);
+    const others = this.sim.world.ships.filter((sh, i) => sh.id !== me.id && !sh.sunk && (seen[i]?.shown ?? true)); // (M4b step 3: the camera does not frame a ship you cannot see)
     const enemy = nearest(me, others);
     if (!enemy || Math.hypot(enemy.x - me.x, enemy.y - me.y) > viewJson.combatCameraRange) return v.zoom;
     const cam = this.cameras.main;
@@ -892,13 +910,19 @@ export class SeaScene extends Phaser.Scene {
   }
 
   /** The nearest enemy still afloat. */
-  private nearestEnemy(me: ShipState): ShipState | undefined {
+  private nearestEnemy(me: ShipState, known: readonly { shown: boolean }[]): ShipState | undefined {
     let best: ShipState | undefined;
-    for (const sh of this.sim.world.ships) {
-      if (sh.id === me.id || sh.sunk) continue;
+    this.sim.world.ships.forEach((sh, i) => {
+      if (sh.id === me.id || sh.sunk || !(known[i]?.shown ?? true)) return; // (M4b step 3: only a ship you can see is the target)
       if (!best || Math.hypot(sh.x - me.x, sh.y - me.y) < Math.hypot(best.x - me.x, best.y - me.y)) best = sh;
-    }
+    });
     return best;
+  }
+
+  /** The old target after the last enemy in view is gone: a wreck stays on the card ("SUNK"); a ship you cannot see does not. */
+  private leftTarget(): ShipState | undefined {
+    const t = this.ship(TARGET_ID);
+    return t?.sunk ? t : undefined;
   }
 
   /** Put the target `distance` metres to windward of you, heading for you. */

@@ -4,6 +4,20 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 22 Nov 2026 — M4b step 3: the screen shows only what your ship knows (D68)
+
+### Your test of step 2 (battle log 22 Nov 19:48)
+A 1.5-minute battle against 5 bots: nobody lost you (all start within 1000 m), so "lost from view" was 0 and the search is not tested by it. The two logs you named (arena 1817, battle 1425) are the ones of 20 Nov, before steps 8 and 2; there is no new arena log for step 2. A bot that keeps you in view is normal; to see the search, get away behind an island or beyond about 1000 m.
+
+### Done
+- `view/knownShips.ts` (`knownShips`): for every ship the viewer's list says "shown" (level 2 or better, or a wreck within the longest sight), "dot" (level 1) or nothing. The arena observer sees everything (step 4 adds the switch).
+- `SeaScene`: a ship not shown is not drawn and leaves no wake, has no bars, flag or WANTED label, is no target and does not frame the auto zoom; no arrow for it; a ship at the edge of sight is a dark dot (`ShipBars`) with an arrow; the minimap and the HUD panels do not turn see-through for a ship you cannot see; the chart's "in sight" follows the contact list (`updateSightings` got a `seen` rule).
+- Target card: class and distance always; the hull bar within 450 m, sails and crew within 200 m (`TargetInfo.detail`).
+- Tests: `knownShips.test.ts` (4), `chart.test.ts` (+1): 478 in all. Browser check (computer and iPhone, no errors): ships at 150 and 500 m drawn, at 800 and 2500 m not. Version `M4b 3`.
+
+### Known limits
+The dot at the edge of sight can be seen only in the spyglass (the screen is about 640 m wide at zoom 1). Cannon smoke and balls of an unseen ship are still drawn; a shot revealing the shooter comes in step 5. The hull bar of a ship 200 to 450 m away is the true hull (the bots only know it within 200 m).
+
 ## 20 Nov 2026 (night, later) — M4b step 2: bots act on what they know (D67)
 
 ### Idea

@@ -62,13 +62,14 @@ export function isKnown(state: ChartState, island: Island): boolean {
 }
 
 /**
- * Update the marks of the other ships: one on the screen is marked where it is now;
- * one off the screen keeps its old mark (if it has one) and is no longer "in sight".
+ * Update the marks of the other ships: one in sight is marked where it is now;
+ * one out of sight keeps its old mark (if it has one) and is no longer "in sight".
  */
-export function updateSightings(state: ChartState, others: readonly ShipState[], view: SeaRect): void {
+export function updateSightings(state: ChartState, others: readonly ShipState[], view: SeaRect, seen: (ship: ShipState) => boolean = (ship) => inside(ship, view)): void {
+  // `seen`: is this ship in sight now? (Default: it is on the screen. M4b step 3: in a battle, the viewer's contact list says.)
   for (const ship of others) {
     const old = state.sightings.find((s) => s.shipId === ship.id);
-    if (inside(ship, view)) {
+    if (seen(ship)) {
       const now: Sighting = { shipId: ship.id, shipClass: ship.shipClass, x: ship.x, y: ship.y, headingRad: ship.headingRad, inSight: true, sunk: ship.sunk };
       if (old) Object.assign(old, now);
       else state.sightings.push(now);

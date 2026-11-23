@@ -60,9 +60,15 @@ export class ShipBars {
     label: (i: number) => ShipLabel = () => null,
     flag: (i: number) => Nation | null = () => null,
     detail: (i: number) => 0 | 1 | 2 = () => 1,
+    dot: (i: number) => boolean = () => false,
   ): void {
     const g = this.g;
     g.clear();
+    // M4b step 3: a ship at the edge of sight (level 1) is only a dark dot.
+    ships.forEach((ship, i) => {
+      const pose = poses[i];
+      if (pose && !ship.sunk && dot(i)) g.fillStyle(0x0b1016, 0.9).fillRect(Math.round(pose.x * s) - 2, Math.round(pose.y * s) - 2, 4, 4);
+    });
     // Labels (shown even with the bars switched off): on whole pixels, above the bar's place.
     this.labels.forEach((t, i) => {
       const ship = ships[i];

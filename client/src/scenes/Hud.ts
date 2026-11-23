@@ -38,6 +38,8 @@ export interface TargetInfo {
   repairing: boolean;
   sailShare: number; // 0..1 (M3 step 4)
   crewShare: number; // 0..1
+  /** M4b step 3: how much of it can be seen from here: 0 = class and distance only, 1 = also the hull bar, 2 = also sails and crew. */
+  detail?: 0 | 1 | 2;
 }
 
 /** Everything the HUD needs in one frame. */
@@ -347,9 +349,12 @@ export class Hud {
       this.targetText.setText(`${tg.shipClass}  ${tg.sunk ? 'SUNK' : `${Math.round(tg.distance)} m${tg.repairing ? ' +' : ''}`}`);
       const pad = this.touch ? 6 : 8;
       const row = { x: t.x + pad, y: t.y + t.h - (this.touch ? 8 : 11), w: t.w - 2 * pad, h: this.touch ? 3 : 5 };
-      const hb = this.withIcon(this.gfx.target, 'hull', row);
-      this.bar(this.gfx.target, hb, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
-      if (!tg.sunk) this.conditionBars(this.gfx.target, { x: row.x, y: row.y + row.h + 2, w: row.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
+      const detail = tg.sunk ? 1 : tg.detail ?? 2;
+      if (detail >= 1) {
+        const hb = this.withIcon(this.gfx.target, 'hull', row);
+        this.bar(this.gfx.target, hb, tg.sunk ? 0 : tg.hull / Math.max(1, tg.hullMax));
+      }
+      if (!tg.sunk && detail >= 2) this.conditionBars(this.gfx.target, { x: row.x, y: row.y + row.h + 2, w: row.w, h: this.touch ? 1 : 2 }, tg.sailShare, tg.crewShare);
     }
 
     // --- Guns ---
