@@ -4,6 +4,21 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 22 Nov 2026 (night) — M4b step 4: what the watched bot sees; sight lines in the log (D70)
+
+### Done
+- **Arena switch:** B, the new **SEE ALL / SEE BOT** button (between x8 and LOG) or Tuning → Auto-bot → "bot's eyes (B)". SEE BOT: the screen shows only what the watched bot sees, by the battle rules (D68): out of sight not drawn, a dot at the edge, flag 400 m, hull bar 450 m, sails and crew 200 m; arena names, arrows and the chart by its sight too. Default SEE ALL (D47). In the free view the eyes stay the watched bot's. `observerSeesAll` in `view/knownShips.ts`.
+- **Log lines for every pair** (arena and battle): `SIGHTED: A sees B: silhouette, 740 m` (first time, or `SIGHTED again` after a loss; a better level writes no line) and `LOST SIGHT: A loses B behind land / out of sight range, 520 m, last seen at (x, y)`. The `sighted` event got `again` and `levelNow`, `lostSight` got `distance` and `why` (`land` / `range`). The summary counts "back in view".
+- **Log size:** the sight lines add about 1,150 lines an hour (10 bots): the log keeps 12,000 lines (was 4,000; about 1 MB, about 5 hours).
+- **Touch:** with a target card shown, the arena buttons now go below it (five buttons reached under the card; `Hud.targetRect()`).
+- Help (H) in the arena: "B bot view". Version `M4b 4`.
+
+### Checks
+492 tests (6 new: `view/sightLog.test.ts`); build and build:test green. Headless arena 60 min (seed 5150): 29 wins, 0 warnings; the game is the same as before step 4 line for line (only the new lines differ); 745 SIGHTED and 405 LOST SIGHT lines (156 behind land), 2,268 lines in all. Browser (computer and iPhone 13 landscape): SEE ALL 10 ships drawn, SEE BOT 2–3 (the watched bot's view), no errors (only the missing favicon).
+
+### Still open (step 5)
+Smoke and balls of a ship the viewer cannot see are still drawn; the hull bar at 200–450 m shows the true hull.
+
 ## 22 Nov 2026 (later) — review of the plan and the code (D69, version M4b 3r)
 
 The full review is in the plan, section 6.5. In short:

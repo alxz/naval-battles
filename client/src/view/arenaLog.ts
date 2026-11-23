@@ -17,16 +17,30 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
+export const BUILD_LABEL = 'M4b step 4 (arena switch: everything / what the watched bot sees, key B; log lines SIGHTED / LOST SIGHT for every pair); M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
 export const SPAWN_LAND_WARN_M = 60;
 
-/** Keep at most this many lines (about 300 KB); the oldest go first. */
-export const LOG_MAX_LINES = 4000;
+/** Keep at most this many lines (about 1 MB; M4b step 4: the sight lines add about 1,000 an hour); the oldest go first. */
+export const LOG_MAX_LINES = 12000;
 /** A table of the scores every this many game seconds. */
 export const STANDINGS_EVERY_SECONDS = 120;
+
+/** M4b step 4: the sight levels as words (1 something there, 2 silhouette, 3 flag, 4 hull / sails / crew). */
+export const SIGHT_LEVEL_WORDS = ['', 'a sail', 'silhouette', 'flag', 'deck'] as const;
+
+/** "SIGHTED: #1 A (sloop) sees #4 B (frigate): silhouette, 870 m" (`again`: it was in view before). */
+export function sightedLine(world: World, watcherId: number, otherId: number, level: number, distance: number, again: boolean): string {
+  return `SIGHTED${again ? ' again' : ''}: ${who(world, watcherId)} sees ${who(world, otherId)}: ${SIGHT_LEVEL_WORDS[level] ?? '?'}, ${Math.round(distance)} m`;
+}
+
+/** "LOST SIGHT: #1 A (sloop) loses #4 B (frigate) behind land, 520 m, last seen at (x, y)". */
+export function lostSightLine(world: World, watcherId: number, otherId: number, x: number, y: number, distance?: number, why?: 'land' | 'range'): string {
+  const how = why === 'land' ? ' behind land' : why === 'range' ? ' out of sight range' : '';
+  return `LOST SIGHT: ${who(world, watcherId)} loses ${who(world, otherId)}${how}${distance !== undefined ? `, ${distance} m` : ''}, last seen at (${x}, ${y})`;
+}
 
 /** "mm:ss" (or "h:mm:ss") of game time. */
 export function clock(seconds: number): string {
@@ -143,6 +157,7 @@ export class ArenaLog {
   // M4b step 1 (perception): how often ships saw, lost and forgot each other (counted, not written line by line).
   private sightFirst = 0;
   private sightBetter = 0;
+  private sightAgain = 0; // M4b step 4: back in view after it was lost
   private sightLost = 0;
   private sightForgotten = 0;
   private sightSamples = 0; // how many updates of the lists were counted
@@ -217,8 +232,17 @@ export class ArenaLog {
         if (e.side === 'bow') this.bowShots++;
       }
       if (e.type === 'landHit') this.landHits++;
-      if (e.type === 'sighted') e.first ? this.sightFirst++ : this.sightBetter++;
-      if (e.type === 'lostSight') this.sightLost++;
+      if (e.type === 'sighted') {
+        if (e.first) this.sightFirst++;
+        else if (e.again) this.sightAgain++;
+        else this.sightBetter++;
+        // M4b step 4: a line when a ship comes into view (first time or again), not for a better level.
+        if (e.first || e.again) this.add(now, sightedLine(world, e.shipId, e.otherId, e.levelNow ?? e.level, e.distance, !e.first));
+      }
+      if (e.type === 'lostSight') {
+        this.sightLost++;
+        this.add(now, lostSightLine(world, e.shipId, e.otherId, e.x, e.y, e.distance, e.why));
+      }
       if (e.type === 'forgotten') this.sightForgotten++;
       if (e.type === 'targetChosen') {
         // A trader (M3 step 7b) does not hunt: it keeps an eye on the nearest danger.
@@ -432,7 +456,7 @@ export class ArenaLog {
     });
     out.push(`   skills (wins/losses): ${levels.join('; ')}  (sea low < 0.97 < mid < 1.08 < high; gun low < 4 < mid < 6 < high)`);
     out.push(`   spirit: left a fight ${this.leaves['fear'] ?? 0}x from fear, ${this.leaves['odds'] ?? 0}x on poor odds, traders ran ${this.leaves['trader'] ?? 0}x; desperate rams ${this.desperateRams}; cargo thrown over the side ${this.jettisons}x; stern salvos ${this.sternSalvos}; bow chaser shots ${this.bowShots}; balls stopped by the land ${this.landHits}; escape points ${this.escapePoints.toFixed(2)}`);
-    out.push(`   sight (M4b): ships sighted ${this.sightFirst}x (a better level ${this.sightBetter}x), lost from view ${this.sightLost}x, forgotten ${this.sightForgotten}x; a ship had on average ${(this.sightSamples > 0 ? this.sightVisible / this.sightSamples : 0).toFixed(1)} others in view`);
+    out.push(`   sight (M4b): ships sighted ${this.sightFirst}x (a better level ${this.sightBetter}x, back in view ${this.sightAgain}x), lost from view ${this.sightLost}x, forgotten ${this.sightForgotten}x; a ship had on average ${(this.sightSamples > 0 ? this.sightVisible / this.sightSamples : 0).toFixed(1)} others in view`);
     return out;
   }
 

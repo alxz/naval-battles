@@ -22,6 +22,8 @@ export interface ArenaScreen {
   ship: Rect; // my ship panel: on a touch screen the buttons go under it (the panel is 64 px high on an iPad)
   avoid: Rect; // the target card: the table moves below it when they would overlap (a narrow window)
   seconds: number;
+  known: readonly { shown: boolean }[]; // M4b step 4: names only over ships the screen shows (bot's eyes)
+  botEyes: boolean; // the EYES button: BOT = what the watched bot sees, ALL = everything
 }
 
 const MAX_SHIPS = 12; // name labels (the arena has up to 10 bots since M3 step 7e)
@@ -31,13 +33,15 @@ export interface ArenaButtons {
   onSpeed: () => void; // x1 -> x2 -> x4 -> x8 (T)
   onLog: () => void; // download the log (L)
   onLeave: () => void; // back to a normal battle
+  onEyes: () => void; // M4b step 4: everything / what the watched bot sees (B)
 }
 
 /**
  * What you see in the auto-bot arena (M3 step 2), over the normal HUD of the ship you follow:
  *   - a name over every ship: "#3 Black Gull 12" (number, name, wins); the one you follow in yellow;
  *   - the score table (most wins first), the time and the speed;
- *   - buttons: NEXT (follow the next ship), the speed, LOG (download), LEAVE (above the table, M3 step 7f);
+ *   - buttons: NEXT (follow the next ship), the speed, SEE ALL / SEE BOT (M4b step 4: everything, or what the
+ *     watched bot sees; B), LOG (download), LEAVE (above the table, M3 step 7f);
  *   - the table is one line (time, speed, wins); a tap on it opens the full table.
  * Drag the sea (or W A S D / arrows) to look round freely; NEXT or Space follows a ship again.
  */
@@ -47,6 +51,7 @@ export class ArenaHud {
   private readonly board: Phaser.GameObjects.Text;
   private readonly buttons: Phaser.GameObjects.Text[] = [];
   private readonly speedButton: Phaser.GameObjects.Text;
+  private readonly eyesButton: Phaser.GameObjects.Text;
   private shown = false;
   private touch: boolean;
 
@@ -85,6 +90,7 @@ export class ArenaHud {
     };
     button('NEXT', actions.onNext);
     this.speedButton = button('x1', actions.onSpeed);
+    this.eyesButton = button('SEE ALL', actions.onEyes);
     button('LOG', actions.onLog);
     button('LEAVE', actions.onLeave);
   }
@@ -129,7 +135,7 @@ export class ArenaHud {
       const ship = world.ships[i];
       const pose = poses[i];
       const pilot = arena.pilots.find((p) => p.shipId === ship?.id);
-      if (!ship || !pose || !pilot || ship.sunk) {
+      if (!ship || !pose || !pilot || ship.sunk || !(screen.known[i]?.shown ?? true)) {
         label.setVisible(false);
         return;
       }
@@ -163,6 +169,7 @@ export class ArenaHud {
     // the table under them (M3 step 7f).
     const x = 8;
     this.speedButton.setText(`x${timeScale}`);
+    this.eyesButton.setText(screen.botEyes ? 'SEE BOT' : 'SEE ALL');
     let bx = x;
     const by = this.touch ? screen.ship.y + screen.ship.h + 4 : 30;
     for (const button of this.buttons) {

@@ -99,6 +99,7 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       world.sight.push(sight);
     }
     const seenNow = new Set<number>();
+    const hiddenByLand = new Set<number>(); // M4b step 4: in range, but an island is in the way (for the log)
     for (const target of world.ships) {
       if (target.id === watcher.id || target.sunk) continue;
       const tParams = SHIP_CLASSES[target.shipClass];
@@ -107,7 +108,11 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       if (distance > reach) continue;
       // The watcher's own height counts too (a lookout high up sees over a longer horizon), within mastScaleMax (D69).
       const level = levelForMasts(distance, mastScale(tParams.mastHeight, p) * Math.max(1, mastScale(wParams.mastHeight, p)), visibility, p);
-      if (level === 0 || !lineOfSightClear(watcher, wParams, target, tParams, islands, p)) continue;
+      if (level === 0) continue;
+      if (!lineOfSightClear(watcher, wParams, target, tParams, islands, p)) {
+        hiddenByLand.add(target.id);
+        continue;
+      }
       seenNow.add(target.id);
       let c = sight.contacts.find((q) => q.id === target.id);
       const first = !c;
@@ -130,7 +135,7 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       }
       if (level >= 3 && target.nation) c.nation = target.nation;
       if (level >= 4) c.hullShare = Math.max(0, Math.min(1, target.hull / tParams.hullPoints));
-      if (first || better || !wasVisible) world.events.push({ type: 'sighted', shipId: watcher.id, otherId: target.id, level: c.level, distance: Math.round(distance), first });
+      if (first || better || !wasVisible) world.events.push({ type: 'sighted', shipId: watcher.id, otherId: target.id, level: c.level, distance: Math.round(distance), first, again: !first && !wasVisible, levelNow: level });
     }
     // Not seen now: remember the last place, then forget.
     for (const c of [...sight.contacts]) {
@@ -139,7 +144,10 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       const sawIt = c.visible; // in view at the last update: the watcher saw it go down
       if (c.visible) {
         c.visible = false;
-        if (!gone) world.events.push({ type: 'lostSight', shipId: watcher.id, otherId: c.id, x: Math.round(c.x), y: Math.round(c.y) });
+        if (!gone) {
+          const distance = Math.round(Math.hypot(c.x - watcher.x, c.y - watcher.y));
+          world.events.push({ type: 'lostSight', shipId: watcher.id, otherId: c.id, x: Math.round(c.x), y: Math.round(c.y), distance, why: hiddenByLand.has(c.id) ? 'land' : 'range' });
+        }
       }
       if ((gone && sawIt) || world.tick - c.seenTick >= forgetTicks) {
         sight.contacts.splice(sight.contacts.indexOf(c), 1);

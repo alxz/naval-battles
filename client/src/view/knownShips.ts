@@ -1,9 +1,14 @@
 // M4b step 3: what the viewer's screen shows of the other ships. The screen draws a ship only as far as the
 // viewer's ship knows it (its contact list, sim/perception.ts): a ship out of sight is not drawn at all (an
 // island hides it, or it is too far), one at the edge of sight is only a dark dot, and from the silhouette level
-// on it is drawn. The arena observer sees everything (until the "what the watched bot sees" switch of step 4).
+// on it is drawn. The arena observer sees everything, or (step 4) only what the watched bot sees.
 import { maxSightM } from '../sim/perception';
 import type { World } from '../sim/types';
+
+/** M4b step 4: does the screen show every ship? In a battle never (your ship's eyes); in the arena unless "bot's eyes" is on. */
+export function observerSeesAll(arena: boolean, botEyes: boolean): boolean {
+  return arena && !botEyes;
+}
 
 export interface Known {
   /** Draw the ship itself. */

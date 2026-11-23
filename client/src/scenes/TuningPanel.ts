@@ -35,6 +35,7 @@ export interface TuningValues {
   screenShake: boolean; // shake the view when your ship is hit or fires
   arenaSpeed: number; // the auto-bot arena runs this many times faster than real time
   arenaBots: number; // bots in the next arena (4-10, at least 30% traders; M3 step 7f)
+  botEyes: boolean; // M4b step 4: the arena screen shows only what the watched bot sees (B, the EYES button)
 }
 
 /** Read-only numbers shown in the panel. The scene fills them in. */
@@ -129,6 +130,7 @@ export class TuningPanel {
     // The auto-bot arena (M3 step 2): bots fight each other, you watch; a test tool.
     const arena = this.gui.addFolder('Auto-bot (test)');
     arena.add(v, 'arenaBots', 4, 10, 1).name('bots (next arena)');
+    arena.add(v, 'botEyes').name("bot's eyes (B)").listen();
     arena.add({ start: () => callbacks.onArena() }, 'start').name('start auto-bot');
     arena.add({ leave: () => callbacks.onLeaveArena() }, 'leave').name('leave auto-bot');
     this.arenaSpeedController = arena.add(v, 'arenaSpeed', [1, 2, 4, 8]).name('time speed').onChange((x: number) => callbacks.onArenaSpeed(Number(x)));

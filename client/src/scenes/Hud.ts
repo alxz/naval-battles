@@ -119,6 +119,7 @@ export class Hud {
   private readonly ammoKeys: Phaser.GameObjects.Text[] = [];
   private base: HudLayout = hudLayout(640, 360, false);
   private l: HudLayout = this.base;
+  private targetShown = false; // M4b step 4: the target card is drawn this frame (Hud.targetRect)
   private covered = 0;
   private shipOpen = false; // phone: the full ship panel (compass, sails, bars) is open; closed = a mini panel (M3 step 7e)
   private lastSize = { w: 640, h: 360 };
@@ -259,6 +260,7 @@ export class Hud {
     const l = this.l;
     // Touch: far enemies get no card (the red arrows at the screen edge tell the distance).
     const target = d.target && this.touch && !d.target.sunk && d.target.distance > TARGET_CARD_RANGE_TOUCH ? null : d.target;
+    this.targetShown = !!target;
     for (const g of Object.values(this.gfx)) g.clear();
     const plate = this.touch ? PANEL_ALPHA_TOUCH : PANEL_ALPHA;
 
@@ -409,7 +411,12 @@ export class Hud {
 
   /** My ship panel as it is now (a phone: mini or open), so the arena buttons can go under it. */
   shipRect(): { x: number; y: number; w: number; h: number } {
-    return this.base ? { ...this.base.ship } : { x: 0, y: 0, w: 0, h: 0 };
+    return { ...this.base.ship };
+  }
+
+  /** M4b step 4: the target card as it is now, or null when it is not shown (the arena buttons go below it on touch screens). */
+  targetRect(): { x: number; y: number; w: number; h: number } | null {
+    return this.targetShown ? { ...this.l.target } : null;
   }
 
   /** Put the help text (H) at this screen place (right of the arena table), or null for its usual place. */

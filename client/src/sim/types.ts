@@ -125,8 +125,10 @@ export type SimEvent =
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number }
   // M4b perception (sim/perception.ts): `shipId` is the watcher, `otherId` the ship it saw / lost / forgot.
-  | { type: 'sighted'; shipId: number; otherId: number; level: SightLevel; distance: number; first: boolean }
-  | { type: 'lostSight'; shipId: number; otherId: number; x: number; y: number }
+  | { type: 'sighted'; shipId: number; otherId: number; level: SightLevel; distance: number; first: boolean; again?: boolean; levelNow?: SightLevel }
+  // M4b step 4: `distance` from the watcher to the last known place; `why` = 'land' (in range, an island in the
+  // way) or 'range' (too far, or gone from the watcher's reach).
+  | { type: 'lostSight'; shipId: number; otherId: number; x: number; y: number; distance?: number; why?: 'land' | 'range' }
   | { type: 'forgotten'; shipId: number; otherId: number; x: number; y: number };
 
 /** One point of a polar table: at this wind angle the ship makes this share of maxSpeed. */

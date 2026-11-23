@@ -41,7 +41,7 @@ function distanceDetail(distance: number): 0 | 1 | 2 {
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
-import { knownShips } from '../view/knownShips';
+import { knownShips, observerSeesAll } from '../view/knownShips';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
 import type { ChartState } from '../view/chart';
@@ -82,7 +82,7 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'SHIFT' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'SPACE', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'SHIFT' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'B' | 'SPACE', Phaser.Input.Keyboard.Key>;
 
 /** The auto-bot arena (M3 step 2): time speeds, how fast the free view moves (screen px per second), where the log is kept. */
 const ARENA_SPEEDS = [1, 2, 4, 8];
@@ -224,7 +224,7 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,SHIFT,Q,E,R,F,H,M,C,V,T,L,SPACE') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,SHIFT,Q,E,R,F,H,M,C,V,T,L,B,SPACE') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.ammoKeys = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE].map((code) => keyboard.addKey(code));
@@ -274,6 +274,7 @@ export class SeaScene extends Phaser.Scene {
       onSpeed: () => this.nextSpeed(),
       onLog: () => this.downloadLog(),
       onLeave: () => this.showArenaResults(),
+      onEyes: () => this.toggleBotEyes(),
     });
     // The arena: drag the sea to look round (the view leaves the ships until NEXT / Space).
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -341,6 +342,7 @@ export class SeaScene extends Phaser.Scene {
         screenShake: true,
         arenaSpeed: 1,
         arenaBots: ARENA.bots,
+        botEyes: false,
       },
       {
         onLogicalHeight: (h) => this.screenFit.setTargetHeight(h),
@@ -419,8 +421,10 @@ export class SeaScene extends Phaser.Scene {
 
     // 3. Draw every ship between the last two steps, so the motion looks smooth.
     const poses = this.sim.world.ships.map((_ship, i) => this.sim.pose(i, alpha));
-    // M4b step 3: the screen shows only what the viewer's ship knows (the arena observer sees everything).
-    const known = knownShips(this.sim.world, this.sim.world.ships[this.focusIndex]?.id ?? PLAYER_ID, this.arena);
+    // M4b step 3: the screen shows only what the viewer's ship knows. The arena observer sees everything, or
+    // (step 4, B / EYES) only what the watched bot sees, with the same rules as a battle.
+    const seeAll = observerSeesAll(this.arena, v.botEyes);
+    const known = knownShips(this.sim.world, this.sim.world.ships[this.focusIndex]?.id ?? PLAYER_ID, seeAll);
     this.sim.world.ships.forEach((ship, i) => {
       const pose = poses[i];
       const image = this.shipImages[i];
@@ -453,9 +457,9 @@ export class SeaScene extends Phaser.Scene {
     const viewer = ships[this.focusIndex];
     const range = (i: number): number => (viewer && ships[i] ? Math.hypot(ships[i]!.x - viewer.x, ships[i]!.y - viewer.y) : Infinity);
     const nationOf = (i: number): Nation => (ships[i]!.nation as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
-    const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : this.arena || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
+    const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : seeAll || range(i) <= SIGHT.flagSightM ? nationOf(i) : null);
     const detail = (i: number): 0 | 1 | 2 => {
-      if (this.arena) return 2;
+      if (seeAll) return 2;
       if (!known[i]?.shown) return 0; // out of sight: nothing is known
       const d = range(i);
       return d <= SIGHT.detailFullM ? 2 : d <= SIGHT.detailHullM ? 1 : 0;
@@ -541,7 +545,7 @@ export class SeaScene extends Phaser.Scene {
       this.sim.world.ships.filter((sh, i) => i !== this.focusIndex && !gone.includes(sh.id)),
       seaView,
       // M4b step 3: in a battle a ship is "in sight" when the viewer's ship has it in view (also off the screen), not when it is on the screen.
-      this.arena ? undefined : (sh) => knownById.get(sh.id) ?? false,
+      seeAll ? undefined : (sh) => knownById.get(sh.id) ?? false,
     );
     forget(this.chartState, gone);
     this.chart.update(this.chartState, myShip, this.sim.world.wind);
@@ -549,10 +553,10 @@ export class SeaScene extends Phaser.Scene {
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
     // (M4b step 3: in a battle, the ships in view of your ship, at whatever distance it can see them.)
-    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk && (this.arena || known[i]?.shown || known[i]?.dot));
+    const enemies = poses.filter((_p, i) => i !== this.focusIndex && !this.sim.world.ships[i]?.sunk && (seeAll || known[i]?.shown || known[i]?.dot));
     for (const p of enemies) {
       const distance = Math.hypot(p.x - me.x, p.y - me.y);
-      if (this.arena && distance > viewJson.sightingRange) continue;
+      if (seeAll && distance > viewJson.sightingRange) continue;
       contacts.push({ screenX: p.x * s - cam.scrollX, screenY: p.y * s - cam.scrollY, distance });
     }
     const hudRects = hudLayout(cam.width, cam.height, this.touch !== null);
@@ -612,7 +616,7 @@ export class SeaScene extends Phaser.Scene {
         : null,
       debug: v.debugText,
       debugLines: v.debugText
-        ? (this.arena ? ['SPACE next ship  T speed  L log', '+ / - zoom  ESC pause', 'H hide this', ''] : []).concat(debugLines({
+        ? (this.arena ? ['SPACE next ship  T speed  L log', 'B bot view  + / - zoom  ESC pause', 'H hide this', ''] : []).concat(debugLines({
             ship: myShip,
             sailing,
             wind,
@@ -638,8 +642,10 @@ export class SeaScene extends Phaser.Scene {
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
     if (this.arena) {
       this.arenaHud.update(this.sim.world, poses, s, myShip.id, this.freeView === null, this.timeScale, clock(this.sim.world.tick * STEP_SECONDS), {
+        known,
+        botEyes: v.botEyes,
         ships: shipsOnScreen,
-        ship: this.hud.shipRect(),
+        ship: belowPanels(this.hud.shipRect(), this.hud.targetRect()),
         avoid: hudRects.target,
         seconds,
       });
@@ -1226,12 +1232,13 @@ export class SeaScene extends Phaser.Scene {
     }
   }
 
-  /** The arena's keys: Space = follow the next ship, W A S D / arrows = move the view, T = time speed, L = log. */
+  /** The arena's keys: Space = follow the next ship, W A S D / arrows = move the view, T = time speed, L = log, B = bot's eyes (M4b step 4). */
   private readArenaInput(seconds: number): void {
     const k = this.keys;
     if (Phaser.Input.Keyboard.JustDown(k.SPACE)) this.nextFocus();
     if (Phaser.Input.Keyboard.JustDown(k.T)) this.nextSpeed();
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.downloadLog();
+    if (Phaser.Input.Keyboard.JustDown(k.B)) this.toggleBotEyes();
     if (Phaser.Input.Keyboard.JustDown(k.M)) this.panel.toggleSound();
     if (Phaser.Input.Keyboard.JustDown(k.C)) this.chart.setOpen(!this.chart.isOpen());
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.panel.toggleDebugText();
@@ -1245,6 +1252,11 @@ export class SeaScene extends Phaser.Scene {
       const step = (FREE_VIEW_PX_PER_SECOND * seconds) / s;
       this.freeView = { x: from.x + dx * step, y: from.y + dy * step };
     }
+  }
+
+  /** M4b step 4: B / the EYES button: the arena screen shows everything, or only what the watched bot sees. */
+  private toggleBotEyes(): void {
+    this.panel.values.botEyes = !this.panel.values.botEyes;
   }
 
   /** NEXT / Space: follow the next ship afloat (by number); this stops the automatic choice. */
@@ -1359,6 +1371,16 @@ export class SeaScene extends Phaser.Scene {
     g.generateTexture('water', 64, 64);
     g.destroy();
   }
+}
+
+/**
+ * M4b step 4: on a touch screen the arena buttons go under my ship panel, and under the target card when it is
+ * shown (with five buttons the row reached under the card). A rect whose bottom is the lower of the two.
+ */
+function belowPanels(ship: { x: number; y: number; w: number; h: number }, target: { x: number; y: number; w: number; h: number } | null): { x: number; y: number; w: number; h: number } {
+  if (!target) return ship;
+  const bottom = Math.max(ship.y + ship.h, target.y + target.h);
+  return { ...ship, h: bottom - ship.y };
 }
 
 /** localStorage can throw (private windows, blocked storage). */
