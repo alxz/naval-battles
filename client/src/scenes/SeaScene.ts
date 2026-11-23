@@ -535,12 +535,13 @@ export class SeaScene extends Phaser.Scene {
     discover(this.chartState, ISLANDS, seaView);
     // A wreck that has melted away is off the chart too.
     const gone = this.sim.world.ships.filter((sh, i) => sh.sunk && wreckGone(this.wreckAge[i] ?? 0, viewJson.wreck)).map((sh) => sh.id);
+    const knownById = new Map(this.sim.world.ships.map((sh, i) => [sh.id, !!(known[i]?.shown || known[i]?.dot)]));
     updateSightings(
       this.chartState,
       this.sim.world.ships.filter((sh, i) => i !== this.focusIndex && !gone.includes(sh.id)),
       seaView,
       // M4b step 3: in a battle a ship is "in sight" when the viewer's ship has it in view (also off the screen), not when it is on the screen.
-      this.arena ? undefined : (sh) => known[this.sim.world.ships.indexOf(sh)] !== undefined && (known[this.sim.world.ships.indexOf(sh)]!.shown || known[this.sim.world.ships.indexOf(sh)]!.dot),
+      this.arena ? undefined : (sh) => knownById.get(sh.id) ?? false,
     );
     forget(this.chartState, gone);
     this.chart.update(this.chartState, myShip, this.sim.world.wind);

@@ -4,6 +4,15 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 22 Nov 2026 (later) — review of the plan and the code (D69, version M4b 3r)
+
+The full review is in the plan, section 6.5. In short:
+- **Progress:** in 11 days R1, M2b, M3 and M4b steps 1–3; the planned weeks in 6.1 are far behind us; the dates are read as test rounds now and recomputed at R2.
+- **Fixed:** a bot circled the empty last known place for up to 60 s (now it gives up within 80 m and sails on); masts scaled the flag and deck ranges too (a frigate saw a frigate's crew at 364 m), now only the horizon levels, factor at most 1.35; global test timeout 20 s (Brainbox); tests for 5 untested `sim/` functions; a small per-frame lookup in `SeaScene`.
+- **Plan:** O6 and O7 closed; M4b items already done marked; order M4b → M3b → M4 → Squadrons.
+- **Open:** groundings 14–24 an hour (traders, port runs) → M3b; smoke of unseen ships and the true hull bar at 200–450 m → M4b steps 4–5; `bot.ts` 1,292 lines → split after M4b; frigate too strong → balance before R2.
+- Checks: 486 tests, build and build:test green, browser (computer, iPhone) without errors, headless arena 60 min (seed 5150): 29 wins, 0 warnings, 24 groundings.
+
 ## 22 Nov 2026 — M4b step 3: the screen shows only what your ship knows (D68)
 
 ### Your test of step 2 (battle log 22 Nov 19:48)

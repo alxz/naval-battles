@@ -32,9 +32,18 @@ export function mastScale(mastHeightM: number, p: SightParams = SIGHT): number {
  * lanterns will change it in later steps of M4b (it shrinks every range).
  */
 export function levelAt(distanceM: number, target: ShipParams, visibility = 1, p: SightParams = SIGHT): 0 | SightLevel {
-  const k = mastScale(target.mastHeight, p) * visibility;
-  if (distanceM <= p.levels.detailM * k) return 4;
-  if (distanceM <= p.levels.flagM * k) return 3;
+  return levelForMasts(distanceM, mastScale(target.mastHeight, p), visibility, p);
+}
+
+/**
+ * Review 22 Nov (D69): the masts help only over the horizon (levels 1 and 2: something there, the silhouette).
+ * The flag and the deck are seen with the eyes at fixed ranges (400 / 200 m, times the visibility), the same
+ * numbers the screen uses (D68), whatever the masts. `mastK` is the masts' factor (mastScale, at most mastScaleMax).
+ */
+export function levelForMasts(distanceM: number, mastK: number, visibility = 1, p: SightParams = SIGHT): 0 | SightLevel {
+  if (distanceM <= p.levels.detailM * visibility) return 4;
+  if (distanceM <= p.levels.flagM * visibility) return 3;
+  const k = Math.min(p.mastScaleMax, mastK) * visibility;
   if (distanceM <= p.levels.silhouetteM * k) return 2;
   if (distanceM <= p.levels.contactM * k) return 1;
   return 0;
@@ -96,8 +105,8 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       if (!tParams) continue;
       const distance = Math.hypot(target.x - watcher.x, target.y - watcher.y);
       if (distance > reach) continue;
-      // The watcher's own height counts too: from a high deck a ship shows further, so use the larger of the two scales.
-      const level = levelAt(distance, tParams, visibility * Math.max(1, mastScale(wParams.mastHeight, p)), p);
+      // The watcher's own height counts too (a lookout high up sees over a longer horizon), within mastScaleMax (D69).
+      const level = levelForMasts(distance, mastScale(tParams.mastHeight, p) * Math.max(1, mastScale(wParams.mastHeight, p)), visibility, p);
       if (level === 0 || !lineOfSightClear(watcher, wParams, target, tParams, islands, p)) continue;
       seenNow.add(target.id);
       let c = sight.contacts.find((q) => q.id === target.id);
@@ -138,6 +147,15 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
       }
     }
   }
+}
+
+/** Review 22 Nov (D69): drop a contact (a bot searched its last known place and found nothing there). */
+export function forgetContact(world: World, watcherId: number, otherId: number): void {
+  const sight = sightOf(world, watcherId);
+  const c = sight?.contacts.find((q) => q.id === otherId);
+  if (!sight || !c || c.visible) return;
+  sight.contacts.splice(sight.contacts.indexOf(c), 1);
+  world.events.push({ type: 'forgotten', shipId: watcherId, otherId, x: Math.round(c.x), y: Math.round(c.y) });
 }
 
 /**

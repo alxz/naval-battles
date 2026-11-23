@@ -4,7 +4,7 @@
 
 *Companion documents: `art-and-tools-guide-v0.2.md` (sprite specifications, art pipeline, tools; its parts on scale and direction count are under review, see D26, D27, D33) `dev-log-en.md` (what was done, problems and fixes, in detail) and `world-ideas-en.md` (ideas for the world, not yet scheduled). This plan keeps the decisions and the checklists short; the dev log has the details. The external review of v0.5 (`Project_plan_v.0.5_Review`) and our response to each finding are in Appendix B.*
 
-**Status (20 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 done 20 Nov** (steps 1–8: bigger ships, auto-bot arena and headless arena, port law, sails / crew / three kinds of shot, collisions and ramming, bot seamanship and ways round the land, fluyt and caravel, crew spirit and running, chasers, pause and END GAME, bot skills, a battle against bots; review in the dev log of 20 Nov) · next: **M4b "Eyes at Sea"**: steps 1 to 3 done (step 3 on 22 Nov), next step 4 (arena switch: what the watched bot sees) · open decisions: O1, O6, O7 (section 9).
+**Status (22 Nov 2026, v0.7):** M0, M1 done · M2 done (R1 "First Duel") · M2b "Open Sea" done · **M3 done 20 Nov** (steps 1–8: bigger ships, auto-bot arena and headless arena, port law, sails / crew / three kinds of shot, collisions and ramming, bot seamanship and ways round the land, fluyt and caravel, crew spirit and running, chasers, pause and END GAME, bot skills, a battle against bots; review in the dev log of 20 Nov) · next: **M4b "Eyes at Sea"**: steps 1 to 3 done (step 3 on 22 Nov), review of 22 Nov done (6.5, D69), next step 4 (arena switch: what the watched bot sees); then M3b, M4, Squadrons · open decision: O1 (section 9).
 
 ---
 
@@ -116,6 +116,7 @@ Status **Confirmed** means you approved it. Do not change these without a new di
 | D66 | What a ship sees (M4b step 1) | Levels by distance for a sloop: something there 1000 m, silhouette (class, course, speed) 600 m, flag 400 m, hull / sails / crew 200 m; tall masts see and are seen further (× (mast / 26.4 m)^0.5, between 0.75 and 1.35); a hill or island hides a ship (line from the lookout at 0.8 of the mast to the masthead over the land height); lists update 3 times a second; a lost ship is kept as the last known place for 60 s; what was learned stays. Numbers in `data/sight.json`; the bots and the screen use the lists from step 2 | Developer's ranges of 18 Nov; D41, D54 | **Confirmed 20 Nov** |
 | D67 | Bots act on what they know (M4b step 2) | A bot's enemy is its *belief* (`believedShip`): a ship in view is taken live as far as its level allows (course and speed from the silhouette; hull and crew only within 200 m; far off it is taken as sound), a ship out of view stays at its last known place and does not move. No shot at what is not in view; the bot sails to the last known place. With nobody known a sound bot **cruises** along a trade run (a search, until patrol routes come); a hurt one mends. A target is chosen among ships in view (the old one may be a last known place). A sunk ship is dropped from a list only if it was in view a moment before | Developer: bots must not cheat (D41) | **Confirmed 20 Nov** |
 | D68 | What the screen shows (M4b step 3) | In a battle the screen draws a ship only as far as the player's ship knows it: out of sight (too far, or hidden by land) = not drawn, no wake, no bars, no arrow, not a target; level 1 (edge of sight) = a dark dot, an arrow; from the silhouette level = drawn. Flag and WANTED label up to 400 m, hull bar up to 450 m, sails and crew up to 200 m (the numbers of 18 Nov, now also needing a ship in view); the target card shows the class and distance, the hull bar within 450 m, sails and crew within 200 m; the camera does not frame a ship that is not seen; the chart marks a ship "in sight" by sight, not by being on the screen. The arena observer still sees everything (step 4 adds the switch) | Developer: the screen must not know more than the ship; D41 | **Confirmed 20 Nov** |
+| D69 | Review of 22 Nov (6.5) | A bot ends its search at the last known place (`searchArriveM` 80 m) and sails on; masts help only sight levels 1–2, the flag (400 m) and the deck (200 m) are fixed, the factor for two ships at most 1.35; global test timeout 20 s; tests for five untested functions; O6 and O7 closed; order M4b → M3b → M4 → Squadrons | Review | **Confirmed 22 Nov** |
 | D51 | WANTED; 3–5 bots | An offender of a port's peace carries a red "WANTED: name" label until pardoned (you and bots). A battle against bots has 3–5 bots at random (the panel can still fix a number) | Developer's request 18 Nov | **Confirmed 19 Nov** |
 | D48 | A Caribbean map | The test sea (6 × 4 km, generated islands) is replaced by a map of the **central Caribbean** from the developer's mockup, in its own milestone **M3b "Caribbean Sea"** after M3, using the mask tool planned for M5 (`tools/build_map.py`). The fixes asked for the test sea (move the central port so ships can sail round its island, the Isla Verde safe-water pocket, a bigger port town, a Spanish port) are made on the new map, not on the test sea. Only cheap picture changes come earlier (the port flag of Spain, clearer shore-gun sprites) | Developer's proposal 18 Nov; island tweaks on the test sea would be thrown away | Proposed 18 Nov (open decision O6) |
 
@@ -855,9 +856,9 @@ Next — **step 7** (traders and bot behaviour, D52–D54):
 - [x] **Step 3, 22 Nov (D68):** Your view: ships your ship does not see are not drawn; edge markers, the target card and hull bars only for known ships; the chart shows "last seen".
 - [ ] Fog banks hide for the rules too (no longer a picture only); a broadside reveals the shooter for a few seconds.
 - [ ] Arena: switch "what the watched bot sees" / "everything"; the log writes "sighted" and "lost sight".
-- [ ] **Detail by distance (your test, 18 Nov):** up to 200 m you see hull, sails and crew of a ship; 200–450 m one overall bar; beyond that nothing. A small national flag next to the bar up to 400 m (ships and you). Bots read the same levels (honest game).
-- [ ] **Nations (simple first):** each bot gets a random flag (England, Spain, France, the Netherlands, pirates) for the picture and the contact level 3; what a flag means (allies, wars) comes with M5 and Stage 2.
-- [ ] Headless tests: a bot does not attack what it cannot see; it searches where it lost you; the same seed gives the same game.
+- [x] **Detail by distance (your test, 18 Nov):** up to 200 m you see hull, sails and crew of a ship; 200–450 m one overall bar; beyond that nothing. A small national flag next to the bar up to 400 m (ships and you). Bots read the same levels (honest game). (Done: M3 step 7d, D57; honest on the screen in M4b step 3, D68.)
+- [x] **Nations (simple first):** each bot gets a random flag (England, Spain, France, the Netherlands, pirates) for the picture and the contact level 3; what a flag means (allies, wars) comes with M5 and Stage 2. (Done: D47, M3 step 6b / 7b.)
+- [x] Headless tests: a bot does not attack what it cannot see; it searches where it lost you; the same seed gives the same game. (Done 20–22 Nov: `perception.test.ts`, `perceptionBots.test.ts`, `review22.test.ts`.)
 - **Done when:** you can slip away from a bot behind an island or in a fog bank, and it looks for you where it saw you last.
 
 #### M4 — Boarding and capture (2 weeks)
@@ -950,6 +951,35 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 - **A warning about the economy.** A full trading simulation with guilds and seasons is the most common place where solo projects stall. The Stage 1 stock model already gives purposeful trade. Guilds and seasons are added one at a time, and each must show a visible effect for the player before the next begins.
 - **Stage 3, multiplayer:** the server must run the simulation. Option A: a small Node.js match server runs the same `sim/` code, and Python keeps accounts and saves. Option B: port `sim/` to Python. We decide after R7.
 
+### 6.5 Review of 22 Nov 2026: plan, code, progress
+
+**Progress.** R1 was planned for mid January 2027 and came on 15 Nov 2026. M2b and M3 (planned with M4 for early March 2027) were done by 20 Nov, and M4b steps 1–3 by 22 Nov. In 11 days the project covered about four months of the planned weeks. The weeks in 6.1 were estimated for code written by hand at 8–10 hours a week. With the assistant writing the larger parts, the limit is now your testing time and our reviews, not writing code. Now: 486 tests in 65 files, about 10,500 lines in `sim/`.
+
+**What the dates mean now.** Keep the order of the milestones and their "Done when" criteria. Read the effort column as a number of test rounds rather than calendar weeks. Recompute the dates at R2 (D36).
+
+**Plan corrections made in this review.**
+- O7 closed: the arena logs are files in `arena-logs/` (D46, done in M3 step 6). O6 closed: M3b comes after M4b and before M4 (your choice, 20 Nov).
+- M4b: "detail by distance" and "nations" were already done in M3 (D57, D47) and are now honest on the screen (step 3, D68): marked done. The headless tests "no attack on what it cannot see / a search at the last place / the same seed gives the same lists" exist (`perception.test.ts`, `perceptionBots.test.ts`, `review22.test.ts`): marked done.
+- Order after M3: **M4b → M3b → M4 → Squadrons**. R2 "Skirmish" = M3, M4b, M3b, M4; Squadrons before M5.
+
+**Code review: what is good.** The six architecture rules hold: no Phaser in `sim/` or `view/`, no `Math.random` in `sim/`, no `any`, no enums, `tsc` strict clean, numbers in JSON. The simulation is deterministic (tested). The headless arena runs 60 game minutes in about 30 s.
+
+**Problems found and fixed (D69, version `M4b 3r`).**
+1. **Bug:** a bot that reached the last known place of a lost enemy circled the empty spot until the contact was forgotten (up to 60 s; in a test 21 s within 80 m of it). Now, within `searchArriveM` (80 m) and with nobody in view, the bot drops the contact (`forgetContact`) and sails on.
+2. **Inconsistency in the sight ranges:** tall masts multiplied every range, also the flag and the deck. A frigate saw another frigate's crew at 364 m and its flag at 729 m, while the screen uses a fixed 200 / 400 m (D68). The factor for two tall ships (1.82) was also cut off unevenly by the 1,350 m limit. Now the masts help only levels 1–2 (over the horizon), and the factor for both ships together is at most 1.35 (`levelForMasts`).
+3. **Tests too slow for a slow machine** (Brainbox, default 5 s): a global `testTimeout` of 20 s in `vite.config.ts`.
+4. **Rule 6:** five functions in `sim/` had no test (`nationFor`, `isPirate`, `seamanshipSpeed`, `terrainFor`, `nearMiss`): now in `review22.test.ts`.
+5. **Small:** in `SeaScene` the chart's "in sight" rule searched the ship list three times per ship in every frame: now one lookup table.
+
+**Known problems not fixed now, and where they go.**
+- **Groundings:** 14–24 an hour with 10 bots, depending on the run (seed 5150: 24 after the review, 14 at step 2). They are mostly traders and ships heading for a port, at Dead Man's Key, Turtle Island and the East reef. They are short (the ship works free within 30 s) and give no warnings. → M3b (new map, navigation grid).
+- **Screen:** cannon smoke and balls of a ship you cannot see are still drawn; the hull bar of a ship 200–450 m away shows the true hull (bots know it only within 200 m). → M4b steps 4–5 (a shot reveals the shooter).
+- **Small leaks of truth to the bots:** the "pack" weight counts the hunters of a target from the world, and `believedShip` copies the real `team`. Harmless now (in the arena every ship is its own team). → Squadrons.
+- A wreck behind an island is still drawn within 1,350 m. Minor.
+- `bot.ts` has 1,292 lines. Split it into `bot/` modules (chase, trade and cruise, port, ram) after M4b, with no change in behaviour (the headless arena must give the same log for the same seed).
+- **Balance:** the frigate wins most (12 of 29 wins in the review run); caravels rarely win. → a balance pass before R2.
+- The plan and the dev log in the Project were older than the copies in the repository (the English plan there was of 18 Nov). The repository copies are the source of truth. With this review the English plan and the summary are written to the Project; the Russian plan and the dev logs come with the commit.
+
 ---
 
 ## 7. How we work together
@@ -978,7 +1008,7 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 | Pixel art looks uneven on phones | Medium | Integer pixel scaling (D27); whole zoom steps only |
 | Economy exploits or collapse | Medium | Per-unit prices, spread, imports (D31); 1,000-day headless run |
 | The English side has little to do | Medium | Pirate only in Stage 1 (D29) |
-| Bots get stuck when tacking | Medium | Hysteresis and cooldown; headless bot scenarios (M3) |
+| Bots get stuck when tacking | Medium | Hysteresis and cooldown; headless bot scenarios (M3). 22 Nov: short groundings 14–24 an hour remain (6.5) → M3b navigation grid |
 | The map takes weeks to paint | Medium | Mask plus `tools/build_map.py` (M5) |
 | Phaser 4 is new; AI tools suggest Phaser 3 code | Medium | Exact version pinned; notes in 5.9 and in the summary (D32) |
 | Results differ slightly between Chrome and Safari | Low | Saves hold the full state; tests with tolerances (D23) |
@@ -992,7 +1022,7 @@ Your notes decide **which R4 parts we build**: only those that fix a boring mome
 
 ## 9. Open decisions
 
-Three decisions are open (O1, O6, O7). O2, O3 and O4 were closed on 13 Nov, O5 on 17 Nov.
+One decision is open (O1). O2, O3 and O4 were closed on 13 Nov, O5 on 17 Nov, O6 and O7 on 22 Nov (review, 6.5).
 
 | # | Question | Recommended default | Alternative | Decide by |
 |---|---|---|---|---|
@@ -1001,8 +1031,8 @@ Three decisions are open (O1, O6, O7). O2, O3 and O4 were closed on 13 Nov, O5 o
 | **O3** | World scale and display (D26, D27) | Game metres with 1 px/m at zoom ×1; whole zoom steps; logical height about 360 (computer) and 240 (phone) with integer scaling | Keep 2 px/m and real ship sizes, shorten the gun range to about 120 m and rely on the combat camera | **Closed 13 Nov: scale test (D26, D27)** |
 | **O4** | Score and saving (D30 against D9) | Net gold gained; save in port, suspend at sea | Keep "gold earned" and saving anywhere, and accept that the score can be inflated | **Closed 13 Nov: accepted (D30)** |
 | **O5** | Length of a game day (world ideas, 17 Nov) | 16 real minutes | 12 or 24 minutes | **Closed 17 Nov: 12 minutes (D42)** |
-| **O6** | When does the Caribbean map come? (D48) | **M3b**, right after M3 and before boarding (M4) | Keep it in M5 with ports and trade | When your mockup is ready |
-| **O7** | Where does the headless arena keep its logs? (D46) | Files on the machine that runs it (`arena-logs/`), listed on a small web page | SQLite now (it comes with the backend in M9 anyway) | M3 step 6 |
+| **O6** | When does the Caribbean map come? (D48) | **M3b**, right after M3 and before boarding (M4) | Keep it in M5 with ports and trade | **Closed 22 Nov: M3b after M4b, before M4** |
+| **O7** | Where does the headless arena keep its logs? (D46) | Files on the machine that runs it (`arena-logs/`), listed on a small web page | SQLite now (it comes with the backend in M9 anyway) | **Closed 22 Nov: files in `arena-logs/` (D46)** |
 
 O2 and O4 change no code yet: the side matters only from M5, the score and saves only from M6.
 
@@ -1041,6 +1071,7 @@ Closed earlier: side in Stage 1 (D29, 13 Nov), score and saving (D30, 13 Nov), a
 | 20 Nov (night): D66 (what a ship sees; M4b step 1 done) | 2, 8 |
 | 20 Nov (night, later): D67 (bots act on their contacts; M4b step 2 done) | 2, 8 |
 | 22 Nov: D68 (the screen shows only what your ship knows; M4b step 3 done) | 2, 8 |
+| 22 Nov (later): D69 (review of plan and code, 6.5; O6, O7 closed) | 2, 6, 9 |
 | 19 Nov (evening): D52 (fluyt and caravel), D53 (sailing crew), D54 (M3 steps 7a–7d, M4b before M4, a "Squadrons" milestone) | 2 |
 | New decisions D43 (camera circle, spyglass centred), D44 (collisions and ramming v2), D45 (bot seamanship), D46 (headless arena), D47 (the arena observer sees everything), D48 (a Caribbean map in M3b); on 19 Nov D49 (ways round the land, harbour boats), D50 (lead aiming, rammers), D51 (WANTED, 3–5 bots) | 2 |
 | Status, key constants and the ship table brought up to date (D38, D39, sails) | top, 4.0, 4.10 |

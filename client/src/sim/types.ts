@@ -494,6 +494,7 @@ export interface BotParams {
   traderThreatM: number; // an enemy this close makes a trader decide: run (most) or fight
   traderFightCourage: number; // a trader fights only with at least this courage and the odds in its favour
   traderArriveM: number; // a stop of the trade run is reached this close
+  searchArriveM: number; // M4b (D69): this close to an enemy's last known place with nobody in view, the search is over
   traderCruiseSails: number; // sails set on the trade run
   traderIslandOffsetM: number; // a stop off a big island lies this far off its shore
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius

@@ -114,6 +114,7 @@
   "traderThreatM": 700,
   "traderFightCourage": 0.5,
   "traderArriveM": 300,
+  "searchArriveM": 80,
   "traderCruiseSails": 0.85,
   "traderIslandOffsetM": 250,
   "fearNearMissWarship": 0.004,

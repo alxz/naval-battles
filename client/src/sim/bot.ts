@@ -13,7 +13,7 @@
 import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
 import { crewShare, gunsManned, sailShare } from './condition';
 import { courageOf, nextTradeStop, odds, tradeStops } from './morale';
-import { believedShip, contactOf } from './perception';
+import { believedShip, contactOf, forgetContact } from './perception';
 import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
 import { berthWaitSpot, berthsTaken, inHarbour, inletWayOut, nearestPort, portWaypoint, portsCached, portsOf } from './port';
@@ -762,6 +762,12 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     delete bot.ramLeft;
     delete bot.finishLeft;
     ramming = false;
+  }
+  // Review 22 Nov (D69): at the last known place and nobody there: the search is over, the bot sails on
+  // (before, it circled the empty spot until the contact was forgotten, up to 60 s).
+  if (!seen && world.sight && distance <= p.searchArriveM) {
+    forgetContact(world, id, bot.enemyId);
+    return cruise(world, bot, ship, params, islands, p);
   }
 
   // --- Course and sails. ---
