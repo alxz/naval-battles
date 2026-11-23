@@ -17,7 +17,7 @@ import { battleName } from './wanted';
 export const BATTLE_PLAYER_ID = 1;
 
 /** Which build wrote the log. Change it with every delivery, so a log says which code it came from. */
-export const BUILD_LABEL = 'M4b step 5a (fog banks for the rules, a shot reveals the shooter within 1200 m, rough hull at 200-450 m, no smoke of unseen ships, wrecks hidden by land); M4b step 4 (arena switch: everything / what the watched bot sees, key B; log lines SIGHTED / LOST SIGHT for every pair); M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
+export const BUILD_LABEL = 'M4b step 5c (a ram hurts again only after 2 s apart; shore guns fire only at what the port sees: fog, range, heard shots (D72); bots steer with a dead band and a slow helm; every bot mode change is logged); M4b step 5a (fog banks for the rules, a shot reveals the shooter within 1200 m, rough hull at 200-450 m, no smoke of unseen ships, wrecks hidden by land); M4b step 4 (arena switch: everything / what the watched bot sees, key B; log lines SIGHTED / LOST SIGHT for every pair); M4b review 22 Nov (search ends at the last known place, flag and deck ranges fixed); M4b step 3 (the screen shows only what your ship knows: ships out of sight are not drawn, a dot at the edge, arrows and the target card by sight); M4b step 2 (bots decide only from their contacts: no shot at what they cannot see, a search at the last known place, a cruise when nothing is known); M4b step 1 (perception lists); M3 step 8b + 8 (camera in the middle, smoke and gun-port fire, Space fires the bow chaser, out of the inlet along its line, trade stops off the mouth; 7f: chasers not trained, stern bar at the bottom, one-line arena table, arena size 4-10; 7e: 10 bots, chaser bars, wheel look-out, phone layout; wrecks fade, solo speed; bow chasers, ESC pause, minimap view, bot skills: seamanship, gunnery, courage, loner/pack; runners pick their course) after 7b + 7d, 21 Nov 2026';
 /** A ship aground longer than this is "stuck": it gets a line of its own. */
 export const STUCK_SECONDS = 20;
 /** A ship that spawns closer to land than this gets a WARNING line. */
@@ -413,7 +413,7 @@ export class ArenaLog {
     if (floated && world && seconds >= 3) this.add(now, `${who(world, shipId)} floats free after ${Math.round(seconds)} s aground`);
   }
 
-  /** Bot modes worth a line when they change (port, flee). */
+  /** Bot modes: a line when they change (M4b 5c: all of them, so that a bot that circles can be explained). */
   modeChanged(world: World, shipId: number, mode: string): void {
     const now = world.tick * (1 / 30);
     const ship = world.ships.find((s) => s.id === shipId);
@@ -423,6 +423,7 @@ export class ArenaLog {
     else if (mode === 'ram') this.add(now, `${who(world, shipId)} turns to ram its enemy${state}`);
     else if (mode === 'port') this.add(now, `${who(world, shipId)} sails to port for repairs${state}`);
     else if (mode === 'outlaw') this.add(now, `${who(world, shipId)} runs from the shore guns${state}`);
+    else this.add(now, `${who(world, shipId)} MODE ${mode}${state}`); // M4b 5c: every other change (chase, engage, idle, trade, repair), to find out why a bot circles
   }
 
   /** Wins, losses, life and trouble per ship class: the table for balancing the classes. */

@@ -459,7 +459,19 @@ export function rudderFor(ship: ShipState, params: ShipParams, headingRad: numbe
     const w = normalizeAngle(wind.fromRad - ship.headingRad); // where the wind comes from, off the bow
     if (Math.sign(w) === Math.sign(diff) && Math.abs(w) < Math.abs(diff)) diff -= Math.sign(diff) * 2 * Math.PI;
   }
-  return clamp(p.rudderGain * diff, -1, 1);
+  return shapeRudder(p.rudderGain * diff, ship.rudder, p);
+}
+
+/**
+ * M4b step 5c (your test 23 Nov: bots hunt about their course). The wanted rudder (`raw`, -1..1) is shaped like a
+ * helmsman's work: nothing for an error below rudderDeadDeg (the rest is eased in from the dead band's edge), and the
+ * rudder moves at most rudderSlewPerThink per decision, so a noisy aim point does not shake the helm.
+ */
+export function shapeRudder(raw: number, current: number, p: BotParams = BOTS): number {
+  const dead = p.rudderGain * degToRad(p.rudderDeadDeg);
+  const eased = Math.sign(raw) * Math.max(0, Math.abs(raw) - dead);
+  const wanted = clamp(eased, -1, 1);
+  return clamp(wanted, current - p.rudderSlewPerThink, current + p.rudderSlewPerThink) + 0; // (+ 0 turns -0 into 0)
 }
 
 /**
@@ -1286,7 +1298,7 @@ function workFree(world: World, bot: BotState, ship: ShipState, params: ShipPara
 /** Rudder toward a heading and the sails at a level (only the commands that change something). */
 function steerTo(ship: ShipState, headingRad: number, sails: number, p: BotParams): Command[] {
   const commands: Command[] = [];
-  const rudder = clamp(p.rudderGain * normalizeAngle(headingRad - ship.headingRad), -1, 1);
+  const rudder = shapeRudder(p.rudderGain * normalizeAngle(headingRad - ship.headingRad), ship.rudder, p);
   if (Math.abs(rudder - ship.rudder) > 0.02) commands.push({ type: 'setRudder', shipId: ship.id, value: rudder });
   if (Math.abs(sails - ship.sailLevel) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: sails });
   return commands;

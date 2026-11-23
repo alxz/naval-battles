@@ -91,6 +91,21 @@ describe('shore guns: who they fire at', () => {
     expect(shoreTarget(world, 0, ports)).toBeNull();
   });
 
+  it('D72: fog hides a ship from the port, but its own shot gives it away (5c)', () => {
+    const world = createWorld(1);
+    const ship = world.ships[0]!;
+    Object.assign(ship, { x: 1000, y: 1300 }); // 300 m: a silhouette in clear air (up to 600 m)
+    makeOffender(world, ship, 0, 'fired');
+    expect(shoreTarget(world, 0, ports)).toBe(ship);
+    world.fog = { banks: [{ x: 1000, y: 1150, speed: 1, reachM: 3000, puffs: [{ along: 0, across: 0, size: 3000 }] }] };
+    expect(shoreTarget(world, 0, ports)).toBeNull(); // fog 0.35: silhouette only within about 210 m
+    world.gunfire = [{ shipId: ship.id, untilTick: world.tick + 150 }];
+    expect(shoreTarget(world, 0, ports)).toBe(ship);
+    ship.y = 1180; // 180 m: close enough to be seen even in fog
+    world.gunfire = [];
+    expect(shoreTarget(world, 0, ports)).toBe(ship);
+  });
+
   it('the guns fire one after another: one gun every reloadSeconds / guns', () => {
     const world = createWorld(1);
     const ship = world.ships[0]!;

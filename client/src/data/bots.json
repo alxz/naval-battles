@@ -12,6 +12,8 @@
   "closeHauledMarginDeg": 15,
   "tackCooldownSeconds": 20,
   "rudderGain": 2.5,
+  "rudderDeadDeg": 3,
+  "rudderSlewPerThink": 0.25,
   "aimErrorMinDeg": 0.5,
   "aimErrorMaxDeg": 1.1,
   "elevationDegPerSecond": 4,

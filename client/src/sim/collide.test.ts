@@ -149,14 +149,37 @@ describe('collideShips', () => {
       collideShips(w, []);
     }
     expect(lost()).toBeCloseTo(first, 6);
-    // After the pause a new blow counts again.
-    w.tick += 10;
+    // Touching renewed the pause (5c): 1 s later it still holds; only after 2 s apart a new blow counts.
+    w.tick += 30;
+    Object.assign(a, { x: 0, y: 0 });
+    Object.assign(b, { x: 6, y: 11 });
+    a.speed = 6;
+    b.speed = 10;
+    collideShips(w, []);
+    expect(lost()).toBeCloseTo(first, 6);
+    w.tick += 70;
     Object.assign(a, { x: 0, y: 0 });
     Object.assign(b, { x: 6, y: 11 });
     a.speed = 6;
     b.speed = 10;
     collideShips(w, []);
     expect(lost()).toBeGreaterThan(first);
+  });
+
+  it('repeated bumps every 1.5 s never hurt again: a new damage needs a run-up after 2 s apart (5c, 23 Nov)', () => {
+    const a = ship(1, 0, 0, 0, 6);
+    const b = ship(2, 6, 11, Math.PI + 0.3, 10);
+    const w = world([a, b]);
+    const lost = (): number => 2 * sloop.hullPoints - a.hull - b.hull;
+    collideShips(w, []);
+    const first = lost();
+    for (let n = 0; n < 6; n++) {
+      w.tick += 45; // 1.5 s apart: shorter than the pause
+      Object.assign(a, { x: 0, y: 0, speed: 6 });
+      Object.assign(b, { x: 6, y: 11, speed: 10 });
+      collideShips(w, []);
+    }
+    expect(lost()).toBeCloseTo(first, 6);
   });
 
   it('a fatal collision sinks the ship and names the other as the cause', () => {

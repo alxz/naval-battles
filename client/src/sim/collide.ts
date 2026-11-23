@@ -16,7 +16,7 @@
 //                x (0.5 + 0.5 x own / closing)        its own share of the speed: a ship lying still
 //                                                     takes half of what one sailing into the blow takes
 //       at most maxHullShare of the ship's full hull in one collision (a head-on crash is bad, not fatal)
-//     and both lose most of their speed. A slow touch does no damage: the ships just lean on each other.
+//     and both lose most of their speed. A touch during the pause renews the pause (5c). A slow touch does no damage: the ships just lean on each other.
 //   - after a damaging contact the same two ships take no new damage for pairPauseSeconds, so two
 //     hulls scraping along each other are not hurt again and again (your test, 18 Nov).
 
@@ -111,6 +111,17 @@ function paused(world: World, a: number, b: number): boolean {
   return world.contacts.some((c) => c.untilTick > world.tick && ((c.a === a && c.b === b) || (c.a === b && c.b === a)));
 }
 
+/**
+ * Hulls that touch again during the pause keep the pause going (M4b step 5c, your test 23 Nov): a pair
+ * takes new damage only after it has been apart for pairPauseSeconds, that is, after a new run-up.
+ */
+function keepPause(world: World, a: number, b: number, d: DamageParams): void {
+  const until = world.tick + Math.round(d.collision.pairPauseSeconds / STEP_SECONDS);
+  for (const c of world.contacts ?? []) {
+    if (c.untilTick > world.tick && ((c.a === a && c.b === b) || (c.a === b && c.b === a))) c.untilTick = Math.max(c.untilTick, until);
+  }
+}
+
 /** Find every pair of ships that touch, push them apart and apply the damage. Call once per step, after the ships moved. */
 export function collideShips(world: World, islands: readonly Island[], d: DamageParams = DAMAGE): void {
   const ships = world.ships;
@@ -130,7 +141,9 @@ export function collideShips(world: World, islands: readonly Island[], d: Damage
         (a.speed * Math.sin(a.headingRad) - b.speed * Math.sin(b.headingRad)) * hit.ny;
       const ownA = a.speed * (Math.cos(a.headingRad) * hit.nx + Math.sin(a.headingRad) * hit.ny);
       const ownB = -b.speed * (Math.cos(b.headingRad) * hit.nx + Math.sin(b.headingRad) * hit.ny);
-      const damage = paused(world, a.id, b.id)
+      const isPaused = paused(world, a.id, b.id);
+      if (isPaused) keepPause(world, a.id, b.id, d);
+      const damage = isPaused
         ? { a: 0, b: 0 }
         : cappedDamage(
             collisionDamage(

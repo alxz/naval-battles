@@ -4,6 +4,23 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 23 Nov 2026 (morning) — your test of step 5a; M4b step 5c: rams, shore guns' eyes, the helm (D72)
+
+### Your logs (battle 0808, arena 0828)
+- Arena 0828 (43 min, 10 bots): 0 warnings, 22 wins, 16 collisions (296 hull points); 430 LOST SIGHT lines, one pair can lose and find each other 9-11 times (the edge of the range). Battle 0808: no fog in that battle; you were sunk after 1:46 by BRIGANTINE 4.
+- Your answers: the rams were meant, but the damage came again and again at low speed; fog works well, the balance (density, range, effect of a shot) is yours to tune; shore guns must obey fog too; a bot circled in fog near the port; bots hunt about their course; a change of shot should take 2-3 s; day and night, weather pictures.
+
+### Done (step 5c, D72)
+- **Ram:** a touch during the 2 s pause renews it (`keepPause` in `collide.ts`), so repeated bumps do not hurt; new damage needs 2 s apart and a new run-up. 2 tests (one changed: it waited only 10 ticks).
+- **Shore guns:** `portSees` in `shore.ts`: level 2 or better with the fog on the line (the same `levelForMasts`, `fogBetween`), or heard (fired within `revealSeconds`, within `revealM`). Test: fog hides a ship at 300 m, a shot gives it away, 180 m is seen even in fog.
+- **Helm:** `shapeRudder` in `bot.ts` (dead band `rudderDeadDeg` 3 deg, slew `rudderSlewPerThink` 0.25, in `bots.json`), used by `rudderFor` and `steerTo`. 3 tests.
+- **Log:** every bot mode change is a line `MODE chase [...]` (about 500 an hour), to find why a bot circles.
+- Headless arena 60 min, seed 5150: 25 wins, 0 warnings, 40 collisions, 2,876 lines. Tests: 513 in 67 files; build and build:test green.
+
+### Not done, by D37
+- Pause of 2.5 s to change the kind of shot -> M4. Light of day and night, weather pictures -> after M3b. The map and islands -> M3b (navigation grid, real islands, quays).
+- Open: why a bot circles in fog near a port (the MODE lines will show it in your next arena log).
+
 ## 22 Nov 2026 (night, later) — your test of step 4; M4b step 5a: fog for the rules, gunfire gives the shooter away (D71)
 
 ### Your logs (battle 2330, arena 2338 on M4b 4; arena 2300 on M4b 3r)

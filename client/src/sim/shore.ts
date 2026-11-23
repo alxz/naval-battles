@@ -11,6 +11,8 @@ import { DAMAGE, GUNS, SHORE } from './data';
 import { stepBall } from './guns';
 import { isOffenderOf, lawRange } from './law';
 import { PORTS } from './port';
+import { firedLately, levelForMasts, SIGHT } from './perception';
+import { fogBetween, fogVisibility } from './fog';
 import type { Port } from './port';
 import { nextGaussian } from './random';
 import type { Ball, DamageParams, GunParams, ShipState, ShoreBattery, ShoreParams, World } from './types';
@@ -87,14 +89,26 @@ export function shoreAim(from: { x: number; y: number }, target: ShipState, dt: 
   return solution ? { bearingRad: Math.atan2(aim.y - from.y, aim.x - from.x), elevationDeg: solution.elevationDeg } : null;
 }
 
-/** The offender this port's guns fire at: the one nearest the anchorage, afloat, within the law range. */
+/**
+ * M4b step 5c (D72): the gunners have eyes like every ship, no more. A ship is seen from the port when it is at least a
+ * silhouette (level 2) at that distance, with the fog on the line shrinking the range; or when it fired lately
+ * (its shot is heard, as for ships). Unseen, it is not shot at. The lookout stands at the mast height of the reference ship.
+ */
+export function portSees(world: World, port: Port, ship: ShipState): boolean {
+  if (firedLately(world, ship.id) && Math.hypot(ship.x - port.x, ship.y - port.y) <= SIGHT.revealM) return true;
+  const vis = fogVisibility(fogBetween(world.fog, world.wind, port.x, port.y, ship.x, ship.y));
+  const level = levelForMasts(Math.hypot(ship.x - port.x, ship.y - port.y), 1, vis, SIGHT);
+  return level >= 2;
+}
+
+/** The offender this port's guns fire at: the one nearest the anchorage, afloat, within the law range, and seen from the port. */
 export function shoreTarget(world: World, port: number, ports: readonly Port[] = PORTS, d: DamageParams = DAMAGE): ShipState | null {
   const p = ports[port];
   if (!p) return null;
   let best: ShipState | null = null;
   let bestD = lawRange(d);
   for (const ship of world.ships) {
-    if (ship.sunk || !isOffenderOf(ship, port)) continue;
+    if (ship.sunk || !isOffenderOf(ship, port) || !portSees(world, p, ship)) continue;
     const distance = Math.hypot(ship.x - p.x, ship.y - p.y);
     if (distance <= bestD) {
       best = ship;

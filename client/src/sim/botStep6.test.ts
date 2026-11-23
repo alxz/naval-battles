@@ -1,7 +1,7 @@
 // M3 step 6 (D45): bot seamanship part 2: cut a runner off, wear instead of tacking,
 // keep clear alongside, turn away after a collision, ram on purpose (with a roll).
 import { describe, expect, it } from 'vitest';
-import { avoidShips, interceptBearing, newBot, rudderFor, thinkBots } from './bot';
+import { avoidShips, interceptBearing, newBot, rudderFor, shapeRudder, thinkBots } from './bot';
 import { BOTS, SHIP_CLASSES } from './data';
 import type { ShipState, World } from './types';
 
@@ -106,5 +106,25 @@ describe('after a collision and ramming (thinkBot)', () => {
     w.bots[0]!.mode = 'engage';
     thinkBots(w, [], { ...BOTS, ramChance: 1 });
     expect(w.events.some((e) => e.type === 'ramDecision')).toBe(false);
+  });
+});
+
+describe('shapeRudder (5c): a dead band and a slow helm', () => {
+  const dead = BOTS.rudderGain * (BOTS.rudderDeadDeg * Math.PI) / 180;
+  it('a small error gets no rudder; beyond the band it grows from zero', () => {
+    expect(shapeRudder(dead * 0.9, 0)).toBe(0);
+    expect(shapeRudder(-dead * 0.9, 0)).toBe(0);
+    expect(shapeRudder(dead + 0.1, 0)).toBeCloseTo(0.1, 9);
+    expect(shapeRudder(-dead - 0.1, 0)).toBeCloseTo(-0.1, 9);
+  });
+  it('the rudder moves at most rudderSlewPerThink per decision, either way', () => {
+    expect(shapeRudder(1 + dead, 0)).toBeCloseTo(BOTS.rudderSlewPerThink, 9);
+    expect(shapeRudder(-1 - dead, 0.1)).toBeCloseTo(0.1 - BOTS.rudderSlewPerThink, 9);
+    expect(shapeRudder(0, 0.9)).toBeCloseTo(0.9 - BOTS.rudderSlewPerThink, 9);
+  });
+  it('a steady error reaches full rudder after 1 / slew decisions', () => {
+    let r = 0;
+    for (let i = 0; i < Math.ceil(1 / BOTS.rudderSlewPerThink); i++) r = shapeRudder(1 + dead, r);
+    expect(r).toBe(1);
   });
 });

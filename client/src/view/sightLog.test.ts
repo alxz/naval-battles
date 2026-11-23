@@ -104,3 +104,15 @@ describe('log lines', () => {
     expect(log.text(w, '')).toContain('back in view 0x');
   });
 });
+
+describe('mode lines (5c)', () => {
+  it('every change of a bot mode gets a line, the old ones keep their words', () => {
+    const w = createWorld(7, 1);
+    const log = new ArenaLog();
+    log.modeChanged(w, w.ships[0]!.id, 'chase');
+    log.modeChanged(w, w.ships[0]!.id, 'flee');
+    const text = log.text(w, '');
+    expect(text).toContain('MODE chase');
+    expect(text).toContain('flees');
+  });
+});

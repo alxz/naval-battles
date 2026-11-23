@@ -432,6 +432,8 @@ export interface BotParams {
   closeHauledMarginDeg: number; // when beating, sail this far outside the no-go zone
   tackCooldownSeconds: number; // at least this long on one tack
   rudderGain: number; // rudder per radian of heading error
+  rudderDeadDeg: number; // M4b 5c: a heading error this small gets no rudder (no hunting about the course)
+  rudderSlewPerThink: number; // M4b 5c: the rudder moves at most this much per decision (a helmsman is not instant)
   aimErrorMinDeg: number; // judgement error of the elevation, sigma: the best bot...
   aimErrorMaxDeg: number; // ...and the worst (each bot gets its own value between)
   elevationDegPerSecond: number; // how fast it can raise or lower the guns (the same as the player's keys)
