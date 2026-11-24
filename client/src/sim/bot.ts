@@ -515,6 +515,45 @@ export function portsFor(ports: readonly Port[], params: ShipParams, p: BotParam
   return ports.filter((port) => port.harbourR === undefined || params.length <= port.harbourR * p.harbourLengthShare);
 }
 
+/** The ports this bot may still use: those its ship can use (portsFor) minus the ones it has given up on (D74). */
+export function portsForBot(bot: BotState, ports: readonly Port[], params: ShipParams, p: BotParams = BOTS): Port[] {
+  const usable = portsFor(ports, params, p);
+  const blocked = bot.blockedPorts;
+  return blocked && blocked.length > 0 ? usable.filter((port) => !blocked.some((b) => b.port === port.name)) : usable;
+}
+
+/**
+ * D74: one failure (a new grounding, or working free) of a bot that is sailing to a port. Near a port
+ * (portFailRadiusM) failures add up in a window; at portFailCount the port is closed for this bot for
+ * portBlockSeconds and it looks for another.
+ */
+export function notePortTrouble(bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams = BOTS): void {
+  if (bot.mode !== 'port') return;
+  const near = nearestPort(ship.x, ship.y, portsForBot(bot, portsOf(islands), params, p));
+  if (!near || near.distance > p.portFailRadiusM) return;
+  const t = bot.portTrouble && bot.portTrouble.port === near.port.name ? bot.portTrouble : { port: near.port.name, count: 0, seconds: 0 };
+  t.count += 1;
+  bot.portTrouble = t;
+  if (t.count < p.portFailCount) return;
+  delete bot.portTrouble;
+  bot.blockedPorts = [...(bot.blockedPorts ?? []).filter((b) => b.port !== near.port.name), { port: near.port.name, seconds: p.portBlockSeconds }];
+  delete bot.route;
+  bot.waitingBerth = false;
+}
+
+/** Time passes for the trouble window and the closed ports. */
+function ageBlockedPorts(bot: BotState, thinkSeconds: number, p: BotParams): void {
+  if (bot.portTrouble) {
+    bot.portTrouble.seconds += thinkSeconds;
+    if (bot.portTrouble.seconds > p.portFailWindowSeconds) delete bot.portTrouble;
+  }
+  if (bot.blockedPorts) {
+    for (const b of bot.blockedPorts) b.seconds -= thinkSeconds;
+    bot.blockedPorts = bot.blockedPorts.filter((b) => b.seconds > 0);
+    if (bot.blockedPorts.length === 0) delete bot.blockedPorts;
+  }
+}
+
 /**
  * The sails for a ship in a harbour (M3 step 6d): at most what gives harbourSpeedMps there (the
  * harbour boats still tow it at towMps, so it never stops). Outside a harbour: `sails` unchanged.
@@ -585,6 +624,11 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const enemy = believedShip(world, id, bot.enemyId, ship.shipClass);
   const seen = !world.sight || !!contactOf(world, id, bot.enemyId)?.visible; // in view right now (else: the last known place)
 
+  // D74: a new grounding on the way to a port counts against that port.
+  ageBlockedPorts(bot, thinkSeconds, p);
+  if (ship.aground && !bot.wasAground) notePortTrouble(bot, ship, params, islands, p);
+  bot.wasAground = ship.aground;
+
   // --- Stuck? (M3 step 4c) A bot that wanted to move but did not get anywhere works free first. ---
   const working = workFree(world, bot, ship, params, islands, thinkSeconds, p);
   if (working) return working;
@@ -616,7 +660,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   // --- No enemy (gone or sunk; or peace in the arena): a hurt ship sails to a port, else it lies still. ---
   if (!enemy || enemy.sunk) {
     const full = params.hullPoints;
-    const port = nearestPort(ship.x, ship.y, portsFor(portsOf(islands), params, p));
+    const port = nearestPort(ship.x, ship.y, portsForBot(bot, portsOf(islands), params, p));
     if (port && ship.hull < full * DAMAGE.port.maxShare - 1e-6 && (world.arena || port.distance <= p.portSeekRange)) return sailToPort(world, bot, ship, params, islands, port, p);
     // M4b step 2: nobody in view and none remembered: a sound ship goes on its way (a search), a hurt one lies still and mends.
     const sound = ship.hull >= full * DAMAGE.repair.seaMaxShare - 1e-6;
@@ -635,7 +679,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
   const hullShare = ship.hull / params.hullPoints;
   const ports = portsOf(islands);
   const nearest = nearestPort(ship.x, ship.y, ports); // any port (to keep clear of it while waiting)
-  const port = nearestPort(ship.x, ship.y, portsFor(ports, params, p)); // a port this ship can use for repairs
+  const port = nearestPort(ship.x, ship.y, portsForBot(bot, ports, params, p)); // a port this ship can use for repairs
   // --- M3 step 7b: crew spirit. Fear fades (faster out of the fight); now and then (every 3-6 s,
   // at random moments) the bot weighs its chances. ---
   const courage = courageOf(bot, params, world, p);
@@ -1257,7 +1301,7 @@ function wantsToMove(bot: BotState, ship: ShipState, islands: readonly Island[])
   if (bot.mode === 'port') {
     if (bot.waitingBerth) return false;
     const params = SHIP_CLASSES[ship.shipClass];
-    const port = nearestPort(ship.x, ship.y, params ? portsFor(portsOf(islands), params, BOTS) : portsOf(islands));
+    const port = nearestPort(ship.x, ship.y, params ? portsForBot(bot, portsOf(islands), params, BOTS) : portsOf(islands));
     return !port || port.distance > 2 * DAMAGE.port.dockRange;
   }
   return true;
@@ -1288,6 +1332,7 @@ function workFree(world: World, bot: BotState, ship: ShipState, params: ShipPara
   bot.progress = { x: ship.x, y: ship.y, seconds: 0, travelledM: 0 };
   if (moved >= p.stuckMoveM || !wantsToMove(bot, ship, islands)) return null;
   const heading = unstickHeading(ship, params, islands, world.wind);
+  notePortTrouble(bot, ship, params, islands, p);
   bot.unstickLeft = p.unstickSeconds;
   bot.unstickHeadingRad = heading;
   bot.tack = 0;

@@ -1,5 +1,5 @@
 import { bearingDegToHeadingRad } from './angles';
-import { ENEMIES, ISLANDS, SHIP_CLASSES, WIND } from './data';
+import { ENEMIES, ISLANDS, SHIP_CLASSES, WIND, WORLD } from './data';
 import { nationFor } from './nation';
 import { nextRandom } from './random';
 import worldJson from '../data/world.json';
@@ -28,9 +28,12 @@ export const START_BATTLE_SKILL = 4;
 /** Any whole number. The same seed gives the same wind drift (and later the same gun errors). */
 export const DEFAULT_SEED = 20261114;
 
-/** Where extra enemies appear: between these distances from your start, in open water. */
-const SPAWN_MIN_M = 400;
-const SPAWN_MAX_M = 800;
+/**
+ * Where extra enemies appear: between these distances from your start, in open water (data/world.json).
+ * M4b 5d: beyond the first sighting (1000 m), so a fight grows out of contacts, not all at once.
+ */
+const SPAWN_MIN_M = WORLD.spawnMinM ?? 400;
+const SPAWN_MAX_M = WORLD.spawnMaxM ?? 800;
 
 /**
  * How many bots for a new battle (M3 step 6c): the number chosen in the panel, or with 0 ("random")

@@ -5,6 +5,7 @@ import type { Pose } from '../sim/simulation';
 import type { World } from '../sim/types';
 import { paint, textStyle } from './text';
 import { shipLabel } from '../view/wanted';
+import { botTag } from '../view/botTag';
 import { shipBar } from '../view/shipBar';
 import { panelCovers, overlaps } from '../view/hudLayout';
 import type { Rect } from '../view/hudLayout';
@@ -141,7 +142,8 @@ export class ArenaHud {
       }
       const params = SHIP_CLASSES[ship.shipClass];
       // An offender of a port's peace: "WANTED: ..." in red until it is pardoned (M3 step 6c).
-      const look = shipLabel(ship, `#${pilot.number} ${pilot.name} ${pilot.wins}`, ship.id === focusId ? '#ffe066' : '#ffffff');
+      const tag = screen.botEyes ? '' : botTag(world.bots.find((b) => b.shipId === ship.id), arena.pilots); // what it is doing (D75), only for SEE ALL
+      const look = shipLabel(ship, `#${pilot.number} ${pilot.name} ${pilot.wins}${tag ? ` ${tag}` : ''}`, ship.id === focusId ? '#ffe066' : '#ffffff');
       paint(label.setVisible(true), look.text, look.colour);
       // Above the ship's bars (whole pixels: a text centred on a half pixel shimmers).
       const top = params ? shipBar(params, pose.x, pose.y, pose.headingRad, 1, s).y - 3 : Math.round(pose.y * s) - 30;

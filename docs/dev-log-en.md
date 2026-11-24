@@ -4,6 +4,13 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 23 Nov 2026 (evening) — your test of step 5c; M4b step 5d: blocked ports, foes list (D74, D75)
+
+- **Found in the logs:** in the Isla Verde fight a caravel grounded 12 times at the same spot of the inlet mouth in 4 minutes: it had no memory of a failed approach. Rams (5c) work: big hits only after a new run-up. Both arenas: 0 warnings. `SUNK` lines showed `killer: ?` for the player.
+- **Done:** D74 (`portsForBot`, `notePortTrouble`: 3 failures near a port in 120 s close it for that bot for 180 s); D75 (foes list, bots start 1100-2000 m away, mode and target over bots in the arena, smaller ship panel on a computer, `killer: player`).
+- **Not done:** a third port (needs a new village island, changes the pictures) → M3b; team numbers → Squadrons. Autopilot (D73) before 5b is waiting for the developer's decision.
+- **Checks:** 520 tests, build, build:test, headless arena 60 min seed 5150: 0 warnings, 21 collisions; Playwright on a computer and iPhone 13 landscape.
+
 ## 23 Nov 2026 (afternoon) — D73: your route and autopilot (proposal accepted)
 - Your idea: up to 4 route points on the chart, the ship follows them; land and shoals are not avoided in the first version. Agreed: first step of M3b (not in M4b, D37). Headwind: option (b), the ship beats in tacks at any moment of the route and the screen says `HEADWIND - TACKING` next to `AUTO`. Details: plan D73, `world-ideas-en.md` section 14.
 

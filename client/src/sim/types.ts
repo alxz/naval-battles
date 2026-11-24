@@ -262,6 +262,8 @@ export interface WorldBounds {
   minY: number;
   maxY: number;
   reefWidth: number; // metres; the reef lies inside the rectangle, along its four sides
+  spawnMinM?: number; // M4b 5d: the bots of a battle start between these distances from you (data/world.json)
+  spawnMaxM?: number;
 }
 
 export interface World {
@@ -410,6 +412,10 @@ export interface BotState {
   weighLeft?: number; // seconds until it weighs its chances again (3-6 s, random)
   weighDistance?: number; // the enemy's distance at the last weighing (is it gaining on us?)
   tradeTo?: { x: number; y: number }; // a trader's next stop on its trade run
+  // --- M4b step 5d (D74): it remembers a port it cannot get into ---
+  wasAground?: boolean; // was aground at the last decision (to count a new grounding once)
+  portTrouble?: { port: string; count: number; seconds: number }; // failures (groundings, working free) near that port in the current window
+  blockedPorts?: { port: string; seconds: number }[]; // ports it gives up on, and for how long still
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -433,6 +439,10 @@ export interface BotParams {
   tackCooldownSeconds: number; // at least this long on one tack
   rudderGain: number; // rudder per radian of heading error
   rudderDeadDeg: number; // M4b 5c: a heading error this small gets no rudder (no hunting about the course)
+  portFailCount: number; // M4b 5d: this many failures near one port within portFailWindowSeconds ...
+  portFailWindowSeconds: number;
+  portFailRadiusM: number; // ... closer to it than this (groundings, working free) ...
+  portBlockSeconds: number; // ... and the bot counts the port closed for this long
   rudderSlewPerThink: number; // M4b 5c: the rudder moves at most this much per decision (a helmsman is not instant)
   aimErrorMinDeg: number; // judgement error of the elevation, sigma: the best bot...
   aimErrorMaxDeg: number; // ...and the worst (each bot gets its own value between)

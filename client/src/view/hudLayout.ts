@@ -37,6 +37,8 @@ export interface HudLayout {
   autoZoom: Rect;
   /** A phone: my ship panel is drawn smaller (see Hud.ts). */
   compact: boolean;
+  /** My ship panel uses the small forms (compass, 8 px speed, small pips): a phone or, since M4b 5d, a computer. */
+  shipSmall: boolean;
   /** A narrow computer window (portrait): the guns panel stands above my ship panel (M3 step 4c). */
   narrow: boolean;
   /** Where the status line (IN IRONS!, AGROUND) starts: just above the lowest panel on the left. */
@@ -48,6 +50,9 @@ export const HUD_MARGIN = 8;
 export const BUTTON_MARGIN = 10;
 const SHIP_W = 160; // room for the speed in the 16 px pixel font
 const SHIP_H = 64;
+/** Computer (M4b 5d): my ship panel in the small forms of the phone, a little roomier. */
+const SHIP_W_PC = 120;
+const SHIP_H_PC = 48;
 const SHIP_W_COMPACT = 112; // phone: a small compass and the speed in the 8 px font
 const SHIP_H_COMPACT = 44;
 /** Phone, ship panel closed (M3 step 7e): a small compass, the speed and the hull bar; a tap on it opens the full panel. */
@@ -111,7 +116,7 @@ export function hudLayout(width: number, height: number, touch: boolean, shipOpe
     ? compact && !shipOpen
       ? { x: m, y: m, w: SHIP_W_MINI, h: SHIP_H_MINI }
       : { x: m, y: m, w: compact ? SHIP_W_COMPACT : SHIP_W, h: compact ? SHIP_H_COMPACT : SHIP_H }
-    : { x: m, y: height - m - SHIP_H, w: SHIP_W, h: SHIP_H };
+    : { x: m, y: height - m - SHIP_H_PC, w: SHIP_W_PC, h: SHIP_H_PC };
   // Touch: the sound button sits right of the zoom button. Computer: a small icon in the corner.
   const z = smallButtonSize(height);
   const sound: Rect = touch ? { x: zoomButtonX(width, height) + z + m, y: m, w: z, h: z } : { x: m, y: m, w: SOUND_ICON, h: SOUND_ICON };
@@ -141,7 +146,7 @@ export function hudLayout(width: number, height: number, touch: boolean, shipOpe
     : narrow
       ? { x: m, y: ship.y - 6 - AMMO_ROW_H - GUNS_H, w: gunsW, h: GUNS_H }
       : { x: Math.round(width / 2 - gunsW / 2), y: height - m - GUNS_H, w: gunsW, h: GUNS_H };
-  const status = touch ? { x: ship.x + 2, y: target.y + target.h + 5 } : narrow ? { x: m + 2, y: guns.y - AMMO_ROW_H - 14 } : { x: ship.x + 2, y: ship.y - 14 };
+  const status = touch ? { x: ship.x + 2, y: target.y + target.h + 5 } : narrow ? { x: m + 2, y: guns.y - AMMO_ROW_H - 14 } : { x: ship.x + 2, y: Math.min(ship.y, guns.y - AMMO_ROW_H) - 14 };
   return {
     ship,
     target,
@@ -155,6 +160,7 @@ export function hudLayout(width: number, height: number, touch: boolean, shipOpe
     autoZoom,
     buttonSize,
     compact,
+    shipSmall: compact || !touch,
     narrow,
     status,
   };

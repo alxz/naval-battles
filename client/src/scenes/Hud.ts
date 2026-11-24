@@ -205,8 +205,8 @@ export class Hud {
       // Phone, panel closed: a small compass, the speed and the hull bar.
       this.compass.place(s.x + 15, s.y + s.h / 2, 10);
       this.speed.setStyle(textStyle('main')).setPosition(s.x + 31, s.y + 4);
-    } else if (l.compact) {
-      // Phone: a small compass and the speed in the 8 px font.
+    } else if (l.shipSmall) {
+      // Phone (and, since M4b 5d, computer): a small compass and the speed in the 8 px font.
       this.compass.place(s.x + 22, s.y + s.h / 2, 18);
       this.speed.setStyle(textStyle('main')).setPosition(s.x + 46, s.y + 5);
     } else {
@@ -297,7 +297,7 @@ export class Hud {
       twaDeg: sailing.twaDeg,
     });
     this.speed.setText(ship.speed.toFixed(1));
-    const c = l.compact;
+    const c = l.shipSmall;
     const mini = this.touch && c && !this.shipOpen;
     this.unit.setVisible(!mini).setPosition(this.speed.x + this.speed.width + 4, s.y + (c ? 6 : 15));
     if (mini) {
@@ -414,6 +414,11 @@ export class Hud {
   /** My ship panel as it is now (a phone: mini or open), so the arena buttons can go under it. */
   shipRect(): { x: number; y: number; w: number; h: number } {
     return { ...this.base.ship };
+  }
+
+  /** The target card's place whether it is shown or not (M4b 5d: the foes list goes under it). */
+  targetBox(): { x: number; y: number; w: number; h: number } {
+    return { ...this.l.target };
   }
 
   /** M4b step 4: the target card as it is now, or null when it is not shown (the arena buttons go below it on touch screens). */

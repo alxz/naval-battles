@@ -9,6 +9,8 @@ import { PortMarks } from './PortMarks';
 import { ShipBars } from './ShipBars';
 import type { ShipLabel } from './ShipBars';
 import { battleName, isWanted, shipLabel } from '../view/wanted';
+import { newRosterMemory, rosterRows, updateRosterMemory } from '../view/roster';
+import { Roster } from './Roster';
 import { nationFor } from '../view/flags';
 import { PerfMeter } from '../view/perfMeter';
 import type { Nation } from '../view/flags';
@@ -175,6 +177,8 @@ export class SeaScene extends Phaser.Scene {
   private freeView: Point | null = null; // metres: you dragged the view away from the ships
   private timeScale = 1;
   private arenaHud!: ArenaHud;
+  private roster!: Roster; // M4b 5d: who is still in the battle (solo)
+  private rosterMemory = newRosterMemory();
   private arenaLog = new ArenaLog();
   private arenaStartedAt = '';
   private battleLog = new ArenaLog(); // M3 step 7d: the log of a battle against bots
@@ -263,6 +267,7 @@ export class SeaScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.middleButtonDown()) this.toggleSpyglass();
     });
+    this.roster = new Roster(this, isTouch);
     this.arenaHud = new ArenaHud(this, isTouch, {
       onNext: () => this.nextFocus(),
       onSpeed: () => this.nextSpeed(),
@@ -636,6 +641,7 @@ export class SeaScene extends Phaser.Scene {
 
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
     if (this.arena) {
+      this.roster.hide();
       this.arenaHud.update(this.sim.world, poses, s, myShip.id, this.freeView === null, this.timeScale, clock(this.sim.world.tick * STEP_SECONDS), {
         known,
         botEyes: v.botEyes,
@@ -646,6 +652,12 @@ export class SeaScene extends Phaser.Scene {
       });
       return;
     }
+    // M4b 5d (D75): the list of the other ships (a battle only, not the arena).
+    updateRosterMemory(this.rosterMemory, this.sim.world.ships, known, PLAYER_ID);
+    const rows = this.started ? rosterRows(this.sim.world.ships, known, this.rosterMemory, PLAYER_ID) : [];
+    const card = this.hud.targetBox();
+    const shipBox = this.hud.shipRect();
+    this.roster.update(rows, this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 4 } : { x: card.x, y: card.y + card.h + 6 });
     const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
     if (myShip.sunk) this.banner.request('lose', this.sunkBy < 0 ? 'Sunk by the shore guns' : `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
     else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk || this.traderGone(sh, myShip))) {
@@ -942,7 +954,7 @@ export class SeaScene extends Phaser.Scene {
    * Start a duel: a fresh world, the same settings from the panel.
    *   - You start where the last duel ended (easier to find your way on the chart); the very
    *     first time, at the start place of the sea.
-   *   - In "bot" mode each bot appears at a random place in open water, 400-800 m from you.
+   *   - In "bot" mode each bot appears at a random place in open water, spawnMinM-spawnMaxM from you (data/world.json).
    * A new seed each time, so every duel is different. (The time of day is only used here,
    * on the screen side, to pick the seed; inside the simulation everything follows from it.)
    */
@@ -955,6 +967,7 @@ export class SeaScene extends Phaser.Scene {
     const last = this.started ? this.ship(PLAYER_ID) : undefined;
     const botMode = v.targetBehaviour === 'bot';
     const seed = (Date.now() & 0x7fffffff) || 1;
+    this.rosterMemory = newRosterMemory();
     this.storeBattleLog(); // the battle that just ended stays downloadable (L) until the next one ends
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
     if (v.fog) this.sim.world.fog = makeFog(seed); // M4b step 5a
