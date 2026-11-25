@@ -4,6 +4,16 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (morning) — your test of M3b 2; M3b 2b
+- **Your test:** "sink 3 ships" counts correctly; phone goal line fits. You saw no pirate goal: both logs had odd seeds (316808599, 320264083), and an odd seed always gives "sink 3 ships" (even seed and a pirate: the pirate goal). So not a bug, but the log did not show it. Seeds come from the clock, you cannot pick one.
+- **Logs:** battle logs: 0 warnings except your own grounding at Isla Verde (7:10, off 56 s). Arena 60+ min (seed 321999492): 1 warning (frigate stuck aground, Empty Barrel Land), 63 collisions; groundings stay for M3b.
+- **Phone / iPad:** ROUTE / DONE and CLEAR were tiny. Now on touch screens they are 16 px (twice as big), ROUTE / DONE at the left of the chart, CLEAR at the right, vertically in the middle; the chart is narrower by two strips. Computer unchanged.
+- **Log:** a line `GOAL: ... (seed even|odd)` after the ships list in the battle log.
+- Seen, not fixed: on a touch screen the minimap lies over the chart's "wind from" text.
+- Version `M3b 2b`.
+
+---
+
 ## 24 Nov 2026 (late night) — D77: a goal in Solo (M3b 2)
 - **Your answer:** black sails only for renegades; a pirate under a false flag keeps ordinary sails and hoists the black flag at about 300 m (for step 5b-2). Recorded in `world-ideas` §15.
 - **Built (D77):** every battle against bots gets a goal from its seed: sink the named pirate (a pirate is in every battle, D76) or sink 3 ships (fewer if fewer bots). Pure `view/goal.ts` (`chooseGoal`, `noteSunk`, `goalLine`), 11 tests; the simulation does not know it, the scene reads the `sunk` events. The pirate sunk by another ship, or too few ships left for "sink 3": goal lost. Screen: a yellow goal line above the foes list (a phone: a shorter line under AUTO), "SHIP 5" until you have met the ship and then "SLOOP 5" (`rosterName`, D68), the result for 8 s in the bosun's place, the banner title "GOAL DONE!". Delivery goals (cargo, a passenger) wait for M3b.

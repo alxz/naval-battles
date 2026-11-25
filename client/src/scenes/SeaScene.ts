@@ -1150,6 +1150,7 @@ export class SeaScene extends Phaser.Scene {
     const world = this.sim.world;
     for (const line of headerLines(world, seed)) this.battleLog.add(0, line);
     this.battleLog.add(0, `battle with ${world.ships.length - 1} bots (seed ${seed}); you sail under the black flag:`);
+    if (this.goal) this.battleLog.add(0, goalLine(this.goal, (id) => who(world, id)) + ` (seed ${seed % 2 === 0 ? 'even' : 'odd'})`);
     for (const ship of world.ships) {
       this.battleLog.add(0, `   ${who(world, ship.id)}${ship.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship.x, ship.y)}`);
     }

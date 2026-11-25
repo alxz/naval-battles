@@ -40,6 +40,7 @@ export class Chart {
   // D73: route mode: a click or tap on the chart sets a route point instead of closing it.
   private routeMode = false;
   private routeAllowed = true;
+  private sideWidth = 0;
   private fit: ChartFit | null = null;
   // D73: the route point picked up with a tap (the next tap puts it down); the route length when it was picked, so a point crossed off meanwhile cancels it.
   private picked = -1;
@@ -85,13 +86,19 @@ export class Chart {
       else onClose();
     });
     // D73: ROUTE (N) turns route mode on and off; CLEAR wipes the route.
-    const button = (label: string): Phaser.GameObjects.Text =>
-      scene.add.text(0, 0, label, textStyle('small', '#fff4d6')).setBackgroundColor('#5a4326').setPadding(3, 2, 3, 2).setScrollFactor(0).setDepth(123).setInteractive();
+    // On a touch screen the buttons are twice as big (Silkscreen 16) and stand at the sides of the chart (your test, 25 Nov).
+    const button = (label: string): Phaser.GameObjects.Text => {
+      const style = textStyle('small', '#fff4d6');
+      if (touch) style.fontSize = '16px';
+      const pad = touch ? 8 : 3;
+      return scene.add.text(0, 0, label, style).setBackgroundColor('#5a4326').setPadding(pad, touch ? 6 : 2, pad, touch ? 6 : 2).setScrollFactor(0).setDepth(123).setInteractive();
+    };
     this.routeButton = button('ROUTE');
     // DONE closes the chart (your test, 24 Nov); ROUTE turns route mode on.
     this.routeButton.on('pointerdown', () => (this.routeMode ? this.setOpen(false) : this.toggleRouteMode()));
     this.clearButton = button('CLEAR');
     this.clearButton.on('pointerdown', () => this.onRouteClear());
+    this.sideWidth = Math.max(this.routeButton.width, this.clearButton.width) + 12; // fixed, so the chart does not jump between ROUTE and DONE
     for (let i = 0; i < 4; i++) this.pointLabels.push(scene.add.text(0, 0, `${i + 1}`, textStyle('small', '#3d2c17')).setScrollFactor(0).setDepth(122));
     this.setOpen(false);
   }
@@ -172,7 +179,9 @@ export class Chart {
     g.strokeRoundedRect(paper.x + 1, paper.y + 1, paper.w - 2, paper.h - 2, 6);
 
     // The sea, fitted into the paper with room for the title above and the notes below.
-    const fit = chartFit(WORLD, { x: paper.x + 8, y: paper.y + 20, w: paper.w - 16, h: paper.h - 38 });
+    // Touch: a strip on each side of the chart for the big buttons (ROUTE / DONE left, CLEAR right).
+    const side = this.touch && routeAllowed ? this.sideWidth : 0;
+    const fit = chartFit(WORLD, { x: paper.x + 8 + side, y: paper.y + 20, w: paper.w - 16 - 2 * side, h: paper.h - 38 });
     this.fit = fit;
     const at = (p: { x: number; y: number }): { x: number; y: number } => toChart(fit, WORLD, p);
     const nw = at({ x: WORLD.minX, y: WORLD.minY });
@@ -272,10 +281,16 @@ export class Chart {
     this.title.setText(this.routeMode ? 'CHART - ROUTE' : 'CHART');
     if (routeAllowed) {
       if (this.routeButton.text !== (this.routeMode ? 'DONE' : 'ROUTE')) this.routeButton.setText(this.routeMode ? 'DONE' : 'ROUTE');
-      const bx = Math.round(paper.x + paper.w / 2 - 40);
-      const by = Math.round(paper.y + paper.h - 16);
-      this.routeButton.setPosition(bx, by).setVisible(true);
-      this.clearButton.setPosition(bx + this.routeButton.width + 6, by).setVisible(route.length > 0);
+      if (this.touch) {
+        const by = Math.round(paper.y + paper.h / 2 - this.routeButton.height / 2);
+        this.routeButton.setPosition(Math.round(paper.x + 8 + side / 2 - this.routeButton.width / 2), by).setVisible(true);
+        this.clearButton.setPosition(Math.round(paper.x + paper.w - 8 - side / 2 - this.clearButton.width / 2), by).setVisible(route.length > 0);
+      } else {
+        const bx = Math.round(paper.x + paper.w / 2 - 40);
+        const by = Math.round(paper.y + paper.h - 16);
+        this.routeButton.setPosition(bx, by).setVisible(true);
+        this.clearButton.setPosition(bx + this.routeButton.width + 6, by).setVisible(route.length > 0);
+      }
     } else {
       this.routeButton.setVisible(false);
       this.clearButton.setVisible(false);
