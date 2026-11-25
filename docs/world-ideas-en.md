@@ -440,6 +440,11 @@ Set up to 4 points on the chart; the ship follows them by itself. **First versio
 - **Sail colours** (D78): history: sails were undyed linen or hemp, cream when new, grey-brown when old, often patched; navies showed who they were by flags, the long pennant and the hull's paint, not by sail colour; tanned red-brown sails on fishing and small coastal craft; black pirate sails are mostly legend (a pirate wanted to look like a merchant until the last moment). Plan: sails as a separate white sheet from `render_ship.py`, coloured in the game (`setTint`): one more picture per ship, any number of colours; 2-3 patterned sheets per class later. Rare black sails only as a game mark of a "legend" pirate (the developer's choice). Better hulls (a pear-shaped fluyt, a high caravel) in M8; the galleon in Stage 2.
 - **Renegades and false flags** (the developer's answers, for step 5b-2): a renegade (hunts anyone, across the map) is (1) an offender of a port's law, (2) the bot with the most rams; at least one bot of a battle or arena is a pirate by lot. A bot that has sunk nobody in 10 minutes (alive) may, by chance, change its flag (and at a rebirth). The player sees a renegade by its flag and black sails. **Confirmed 24 Nov (night):** black sails give a false flag away, so: a pirate under a false flag keeps ordinary sails and hoists the black flag at about 300 m; black sails only for renegades who no longer hide.
 
+## 16. Ideas of 25 Nov: sweeps (oars), a livelier Solo
+
+- **Sweeps** (the developer's idea): history: sloops, brigs and small traders carried long oars (sweeps) and rowed in a calm, to leave a harbour against the wind or to claw off a lee shore; in ports the ship's boats tow (already in the game, D49, 1.5-2.5 m/s). **First version (D81, after M3b):** a key / button for small classes: 1-2 m/s on the heading you steer, no matter the wind, only below about 2 m/s and with the sails not drawing; the crew tires while rowing (speed falls), and rests when the oars are in; bots use it to get out of a port and to work off a shoal. Later: galleys and row-boats as a class, ramming speed.
+- **Why Solo felt slow (test of 25 Nov):** a fore-and-aft ship makes only about a quarter of its top speed straight into the wind (50 degrees off: 40% x cos 50 degrees), so a 3 km beat takes four times longer; the numbers are in `polars.json` (yours to tune). Done in D80: time x2 / x4 held at x1 while a ship is in view, the autopilot sets the sails, a TEST switch "bots hunt me". The honest cure inside the rules comes with renegades and port rumours (5b-2).
+
 ## History
 
 | Date | What |
@@ -451,3 +456,4 @@ Set up to 4 points on the chart; the ship follows them by itself. **First versio
 | 19 Nov 2026 (late) | Section 13: fire, island objects |
 | 23 Nov 2026 | Section 14: your route on the chart (D73) |
 | 24 Nov 2026 | Section 15: goal in Solo, sail colours, renegades and false flags (D77, D78, step 5b-2) |
+| 25 Nov 2026 | Section 16: sweeps (oars), why Solo felt slow (D80, D81) |

@@ -39,6 +39,7 @@ export class TouchControls {
     onFire: (side: 'port' | 'starboard' | 'bow') => void,
     onAmmo: () => void,
     onPause: () => void,
+    onSpeed: () => void,
   ) {
     scene.input.addPointer(2); // allow up to 3 fingers at once (rudder + sails + guns)
 
@@ -57,6 +58,8 @@ export class TouchControls {
     this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);
     // M3 step 7c: pause (the ESC key on a computer); also in the arena.
     this.pause = this.add(scene, 'pause', 'II', undefined, onPause, true);
+    // M4b step 5b-2: the time speed in Solo (T on a computer); hidden in the arena, which has its own.
+    this.add(scene, 'speed', 'x1', undefined, onSpeed, true);
   }
 
   /** Show or hide the ship buttons (the auto-bot arena has no ship of yours; the spyglass stays). */
@@ -114,6 +117,16 @@ export class TouchControls {
   setAmmo(label: string): void {
     const b = this.buttons.find((x) => x.name === 'ammo');
     if (b && b.label instanceof Phaser.GameObjects.Text && b.label.text !== label) b.label.setText(label);
+  }
+
+  /** The speed button shows the chosen time speed ("x2"); lit while it runs above x1. */
+  setSpeed(x: number, held = false): void {
+    const b = this.buttons.find((k) => k.name === 'speed');
+    if (!b || !(b.label instanceof Phaser.GameObjects.Text)) return;
+    const text = `x${x}`;
+    if (b.label.text !== text) b.label.setText(text);
+    // yellow frame: running faster; orange: chosen, but held at x1 because a ship is in view
+    b.box.setStrokeStyle(1, x > 1 ? (held ? 0xff9a3c : 0xffe066) : 0xffffff, x > 1 ? 1 : 0.6);
   }
 
   /** The spyglass button is lit (yellow frame) while you look through it. */

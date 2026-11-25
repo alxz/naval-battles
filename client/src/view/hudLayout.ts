@@ -94,8 +94,8 @@ export function isCompact(height: number): boolean {
 
 /** The zoom button (touch) sits to the right of my ship panel; its left edge. */
 export function zoomButtonX(width: number, height: number): number {
-  // Four small buttons in the middle of the top edge: spyglass, sound, auto zoom, pause (M3 step 7c).
-  return Math.round(width / 2 - smallButtonSize(height) * 2 - HUD_MARGIN * 1.5);
+  // Five small buttons in the middle of the top edge: spyglass, sound, auto zoom, pause (M3 step 7c), time speed (5b-2).
+  return Math.round(width / 2 - smallButtonSize(height) * 2.5 - HUD_MARGIN * 2);
 }
 
 /** The small buttons at the top on touch screens (zoom, sound) are this big. */
@@ -130,7 +130,7 @@ export function hudLayout(width: number, height: number, touch: boolean, shipOpe
   // Touch (M3 step 4b): a big minimap at the top right, left of the right column of buttons;
   // as wide as MINIMAP_TOUCH_SCALE buttons, but never onto the small buttons in the top middle.
   const mapRight = width - MAP_EDGE;
-  const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (b.pause.x + b.pause.w + m)));
+  const mapW = Math.max(buttonSize, Math.min(Math.round(buttonSize * MINIMAP_TOUCH_SCALE), mapRight - (b.speed.x + b.speed.w + m)));
   const minimap: Rect = touch
     ? { x: mapRight - mapW, y: MAP_EDGE, w: mapW, h: Math.round((mapW * 2) / 3) }
     : { x: width - m - MINIMAP_W, y: height - m - MINIMAP_H, w: MINIMAP_W, h: MINIMAP_H };
@@ -201,14 +201,15 @@ export type ButtonName =
   | 'ammo'
   | 'zoom'
   | 'fireBow'
-  | 'pause';
+  | 'pause'
+  | 'speed';
 
 /**
  * Touch buttons (their top left corners and sizes):
  *   row 1 (bottom): "<" and "L" at the left edge, "R" and ">" at the right edge
  *   row 2:          "-" and the shot kind at the left; "B" (bow chaser) and gun down at the right
  *   row 3:          "+" at the left; gun up at the right (above gun down)
- *   zoom:         small, at the top, right of my ship panel; pause: the fourth small button at the top
+ *   zoom:         small, at the top, right of my ship panel; pause: the fourth small button at the top; speed: the fifth
  */
 export function touchButtonRects(width: number, height: number): Record<ButtonName, Rect> {
   const s = touchButtonSize(height);
@@ -233,5 +234,6 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
     gunsUp: at(right(1), row(3)),
     zoom: at(zoomButtonX(width, height), HUD_MARGIN, z),
     pause: at(zoomButtonX(width, height) + 3 * (z + HUD_MARGIN), HUD_MARGIN, z),
+    speed: at(zoomButtonX(width, height) + 4 * (z + HUD_MARGIN), HUD_MARGIN, z), // M4b 5b-2: time x1 / x2 / x4 in Solo
   };
 }

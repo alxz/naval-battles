@@ -1,4 +1,4 @@
-import { noteGunfire, stepPerception } from './perception';
+import { noteGunfire, rumourOfPlayer, stepPerception } from './perception';
 import { stepFog } from './fog';
 import { cargoSpeedFactor, crewAccelFactor, crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
 import { collideShips } from './collide';
@@ -181,5 +181,6 @@ export function stepWorld(
   if (world.fog) stepFog(world.fog, world.wind, dt); // M4b step 5a: fog banks drift down the wind
   noteGunfire(world); // M4b step 5a: a shot gives the shooter away
   stepPerception(world, islands); // M4b: every ship's list of what it has seen (3 times a second)
+  if (tuning.huntPlayer && !world.arena) rumourOfPlayer(world, 1); // TEST switch "bots hunt me" (M4b 5b-2)
   world.tick += 1;
 }

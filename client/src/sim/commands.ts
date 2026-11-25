@@ -57,6 +57,7 @@ export function applyCommand(world: World, command: Command): void {
       break;
     case 'setSails':
       ship.sailLevel = clamp(command.value, 0, 1);
+      if (!command.auto) for (const r of world.routes ?? []) if (r.shipId === ship.id) r.handSails = true;
       break;
     case 'placeShip': {
       // Never on land: if the asked place is land (or the reef), the nearest open water is used;

@@ -283,3 +283,33 @@ export function believedShip(world: World, watcherId: number, otherId: number, f
   if (know4 && live.sails !== undefined) ship.sails = live.sails;
   return ship;
 }
+
+/**
+ * TEST switch "bots hunt me" (M4b step 5b-2): a rumour of the player's place reaches every warship and pirate that does
+ * not see him now: a contact at level 1, out of view, so the usual search mode takes it to the place (and, once it is
+ * close, its own eyes take over). Runs every `everySeconds`. It tells bots what they could not know, so it is a test aid
+ * only: the arena log marks it. Returns how many bots were told.
+ */
+export function rumourOfPlayer(world: World, playerId: number, everySeconds = 20): number {
+  if (world.tick % Math.round(everySeconds / STEP_SECONDS) !== 0) return 0;
+  const player = world.ships.find((s) => s.id === playerId);
+  if (!player || player.sunk || !world.sight) return 0;
+  let told = 0;
+  for (const bot of world.ships) {
+    if (bot.id === playerId || bot.sunk) continue;
+    if (SHIP_CLASSES[bot.shipClass]?.trader) continue;
+    const sight = sightOf(world, bot.id);
+    if (!sight) continue;
+    const c = sight.contacts.find((q) => q.id === playerId);
+    if (c?.visible) continue; // it sees him itself
+    if (c) {
+      c.x = player.x;
+      c.y = player.y;
+      c.seenTick = world.tick;
+    } else {
+      sight.contacts.push({ id: playerId, level: 1, levelNow: 1, visible: false, x: player.x, y: player.y, seenTick: world.tick, firstTick: world.tick });
+    }
+    told++;
+  }
+  return told;
+}

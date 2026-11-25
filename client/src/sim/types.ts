@@ -545,6 +545,7 @@ export interface BotParams {
 export interface Tuning {
   speedScale: number; // multiplies every ship's speed; 1 = the numbers in ships.json
   windDrift: boolean; // let the wind wander slowly (plan 4.2)
+  huntPlayer?: boolean; // TEST only (M4b 5b-2): warships and pirates are told where you are every 20 s (a rumour reaches them); it breaks "bots do not cheat", so it is off by default and the logs say TEST
 }
 
 export const DEFAULT_TUNING: Tuning = { speedScale: 1, windDrift: true };
@@ -552,7 +553,7 @@ export const DEFAULT_TUNING: Tuning = { speedScale: 1, windDrift: true };
 /** Everything the player or a bot may do goes through a command. */
 export type Command =
   | { type: 'setRudder'; shipId: number; value: number; auto?: boolean } // auto: from the autopilot; a rudder input without it switches the autopilot off (D73)
-  | { type: 'setSails'; shipId: number; value: number }
+  | { type: 'setSails'; shipId: number; value: number; auto?: boolean } // auto: from the autopilot; a sail input without it keeps the sails in your hand while the route lasts (M4b 5b-2)
   // Test setup only (scale test, later scenario tests): put a ship somewhere, stopped.
   | { type: 'placeShip'; shipId: number; x: number; y: number; headingRad: number; shipClass?: string }
   // Test setup now (lil-gui); later sea events can change the wind the same way.
@@ -574,12 +575,14 @@ export interface AutoRoute {
   points: { x: number; y: number }[]; // the points still ahead, the next one first
   tack: -1 | 0 | 1; // beating to the next point (headwind): +1 / -1 the tack, 0 straight at it
   tackSeconds: number; // how long on this tack (the bots' hysteresis)
+  handSails?: boolean; // you touched the sails: the helmsman leaves them alone for the rest of this route
 }
 
 /** D73: the autopilot's numbers (data/autopilot.json). */
 export interface AutopilotParams {
   maxPoints: number; // a route holds at most this many points (a fifth wipes the oldest)
   arriveM: number; // a point is reached this close
+  sails: number; // the sail level the helmsman sets when the route starts (until you touch the sails)
   thinkEveryTicks: number; // the helmsman decides every this many steps
 }
 
