@@ -73,6 +73,28 @@ describe('hudLayout', () => {
   });
 });
 
+describe('phone button layout (your mock-up, 24 Nov)', () => {
+  const b = touchButtonRects(844, 390);
+  it('the bottom row: "<" and "L" at the left edge, "R" and ">" at the right edge, all on one line', () => {
+    expect(b.rudderLeft.x).toBeLessThan(b.firePort.x);
+    expect(b.fireStarboard.x).toBeLessThan(b.rudderRight.x);
+    expect(b.rudderRight.x + b.rudderRight.w).toBeLessThanOrEqual(844 - 10);
+    for (const r of [b.firePort, b.fireStarboard, b.rudderRight]) expect(r.y).toBe(b.rudderLeft.y);
+  });
+  it('the second row: "-" and the shot kind at the left; "B" and gun down at the right', () => {
+    expect(b.sailsLess.x).toBe(b.rudderLeft.x);
+    expect(b.ammo.x).toBe(b.firePort.x);
+    expect(b.fireBow.x).toBe(b.fireStarboard.x);
+    expect(b.gunsDown.x).toBe(b.rudderRight.x);
+    for (const r of [b.ammo, b.fireBow, b.gunsDown]) expect(r.y).toBe(b.sailsLess.y);
+    expect(b.sailsLess.y).toBeLessThan(b.rudderLeft.y);
+  });
+  it('"+" is straight above "-"', () => {
+    expect(b.sailsMore.x).toBe(b.sailsLess.x);
+    expect(b.sailsMore.y).toBeLessThan(b.sailsLess.y);
+  });
+});
+
 describe('panelCovers', () => {
   const panel = { x: 100, y: 100, w: 50, h: 20 };
   it('a ship under the panel or close to its edge counts; one far away does not', () => {

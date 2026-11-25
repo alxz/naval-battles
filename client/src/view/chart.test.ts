@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Island, ShipState } from '../sim/types';
-import { chartFit, discover, forget, fromChart, isKnown, newChart, toChart, updateSightings, viewFrame } from './chart';
+import { chartFit, discover, forget, fromChart, isKnown, movePoint, newChart, pointAt, toChart, updateSightings, viewFrame } from './chart';
 
 const square = (name: string, x: number, y: number, kind?: string): Island => ({
   name,
@@ -99,5 +99,28 @@ describe('forget', () => {
     updateSightings(chart, [ship(2, 9100, 9000)], view, () => false);
     expect(chart.sightings[0]!.inSight).toBe(false);
     expect(chart.sightings[0]!.x).toBe(9000); // the old mark stays where it was last seen
+  });
+});
+
+describe('route editing (D73)', () => {
+  const pts = [
+    { x: 10, y: 10 },
+    { x: 60, y: 10 },
+    { x: 64, y: 12 },
+  ];
+  it('pointAt finds the nearest point within the radius', () => {
+    expect(pointAt(pts, { x: 12, y: 11 }, 12)).toBe(0);
+    expect(pointAt(pts, { x: 63, y: 11 }, 12)).toBe(2); // 60 and 64 are both near: the closer wins
+  });
+  it('pointAt gives -1 when nothing is near, or there are no points', () => {
+    expect(pointAt(pts, { x: 30, y: 40 }, 12)).toBe(-1);
+    expect(pointAt([], { x: 0, y: 0 }, 12)).toBe(-1);
+  });
+  it('movePoint moves one point and leaves the others and the input alone', () => {
+    const moved = movePoint(pts, 1, { x: 5, y: 6 });
+    expect(moved[1]).toEqual({ x: 5, y: 6 });
+    expect(moved[0]).toEqual(pts[0]);
+    expect(pts[1]).toEqual({ x: 60, y: 10 });
+    expect(movePoint(pts, 7, { x: 1, y: 1 })).toEqual(pts);
   });
 });

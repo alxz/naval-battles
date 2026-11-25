@@ -6,6 +6,7 @@ import { textStyle } from './text';
 import type { TextKind } from './text';
 
 const PODIUM = 3;
+const OTHERS_PER_COLUMN = 4;
 const PLACE_COLOURS = ['#ffd84a', '#d8dde3', '#d9935a']; // gold, silver, bronze
 
 /**
@@ -24,6 +25,7 @@ export class ArenaResults {
   private readonly names: Phaser.GameObjects.Text[] = [];
   private readonly ships: Phaser.GameObjects.Image[] = [];
   private readonly rest: Phaser.GameObjects.Text;
+  private readonly rest2: Phaser.GameObjects.Text;
   private readonly exit: Phaser.GameObjects.Text;
   private readonly back: Phaser.GameObjects.Text;
   private readonly save: Phaser.GameObjects.Text;
@@ -47,6 +49,7 @@ export class ArenaResults {
       this.ships.push(scene.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(141));
     }
     this.rest = text('small', '#cfe6f7').setAlign('left');
+    this.rest2 = text('small', '#cfe6f7').setAlign('left');
     const button = (label: string, action: () => void): Phaser.GameObjects.Text => {
       const t = scene.add
         .text(0, 0, label, { ...textStyle('main', '#1b1b1b'), backgroundColor: '#ffe066', padding: { x: 6, y: 4 } })
@@ -77,7 +80,7 @@ export class ArenaResults {
 
   hide(): void {
     this.shown = false;
-    for (const o of [this.g, this.title, this.sub, this.rest, this.exit, this.back, this.save, ...this.places, ...this.names, ...this.ships]) o.setVisible(false);
+    for (const o of [this.g, this.title, this.sub, this.rest, this.rest2, this.exit, this.back, this.save, ...this.places, ...this.names, ...this.ships]) o.setVisible(false);
     this.blocker.setVisible(false).disableInteractive();
   }
 
@@ -88,7 +91,14 @@ export class ArenaResults {
     const h = this.height;
     const compact = h < 300; // a phone
     const panelW = Math.min(w - 16, 420);
-    const panelH = Math.min(h - 16, compact ? 220 : 300);
+    // The others (place IV and below) go in columns of at most OTHERS_PER_COLUMN lines, and the panel grows to hold them (the list used to creep under the buttons).
+    const others = rows.slice(PODIUM).map((r) => `${r.roman.padEnd(3)} #${r.number} ${r.name.padEnd(12)} ${r.wins} / ${r.escapes} / ${r.losses}`);
+    const columns = others.length > OTHERS_PER_COLUMN ? 2 : 1;
+    const perColumn = Math.ceil(others.length / columns);
+    this.rest.setText(others.slice(0, perColumn).join('\n'));
+    this.rest2.setText(others.slice(perColumn).join('\n'));
+    const restH = others.length > 0 && !compact ? this.rest.height : 0;
+    const panelH = Math.min(h - 16, compact ? 220 : Math.max(300, 112 + 104 + restH + 52));
     const px = Math.round(w / 2 - panelW / 2);
     const py = Math.round(h / 2 - panelH / 2);
     this.g.clear().setVisible(true);
@@ -129,8 +139,18 @@ export class ArenaResults {
     });
 
     // The others: one short line each.
-    const others = rows.slice(PODIUM).map((r) => `${r.roman.padEnd(3)} #${r.number} ${r.name.padEnd(12)} ${r.wins} / ${r.escapes} / ${r.losses}`);
-    centre(this.rest.setVisible(others.length > 0 && !compact).setText(others.join('\n')), w / 2, shipY + 104);
+    const showRest = others.length > 0 && !compact;
+    this.rest.setVisible(showRest);
+    this.rest2.setVisible(showRest && columns === 2);
+    if (columns === 2) {
+      const gapX = 16;
+      const total = this.rest.width + gapX + this.rest2.width;
+      const left = Math.round(w / 2 - total / 2);
+      this.rest.setPosition(left, Math.round(shipY + 104));
+      this.rest2.setPosition(left + Math.round(this.rest.width) + gapX, Math.round(shipY + 104));
+    } else {
+      centre(this.rest, w / 2, shipY + 104);
+    }
 
     // EXIT, SAVE LOG, BACK in a row, centred.
     const by = py + panelH - (compact ? 22 : 28);

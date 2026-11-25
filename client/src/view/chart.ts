@@ -131,3 +131,25 @@ export function viewFrame(
   const y = Math.round(a.y);
   return { x, y, w: Math.max(2, Math.round(b.x) - x), h: Math.max(2, Math.round(b.y) - y) };
 }
+
+/**
+ * D73 (route editing): which route point is under the finger? The nearest one within `radiusPx` of the tap
+ * (chart pixels), as an index, or -1. Points are given on the chart already.
+ */
+export function pointAt(points: readonly { x: number; y: number }[], tap: { x: number; y: number }, radiusPx: number): number {
+  let best = -1;
+  let bestD = radiusPx;
+  points.forEach((pt, i) => {
+    const d = Math.hypot(pt.x - tap.x, pt.y - tap.y);
+    if (d <= bestD) {
+      best = i;
+      bestD = d;
+    }
+  });
+  return best;
+}
+
+/** The route with point `index` moved to `to`. Out of range: the route as it is. Pure, for the screen. */
+export function movePoint(points: readonly { x: number; y: number }[], index: number, to: { x: number; y: number }): { x: number; y: number }[] {
+  return points.map((pt, i) => (i === index ? { x: to.x, y: to.y } : { x: pt.x, y: pt.y }));
+}

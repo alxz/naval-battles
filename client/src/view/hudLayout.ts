@@ -142,7 +142,7 @@ export function hudLayout(width: number, height: number, touch: boolean, shipOpe
   // Computer: the guns panel in the bottom middle; in a narrow window above my ship panel,
   // with room for the ammunition row between them.
   const guns: Rect = touch
-    ? { x: b.sailsLess.x - GUNS_TOUCH_EXTRA, y: b.gunsUp.y + buttonSize - GUNS_TOUCH_H, w: buttonSize + GUNS_TOUCH_EXTRA, h: GUNS_TOUCH_H }
+    ? { x: b.gunsUp.x - m - buttonSize - GUNS_TOUCH_EXTRA, y: b.gunsUp.y + buttonSize - GUNS_TOUCH_H, w: buttonSize + GUNS_TOUCH_EXTRA, h: GUNS_TOUCH_H }
     : narrow
       ? { x: m, y: ship.y - 6 - AMMO_ROW_H - GUNS_H, w: gunsW, h: GUNS_H }
       : { x: Math.round(width / 2 - gunsW / 2), y: height - m - GUNS_H, w: gunsW, h: GUNS_H };
@@ -205,8 +205,9 @@ export type ButtonName =
 
 /**
  * Touch buttons (their top left corners and sizes):
- *   left group:   row 1 (bottom) fire L B R (B = bow chaser, M3 step 7c), row 2 rudder < > (swapped in step 7e)
- *   right group:  row 1 sails - +,  above "+" a column: gun down (row 2), gun up (row 3)
+ *   row 1 (bottom): "<" and "L" at the left edge, "R" and ">" at the right edge
+ *   row 2:          "-" and the shot kind at the left; "B" (bow chaser) and gun down at the right
+ *   row 3:          "+" at the left; gun up at the right (above gun down)
  *   zoom:         small, at the top, right of my ship panel; pause: the fourth small button at the top
  */
 export function touchButtonRects(width: number, height: number): Record<ButtonName, Rect> {
@@ -218,17 +219,18 @@ export function touchButtonRects(width: number, height: number): Record<ButtonNa
   const z = smallButtonSize(height);
   const at = (x: number, y: number, size = s): Rect => ({ x, y, w: size, h: size });
   return {
-    // M3 step 7e: the fire row is the lowest, the rudder above it.
-    rudderLeft: at(left(1), row(2)),
-    rudderRight: at(left(2), row(2)),
-    firePort: at(left(1), row(1)),
-    fireBow: at(left(2), row(1)),
-    fireStarboard: at(left(3), row(1)),
-    sailsLess: at(right(2), row(1)),
-    sailsMore: at(right(1), row(1)),
+    // M3b step 1b (your layout, 24 Nov): the lowest row is rudder and broadside at the edges, the second row the sails
+    // and shot kind at the left and the bow chaser and gun down at the right; "+" above "-", gun up above gun down.
+    rudderLeft: at(left(1), row(1)),
+    firePort: at(left(2), row(1)),
+    fireStarboard: at(right(2), row(1)),
+    rudderRight: at(right(1), row(1)),
+    sailsLess: at(left(1), row(2)),
+    ammo: at(left(2), row(2)), // next to "-": the kind of shot (M3 step 4)
+    fireBow: at(right(2), row(2)),
     gunsDown: at(right(1), row(2)),
+    sailsMore: at(left(1), row(3)),
     gunsUp: at(right(1), row(3)),
-    ammo: at(left(1), row(3)), // above "L": the kind of shot (M3 step 4)
     zoom: at(zoomButtonX(width, height), HUD_MARGIN, z),
     pause: at(zoomButtonX(width, height) + 3 * (z + HUD_MARGIN), HUD_MARGIN, z),
   };

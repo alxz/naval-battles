@@ -13,10 +13,9 @@ interface Button {
 
 /**
  * On-screen buttons for phones and tablets (places: `touchButtonRects` in view/hudLayout.ts):
- *   left:  "<" ">" rudder (held); "L" "R" fire the port / starboard broadside (one tap = one salvo),
- *          "B" between them the bow chaser (M3 step 7c);
- *          they also show the reload (see setReload)
- *   right: "-" "+" sails (one step per tap); above "+" the gun up / gun down icons (held)
+ *   bottom row: "<" "L" at the left edge, "R" ">" at the right edge (rudder held; one tap on L / R = one salvo, they show the reload)
+ *   second row: "-" and the shot kind at the left; "B" (the bow chaser, M3 step 7c) and gun down at the right
+ *   third row:  "+" at the left (sails: one step per tap); gun up at the right (held)
  *   top:   a small spyglass button (look far for a while) and a pause button "II" (M3 step 7c)
  * They only report what the finger does; SeaScene turns it into commands.
  */
@@ -52,7 +51,7 @@ export class TouchControls {
     this.add(scene, 'sailsMore', '+', undefined, () => onSails(1));
     this.add(scene, 'gunsUp', 'icon-gun-up', (down) => (this.raise = down));
     this.add(scene, 'gunsDown', 'icon-gun-down', (down) => (this.lower = down));
-    // Above "L": the kind of shot; each tap loads the next kind (round, chain, grape).
+    // Next to "-": the kind of shot; each tap loads the next kind (round, chain, grape).
     this.add(scene, 'ammo', 'RND', undefined, onAmmo, true);
     // The button at the top ("zoom" in the layout) is the spyglass: tap to look far for a while.
     this.spyglass = this.add(scene, 'zoom', 'icon-spyglass', undefined, onZoom, true);

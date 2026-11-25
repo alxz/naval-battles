@@ -4,6 +4,25 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 24 Nov 2026 (night) — your test of the autopilot; M3b step 1b
+- **Your test:** route, HEADWIND - TACKING, A / D ends AUTO, bosun at 42% hull, `[pirates]` in the log: all as planned. Not yet tried on the phone. Arena log 2251: 0 warnings, 10 PORT BLOCKED lines.
+- **Fixed / changed (M3b 1b):**
+  - DONE (and N in route mode) now closes the chart; the route stays.
+  - Route points can be edited: a tap within 12 px picks a point up (yellow, bigger; the foot line says "tap the new place for point N"), the next tap puts it down there; a tap on the same point drops it where it was. Pure helpers `pointAt` and `movePoint` in `view/chart.ts` (tested). A point crossed off by the ship meanwhile cancels the pick. On a phone the chart is small, so 12 px is about 300-400 m: points closer than that cannot be told apart.
+  - Phone buttons as in your mock-up (`touchButtonRects`): bottom row `<` `L` at the left, `R` `>` at the right; second row `-` and the shot kind at the left, `B` and gun down at the right; `+` above `-`, gun up above gun down. The angle / range readout stands left of the gun column.
+  - Arena results: the list of places IV and below goes into two columns (4 lines each) and the panel grows to hold it, so it no longer creeps under EXIT / SAVE LOG / BACK.
+- Version label `M3b 1b`. Tests: 537.
+
+---
+
+## 24 Nov 2026 (evening) — your route and the autopilot (D73), the bosun, a pirate in every battle (D76)
+
+- **Your answers:** agreed order: autopilot first, then a goal in Solo (D77), then 5b; renegades and false flags (`world-ideas` §15, step 5b-2); sail colours (D78).
+- **Autopilot (D73, M3b step 1 moved ahead):** `sim/autopilot.ts` (`thinkAutopilot`, `routeOf`, `withPoint`), commands `setRoute` / `clearRoute`, `setRudder.auto`; the helmsman of the bots (`steerWithTacks`, `rudderFor`) steers to each point in turn, rudder only; within 50 m a point is crossed off (`routePoint` event), after the last one the rudder goes amidships; any rudder input of yours ends it; a sunk ship loses its route. Screen: N opens the chart in route mode (N again: done), a click or tap sets a point (4 at most, a fifth wipes the oldest), ROUTE / DONE and CLEAR buttons; the route dashed on the chart and the minimap; `AUTO` and `AUTO  HEADWIND - TACKING` next to my ship panel. Change to D73: N again ends route mode and keeps the route (CLEAR wipes it).
+- **Bosun (D76):** `view/helmNotes.ts`, `scenes/HelmNotes.ts`; above my ship panel, on a phone bottom middle in two lines.
+- **A pirate in every battle (D76):** `withOnePirate` in `sim/nation.ts`; the pirate gets a warship when the battle has one.
+- **Checks:** 531 tests (new: `autopilot.test.ts` 5, `nationPirate.test.ts` 4, `helmNotes.test.ts` 2), build, build:test, headless arena 60 min seed 5150: 0 warnings (arena unchanged); Playwright computer and iPhone 13: route of 3 points from the chart, AUTO, bosun at 42%, no errors.
+
 ## 24 Nov 2026 — your test of step 5d; fixes 5d2
 
 - **Your test:** foes list, struck-through names, arena tags and the smaller panel work. Isla Verde could not be checked in play.

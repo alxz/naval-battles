@@ -11,6 +11,9 @@ import type { ShipLabel } from './ShipBars';
 import { battleName, isWanted, shipLabel } from '../view/wanted';
 import { newRosterMemory, rosterRows, updateRosterMemory } from '../view/roster';
 import { Roster } from './Roster';
+import { HelmNotes } from './HelmNotes';
+import { autoNote, bosunNote, newBosunMemory } from '../view/helmNotes';
+import { routeOf, routeTacking, withPoint } from '../sim/autopilot';
 import { nationFor } from '../view/flags';
 import { PerfMeter } from '../view/perfMeter';
 import type { Nation } from '../view/flags';
@@ -34,7 +37,7 @@ import { battleClasses, createWorld, enemiesFor } from '../sim/world';
 const TRADER_GONE_M = 1500;
 
 import { autoZoom } from '../view/autoZoom';
-import { discover, forget, newChart, updateSightings } from '../view/chart';
+import { discover, forget, movePoint, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
 import { knownShips, observerSeesAll, shotSeen } from '../view/knownShips';
 import { makeFog } from '../sim/fog';
@@ -78,7 +81,7 @@ const TARGET_ID = 2;
 const SAIL_STEP = 0.25; // W / S change the sails by 25% per key press
 const MAX_FRAME_SECONDS = 0.25; // ignore longer pauses (e.g. after a tab switch)
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'SHIFT' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'B' | 'SPACE', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'Z' | 'X' | 'SHIFT' | 'Q' | 'E' | 'R' | 'F' | 'H' | 'M' | 'C' | 'V' | 'T' | 'L' | 'B' | 'N' | 'SPACE', Phaser.Input.Keyboard.Key>;
 
 /** The auto-bot arena (M3 step 2): time speeds, how fast the free view moves (screen px per second), where the log is kept. */
 const ARENA_SPEEDS = [1, 2, 4, 8];
@@ -177,7 +180,9 @@ export class SeaScene extends Phaser.Scene {
   private freeView: Point | null = null; // metres: you dragged the view away from the ships
   private timeScale = 1;
   private arenaHud!: ArenaHud;
-  private roster!: Roster; // M4b 5d: who is still in the battle (solo)
+  private roster!: Roster;
+  private helmNotes!: HelmNotes; // D73 AUTO, and the bosun (24 Nov)
+  private bosun = newBosunMemory(); // M4b 5d: who is still in the battle (solo)
   private rosterMemory = newRosterMemory();
   private arenaLog = new ArenaLog();
   private arenaStartedAt = '';
@@ -222,7 +227,7 @@ export class SeaScene extends Phaser.Scene {
       throw new Error('Keyboard input is not available');
     }
     this.cursors = keyboard.createCursorKeys();
-    this.keys = keyboard.addKeys('W,A,S,D,Z,X,SHIFT,Q,E,R,F,H,M,C,V,T,L,B,SPACE') as KeyMap;
+    this.keys = keyboard.addKeys('W,A,S,D,Z,X,SHIFT,Q,E,R,F,H,M,C,V,T,L,B,N,SPACE') as KeyMap;
     this.raiseKeys = RAISE_KEY_CODES.map((code) => keyboard.addKey(code));
     this.lowerKeys = LOWER_KEY_CODES.map((code) => keyboard.addKey(code));
     this.ammoKeys = [Phaser.Input.Keyboard.KeyCodes.ONE, Phaser.Input.Keyboard.KeyCodes.TWO, Phaser.Input.Keyboard.KeyCodes.THREE].map((code) => keyboard.addKey(code));
@@ -284,7 +289,16 @@ export class SeaScene extends Phaser.Scene {
       const from = this.freeView ?? this.cameraCentre ?? { x: 0, y: 0 };
       this.freeView = { x: from.x - (p.x - p.prevPosition.x) / s, y: from.y - (p.y - p.prevPosition.y) / s };
     });
-    this.chart = new Chart(this, isTouch, () => this.chart.setOpen(false));
+    this.chart = new Chart(
+      this,
+      isTouch,
+      () => this.chart.setOpen(false),
+      // D73: a click on the chart in route mode adds a point (a fifth wipes the oldest); CLEAR wipes the route.
+      (sea) => this.sim.queueCommand({ type: 'setRoute', shipId: PLAYER_ID, points: withPoint(routeOf(this.sim.world, PLAYER_ID)?.points ?? [], sea) }),
+      () => this.sim.queueCommand({ type: 'clearRoute', shipId: PLAYER_ID }),
+      (index, sea) => this.sim.queueCommand({ type: 'setRoute', shipId: PLAYER_ID, points: movePoint(routeOf(this.sim.world, PLAYER_ID)?.points ?? [], index, sea) }),
+    );
+    this.helmNotes = new HelmNotes(this);
     this.minimap = new Minimap(this, isTouch, (sea) => {
       // M3 step 7c: in the arena a click on the minimap moves the view there (C still opens the chart).
       if (this.arena && !this.chart.isOpen()) this.freeView = sea;
@@ -548,7 +562,7 @@ export class SeaScene extends Phaser.Scene {
       seeAll ? undefined : (sh) => knownById.get(sh.id) ?? false,
     );
     forget(this.chartState, gone);
-    this.chart.update(this.chartState, myShip, this.sim.world.wind);
+    this.chart.update(this.chartState, myShip, this.sim.world.wind, this.arena ? [] : (routeOf(this.sim.world, PLAYER_ID)?.points ?? []), !this.arena);
 
     // 5. Edge markers for ships within sighting range that are off the screen.
     const contacts: Contact[] = [];
@@ -577,7 +591,7 @@ export class SeaScene extends Phaser.Scene {
     // A wreck never makes a panel see-through: only ships that float count.
     const shipsOnScreen = poses.flatMap((p, i) => (this.sim.world.ships[i]?.sunk || !(known[i]?.shown ?? true) ? [] : [{ x: p.x * s - cam.scrollX, y: p.y * s - cam.scrollY }]));
     const viewNow = { x: (cam.scrollX + cam.width / 2) / s, y: (cam.scrollY + cam.height / 2) / s, halfW, halfH };
-    this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow);
+    this.minimap.update(v.minimap, this.chartState, myShip, shipsOnScreen, seconds, this.panel.openWidthCss() / layout.cssZoom, viewNow, this.arena ? [] : (routeOf(this.sim.world, PLAYER_ID)?.points ?? []));
     this.hud.setDebugBeside(this.arena && this.arenaHud.right() > 0 ? { x: this.arenaHud.right() + 10, y: this.arenaHud.top() + 3 } : null);
     this.hud.update({
       soundOn: v.sound,
@@ -642,6 +656,7 @@ export class SeaScene extends Phaser.Scene {
     // 7. The end of the duel: a banner, then "sail again" (button or Enter).
     if (this.arena) {
       this.roster.hide();
+      this.helmNotes.update('', '', { x: 0, y: 0 });
       this.arenaHud.update(this.sim.world, poses, s, myShip.id, this.freeView === null, this.timeScale, clock(this.sim.world.tick * STEP_SECONDS), {
         known,
         botEyes: v.botEyes,
@@ -658,6 +673,16 @@ export class SeaScene extends Phaser.Scene {
     const card = this.hud.targetBox();
     const shipBox = this.hud.shipRect();
     this.roster.update(rows, this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 4 } : { x: card.x, y: card.y + card.h + 6 });
+    // D73 AUTO / HEADWIND - TACKING, and the bosun's word below half the hull (24 Nov).
+    const route = routeOf(this.sim.world, PLAYER_ID);
+    const full = SHIP_CLASSES[myShip.shipClass]?.hullPoints ?? myShip.hull;
+    const bosun = myShip.sunk ? '' : bosunNote(this.bosun, myShip.hull / full, myShip.repairing, this.sim.world.tick / 30, viewJson.bosunBelowHull, viewJson.bosunSeconds);
+    this.helmNotes.update(
+      autoNote(!!route && !myShip.sunk, routeTacking(route)),
+      this.touch !== null ? bosun.replace(', OR ', '\nOR ') : bosun, // a phone: two short lines between the buttons
+      this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 16 } : { x: shipBox.x, y: shipBox.y - 12 },
+      this.touch !== null ? { x: this.scale.width / 2, y: this.scale.height - 40 } : undefined, // a phone: bottom middle, clear of the buttons
+    );
     const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
     if (myShip.sunk) this.banner.request('lose', this.sunkBy < 0 ? 'Sunk by the shore guns' : `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
     else if (v.targetBehaviour === 'bot' && foes.length > 0 && foes.every((sh) => sh.sunk || this.traderGone(sh, myShip))) {
@@ -728,6 +753,15 @@ export class SeaScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
     if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
+    // D73: N opens the chart in route mode, or switches route mode on and off.
+    if (Phaser.Input.Keyboard.JustDown(this.keys.N)) {
+      // N again (like the DONE button) ends the route and closes the chart.
+      if (this.chart.inRouteMode()) this.chart.setOpen(false);
+      else {
+        if (!this.chart.isOpen()) this.chart.setOpen(true);
+        this.chart.toggleRouteMode();
+      }
+    }
 
     // H shows or hides the debug text (keys and all the numbers).
     if (Phaser.Input.Keyboard.JustDown(this.keys.H)) this.panel.toggleDebugText();
@@ -968,11 +1002,20 @@ export class SeaScene extends Phaser.Scene {
     const botMode = v.targetBehaviour === 'bot';
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.rosterMemory = newRosterMemory();
+    this.bosun = newBosunMemory();
     this.storeBattleLog(); // the battle that just ended stays downloadable (L) until the next one ends
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
     if (v.fog) this.sim.world.fog = makeFog(seed); // M4b step 5a
     // M3 step 7d: the classes of the bots (the panel's "bot classes": a mix, or one class for all).
     const classes = battleClasses(seed, this.sim.world.ships.length - 1, botMode ? v.botClasses : v.targetClass);
+    // 24 Nov: the battle's pirate (createWorld makes sure there is one) sails a warship when the battle has one.
+    const botNations = this.sim.world.ships.slice(1).map((s) => s.nation);
+    const isTraderClass = (k: string | undefined): boolean => !!SHIP_CLASSES[k ?? '']?.trader;
+    if (!botNations.some((n, i) => n === 'pirates' && !isTraderClass(classes[i]))) {
+      const p = botNations.findIndex((n, i) => n === 'pirates' && isTraderClass(classes[i]));
+      const w = classes.findIndex((k, i) => !isTraderClass(k) && botNations[i] !== 'pirates');
+      if (p >= 0 && w >= 0) [classes[p], classes[w]] = [classes[w]!, classes[p]!];
+    }
     this.sim.tuning.speedScale = speedScaleFor(v.speedScale, false, viewJson.soloSpeedScale);
     this.sim.tuning.windDrift = v.windDrift;
     this.sim.queueCommand({ type: 'setWind', fromRad: bearingDegToHeadingRad(v.windFromBearingDeg), strength: v.windStrength });
