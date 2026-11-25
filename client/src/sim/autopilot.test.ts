@@ -87,3 +87,28 @@ describe('autopilot steering (D73)', () => {
     expect(routeOf(s.world, 1)).toBeUndefined(); // reached within 5 minutes
   });
 });
+
+describe('the helmsman sets the sails (M4b step 5b-2)', () => {
+  it('a route starts with full sail; your own sail input keeps them in your hand', () => {
+    const s = sim();
+    s.queueCommand({ type: 'setSails', shipId: 1, value: 0.3 });
+    s.update(1 / 30);
+    s.queueCommand({ type: 'setRoute', shipId: 1, points: [{ x: 2000, y: 0 }] });
+    run(s, 1);
+    expect(s.world.ships[0]!.sailLevel).toBeCloseTo(AUTOPILOT.sails, 5);
+    s.queueCommand({ type: 'setSails', shipId: 1, value: 0.5 });
+    run(s, 2);
+    expect(s.world.ships[0]!.sailLevel).toBeCloseTo(0.5, 5);
+    expect(routeOf(s.world, 1)!.handSails).toBe(true);
+  });
+
+  it('a new route hands the sails to the helmsman again', () => {
+    const s = sim();
+    s.queueCommand({ type: 'setRoute', shipId: 1, points: [{ x: 2000, y: 0 }] });
+    s.queueCommand({ type: 'setSails', shipId: 1, value: 0.2 });
+    run(s, 1);
+    s.queueCommand({ type: 'setRoute', shipId: 1, points: [{ x: 0, y: 2000 }] });
+    run(s, 1);
+    expect(s.world.ships[0]!.sailLevel).toBeCloseTo(AUTOPILOT.sails, 5);
+  });
+});

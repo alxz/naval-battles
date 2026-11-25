@@ -5,19 +5,25 @@ import { paint, textStyle } from './text';
 export class HelmNotes {
   private readonly auto: Phaser.GameObjects.Text;
   private readonly bosun: Phaser.GameObjects.Text;
+  private readonly speed: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.auto = scene.add.text(0, 0, '', textStyle('small', '#9fe870')).setScrollFactor(0).setDepth(104);
     this.bosun = scene.add.text(0, 0, '', textStyle('small', '#ffd27a')).setScrollFactor(0).setDepth(104);
+    this.speed = scene.add.text(0, 0, '', textStyle('small', '#7fd6ff')).setScrollFactor(0).setDepth(104);
+    this.speed.setShadow(1, 1, '#000000', 0, false, true);
     this.auto.setShadow(1, 1, '#000000', 0, false, true);
     this.bosun.setShadow(1, 1, '#000000', 0, false, true);
   }
 
   /** `at`: the AUTO line. `bosunAt`: the bosun's line, its middle at x when `centred` (a phone: bottom middle), else above AUTO. */
-  update(auto: string, bosun: string, at: { x: number; y: number }, bosunAt?: { x: number; y: number }): void {
+  update(auto: string, bosun: string, at: { x: number; y: number }, bosunAt?: { x: number; y: number }, speed = ''): void {
     paint(this.auto.setVisible(auto !== ''), auto).setPosition(at.x, at.y);
     paint(this.bosun.setVisible(bosun !== ''), bosun);
     if (bosunAt) this.bosun.setAlign('center').setOrigin(0.5, 0).setPosition(Math.round(bosunAt.x), bosunAt.y);
     else this.bosun.setAlign('left').setOrigin(0, 0).setPosition(at.x, at.y - (auto !== '' ? 10 : 0));
+    // M4b 5b-2: the Solo time speed; a phone: under AUTO, a computer: above the other two lines.
+    const above = 10 * ((auto !== '' ? 1 : 0) + (bosun !== '' ? 1 : 0)) + 10;
+    paint(this.speed.setVisible(speed !== ''), speed).setPosition(at.x, bosunAt ? at.y + 10 : at.y - above);
   }
 }

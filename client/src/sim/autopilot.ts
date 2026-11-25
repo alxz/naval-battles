@@ -1,5 +1,5 @@
 // D73: the player's route and the autopilot. The helmsman steers the ship through the route's points, one after
-// another, with the rudder only (the sails stay the player's). When a leg lies in the no-go zone, at any moment
+// another, with the rudder; the sails he sets once (full), and leaves them to you as soon as you touch them. When a leg lies in the no-go zone, at any moment
 // (the wind shifts), it beats toward the point in tacks like a bot (steerWithTacks). No land avoidance: the ship
 // runs aground or into an island by the usual rules. It acts through commands (setRudder with auto: true), like a bot.
 import { BOTS, AUTOPILOT, SHIP_CLASSES } from './data';
@@ -45,6 +45,7 @@ export function thinkAutopilot(world: World, p: AutopilotParams = AUTOPILOT, bp:
       commands.push({ type: 'setRudder', shipId: ship.id, value: 0, auto: true }); // the last point: it holds its course
       continue;
     }
+    if (!route.handSails && Math.abs(ship.sailLevel - p.sails) > 0.01) commands.push({ type: 'setSails', shipId: ship.id, value: p.sails, auto: true }); // M4b 5b-2: the helmsman sets sail too, until you do
     route.tackSeconds += thinkSeconds;
     const goal = Math.atan2(next.y - ship.y, next.x - ship.x);
     const heading = steerWithTacks(goal, params, world.wind, route, bp);
