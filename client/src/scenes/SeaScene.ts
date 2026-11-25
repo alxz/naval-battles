@@ -15,6 +15,7 @@ import type { GoalState } from '../view/goal';
 import { Roster } from './Roster';
 import { HelmNotes } from './HelmNotes';
 import { autoNote, bosunNote, newBosunMemory } from '../view/helmNotes';
+import { effectiveSoloSpeed, nextSoloSpeed, somebodyInView, soloSpeedNote } from '../view/soloSpeed';
 import { routeOf, routeTacking, withPoint } from '../sim/autopilot';
 import { nationFor } from '../view/flags';
 import { PerfMeter } from '../view/perfMeter';
@@ -181,6 +182,8 @@ export class SeaScene extends Phaser.Scene {
   private autoFocus = true; // follow the bot with the most wins (until you pick one with NEXT / Space)
   private freeView: Point | null = null; // metres: you dragged the view away from the ships
   private timeScale = 1;
+  private soloSpeed = 1; // M4b 5b-2: the time speed you chose in Solo (T); held at x1 while a ship is in view
+  private soloRun = 1; // the speed that runs now
   private arenaHud!: ArenaHud;
   private roster!: Roster;
   private helmNotes!: HelmNotes; // D73 AUTO, and the bosun (24 Nov)
@@ -248,6 +251,7 @@ export class SeaScene extends Phaser.Scene {
         (side) => this.firePlayer(side),
         () => this.cycleAmmo(),
         () => this.onPauseKey(),
+        () => this.cycleSoloSpeed(),
       );
     }
     this.sounds = new Sounds(this);
@@ -352,6 +356,7 @@ export class SeaScene extends Phaser.Scene {
         minimap: true,
         fog: true,
         shipBars: true,
+        huntPlayer: false,
         enemyCount: 0,
         botClasses: 'mix',
         sound: true,
@@ -367,6 +372,10 @@ export class SeaScene extends Phaser.Scene {
         onPlaceTarget: (d) => this.placeTarget(d),
         onTargetClass: () => this.placeTarget(this.targetDistance()),
         onWindDrift: (on) => (this.sim.tuning.windDrift = on),
+        onHuntPlayer: (on) => {
+          this.sim.tuning.huntPlayer = on;
+          this.battleLog?.add(this.sim.world.tick / 30, on ? 'TEST: "bots hunt me" is ON: warships and pirates are told where you are every 20 s' : 'TEST: "bots hunt me" is off');
+        },
         onTargetCircle: () => (this.targetCircle = null),
         onTargetBehaviour: () => (this.targetCircle = null),
         onRestart: () => this.restart(),
@@ -410,7 +419,10 @@ export class SeaScene extends Phaser.Scene {
 
     // 1. Let the simulation catch up with real time (the arena can run faster).
     const simStart = performance.now();
-    const alpha = this.sim.update(this.paused || this.ended ? 0 : seconds * (this.arena ? this.timeScale : 1));
+    const soloSunk = !!this.ship(PLAYER_ID)?.sunk;
+    this.soloRun = this.arena ? 1 : effectiveSoloSpeed(this.soloSpeed, somebodyInView(this.sim.world, PLAYER_ID, viewJson.soloSlowRangeM) || soloSunk);
+    this.touch?.setSpeed(this.soloSpeed, this.soloRun < this.soloSpeed);
+    const alpha = this.sim.update(this.paused || this.ended || this.banner.isShown() ? 0 : seconds * (this.arena ? this.timeScale : this.soloRun));
     this.perf.note(delta, performance.now() - simStart);
     if (this.arena) {
       this.pickFocus();
@@ -697,6 +709,7 @@ export class SeaScene extends Phaser.Scene {
       this.sim.world.tick / 30 < this.goalFlashUntil ? goalText : this.touch !== null ? bosun.replace(', OR ', '\nOR ') : bosun, // the goal's result for 8 s, else the bosun; a phone: two short lines between the buttons
       this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 16 } : { x: shipBox.x, y: shipBox.y - 12 },
       this.touch !== null ? { x: this.scale.width / 2, y: this.scale.height - 40 } : undefined, // a phone: bottom middle, clear of the buttons
+      this.touch !== null ? '' : soloSpeedNote(this.soloSpeed, this.soloRun < this.soloSpeed), // a phone: the button shows it (orange = held at x1)
     );
     const foes = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID);
     if (myShip.sunk) this.banner.request('lose', this.sunkBy < 0 ? 'Sunk by the shore guns' : `Sunk by the pirate ${this.ship(this.sunkBy)?.shipClass ?? 'ship'}`, this.duelStats());
@@ -768,6 +781,7 @@ export class SeaScene extends Phaser.Scene {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.M)) this.panel.toggleSound();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.T)) this.cycleSoloSpeed();
     if (Phaser.Input.Keyboard.JustDown(this.keys.C)) this.chart.setOpen(!this.chart.isOpen());
     // D73: N opens the chart in route mode, or switches route mode on and off.
     if (Phaser.Input.Keyboard.JustDown(this.keys.N)) {
@@ -1150,6 +1164,7 @@ export class SeaScene extends Phaser.Scene {
     const world = this.sim.world;
     for (const line of headerLines(world, seed)) this.battleLog.add(0, line);
     this.battleLog.add(0, `battle with ${world.ships.length - 1} bots (seed ${seed}); you sail under the black flag:`);
+    if (this.sim.tuning.huntPlayer) this.battleLog.add(0, 'TEST: "bots hunt me" is ON (warships and pirates are told where you are)');
     if (this.goal) this.battleLog.add(0, goalLine(this.goal, (id) => who(world, id)) + ` (seed ${seed % 2 === 0 ? 'even' : 'odd'})`);
     for (const ship of world.ships) {
       this.battleLog.add(0, `   ${who(world, ship.id)}${ship.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship.x, ship.y)}`);
@@ -1250,6 +1265,8 @@ export class SeaScene extends Phaser.Scene {
     this.focusIndex = 0;
     this.freeView = null;
     this.timeScale = 1;
+    this.soloSpeed = 1;
+    this.touch?.setSpeed(1);
     this.panel.setArenaSpeed(1);
     this.touch?.setShipButtonsVisible(true);
     this.arenaHud.setShown(false);
@@ -1345,6 +1362,13 @@ export class SeaScene extends Phaser.Scene {
       }
     }
     this.cameraCentre = null;
+  }
+
+  /** Solo: x1 -> x2 -> x4 -> x1 (T, or the speed button on a touch screen). */
+  private cycleSoloSpeed(): void {
+    if (this.arena) return;
+    this.soloSpeed = nextSoloSpeed(this.soloSpeed);
+    this.touch?.setSpeed(this.soloSpeed);
   }
 
   /** x1 -> x2 -> x4 -> x8 -> x1 (T, or the speed button). */

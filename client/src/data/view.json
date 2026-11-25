@@ -40,6 +40,7 @@
     3
   ],
   "soloSpeedScale": 1.15,
+  "soloSlowRangeM": 600,
   "bosunBelowHull": 0.5,
   "bosunSeconds": 10,
   "wreck": {

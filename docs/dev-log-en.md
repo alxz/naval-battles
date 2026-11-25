@@ -4,6 +4,23 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (late evening) — your test of 5b-2a; M4b step 5b-2a2
+- **Your test:** all works. Two requests, both done:
+- **Time speed:** it was held at x1 by a ship at the edge of sight (1,000+ m), too early. Now only a ship within `soloSlowRangeM` (600 m, `data/view.json`) holds it back; the note says `SLOW: SHIP NEAR`. Checked: a ship at 900 m: x4 runs; at 400 m: x1.
+- **End of a Solo battle:** while the win / lose banner is up, the simulation stands still (ships, bots, shots, the clock); buttons on the banner (log, sail again) and Enter still work. Checked: 0 steps in 3 s with the banner up. The arena is unchanged.
+- 563 tests (1 new); version `M4b 5b-2a2`.
+
+---
+
+## 25 Nov 2026 (evening) — your test of 5b-1; M4b step 5b-2a: Solo test aids (D80, D81)
+- **Your test (Solo, 14:41-15:12 game time 31 min; arena 2 h):** the pirate goal was done at 2:42, a caravel sunk at 4:43; then 26 minutes without a sinking: the three left (frigate, two fluyts) ran or lost you, nobody knew where you were. Arena 2 h: 0 warnings, 41 collisions, 64 routes. You grounded once at Isla Verde (11:44, 20 s).
+- **Built (D80, first half of 5b-2):** time x1 / x2 / x4 in Solo (T; a fifth small button at the top on touch screens, yellow = runs faster, orange = held at x1 while a ship is in view or heard; `view/soloSpeed.ts`); the autopilot sets full sail when a route starts and leaves the sails to you once you touch them (`handSails`); TEST switch "bots hunt me" (Tuning > Solo (test); `rumourOfPlayer` every 20 s tells warships and pirates where you are; the battle log says TEST).
+- **Ideas:** sweeps (D81) written to `world-ideas` section 16; why Solo felt slow (polar: 26% made good straight upwind).
+- 562 tests (7 new); tsc, build; arena 60 min seed 5150 unchanged: 27 wins, 0 warnings, 23 collisions; Playwright PC and iPhone 13 landscape: x4 runs 4x ticks, the button and the note fit.
+- **Next:** the second half of 5b-2: renegades, false flags, sail colours (D78).
+
+---
+
 ## 25 Nov 2026 (midday) — M4b step 5b-1: default routes (D79)
 - **Your test (Solo, 12:15):** the pirate goal came up (even seed): you sank the pirate FRIGATE 3 at 4:33 (goal done), then were sunk by SLOOP 5 at 6:42. 0 warnings. Big chart buttons on iOS stay as they are.
 - **Built (D79):** a bot gets its route once, when it has nothing else to do: 3 stops by lot (`routeStops` in `bots.json`), sailed round in turn (`sim/routes.ts`; `tradeStopSets` in `morale.ts` splits the stops into ports and islands). Traders go port to port (with fewer than two usable ports: stop to stop; the fluyt has one), warships and pirates island to island. The first stop is not under the ship. Stops are drawn by lot, not by distance. A `ROUTE:` line in the arena and battle log.
