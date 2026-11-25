@@ -4,6 +4,13 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 24 Nov 2026 (late night) — D77: a goal in Solo (M3b 2)
+- **Your answer:** black sails only for renegades; a pirate under a false flag keeps ordinary sails and hoists the black flag at about 300 m (for step 5b-2). Recorded in `world-ideas` §15.
+- **Built (D77):** every battle against bots gets a goal from its seed: sink the named pirate (a pirate is in every battle, D76) or sink 3 ships (fewer if fewer bots). Pure `view/goal.ts` (`chooseGoal`, `noteSunk`, `goalLine`), 11 tests; the simulation does not know it, the scene reads the `sunk` events. The pirate sunk by another ship, or too few ships left for "sink 3": goal lost. Screen: a yellow goal line above the foes list (a phone: a shorter line under AUTO), "SHIP 5" until you have met the ship and then "SLOOP 5" (`rosterName`, D68), the result for 8 s in the bosun's place, the banner title "GOAL DONE!". Delivery goals (cargo, a passenger) wait for M3b.
+- Version `M3b 2`. 548 tests; build, build:test; Playwright computer and iPhone 13: both goal kinds, counting, done, banner, no errors.
+
+---
+
 ## 24 Nov 2026 (night) — your test of the autopilot; M3b step 1b
 - **Your test:** route, HEADWIND - TACKING, A / D ends AUTO, bosun at 42% hull, `[pirates]` in the log: all as planned. Not yet tried on the phone. Arena log 2251: 0 warnings, 10 PORT BLOCKED lines.
 - **Fixed / changed (M3b 1b):**

@@ -33,12 +33,17 @@ export function updateRosterMemory(memory: RosterMemory, ships: readonly ShipSta
   });
 }
 
+/** How the list names a ship now: "SHIP 5" until the player has met it, then "SLOOP 5". */
+export function rosterName(ship: Pick<ShipState, 'id' | 'shipClass'>, memory: RosterMemory): string {
+  return memory.met.has(ship.id) ? `${ship.shipClass.toUpperCase()} ${ship.id}` : `SHIP ${ship.id}`;
+}
+
 export function rosterRows(ships: readonly ShipState[], known: readonly Known[], memory: RosterMemory, viewerId: number): RosterRow[] {
   const rows: RosterRow[] = [];
   ships.forEach((ship, i) => {
     if (ship.id === viewerId) return;
     const k = known[i];
-    const name = memory.met.has(ship.id) ? `${ship.shipClass.toUpperCase()} ${ship.id}` : `SHIP ${ship.id}`;
+    const name = rosterName(ship, memory);
     const state: RosterState = ship.sunk ? (memory.sunk.has(ship.id) ? 'sunk' : 'unknown') : k && (k.shown || k.dot) ? 'seen' : 'unknown';
     rows.push({ id: ship.id, name, state });
   });

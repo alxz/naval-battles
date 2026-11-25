@@ -9,7 +9,9 @@ import { PortMarks } from './PortMarks';
 import { ShipBars } from './ShipBars';
 import type { ShipLabel } from './ShipBars';
 import { battleName, isWanted, shipLabel } from '../view/wanted';
-import { newRosterMemory, rosterRows, updateRosterMemory } from '../view/roster';
+import { newRosterMemory, rosterName, rosterRows, updateRosterMemory } from '../view/roster';
+import { chooseGoal, goalBannerWord, goalLine, noteSunk } from '../view/goal';
+import type { GoalState } from '../view/goal';
 import { Roster } from './Roster';
 import { HelmNotes } from './HelmNotes';
 import { autoNote, bosunNote, newBosunMemory } from '../view/helmNotes';
@@ -184,6 +186,8 @@ export class SeaScene extends Phaser.Scene {
   private helmNotes!: HelmNotes; // D73 AUTO, and the bosun (24 Nov)
   private bosun = newBosunMemory(); // M4b 5d: who is still in the battle (solo)
   private rosterMemory = newRosterMemory();
+  private goal: GoalState | null = null; // D77: the goal of this battle
+  private goalFlashUntil = -1; // seconds: the goal's result shows in the bosun's place until then
   private arenaLog = new ArenaLog();
   private arenaStartedAt = '';
   private battleLog = new ArenaLog(); // M3 step 7d: the log of a battle against bots
@@ -490,6 +494,10 @@ export class SeaScene extends Phaser.Scene {
       if (e.type === 'gunFired' && e.shipId !== PLAYER_ID) this.enemyBalls++;
       if (e.type === 'hit' && e.byShipId !== PLAYER_ID && e.shipId === PLAYER_ID && e.zone === 'hull') this.enemyHullHits++;
       if (e.type === 'sunk' && e.shipId === PLAYER_ID) this.sunkBy = e.byShipId;
+      if (e.type === 'sunk' && e.shipId !== PLAYER_ID && this.goal) {
+        const afloat = this.sim.world.ships.filter((sh) => sh.id !== PLAYER_ID && !sh.sunk).length;
+        if (noteSunk(this.goal, e.shipId, e.byShipId, PLAYER_ID, afloat)) this.goalFlashUntil = this.sim.world.tick / 30 + 8;
+      }
       if (e.type === 'hit' && e.byShipId === PLAYER_ID && e.zone === 'hull') this.myDuelHullHits++;
     }
     // M4b step 5a: no smoke, flash, sound or balls of a ship you cannot see or hear (a shot reveals the shooter
@@ -672,14 +680,21 @@ export class SeaScene extends Phaser.Scene {
     const rows = this.started ? rosterRows(this.sim.world.ships, known, this.rosterMemory, PLAYER_ID) : [];
     const card = this.hud.targetBox();
     const shipBox = this.hud.shipRect();
-    this.roster.update(rows, this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 4 } : { x: card.x, y: card.y + card.h + 6 });
+    const nameOf = (id: number): string => {
+      const sh = this.sim.world.ships.find((x) => x.id === id);
+      return sh ? rosterName(sh, this.rosterMemory) : `SHIP ${id}`;
+    };
+    const goalFull = this.started ? goalLine(this.goal, nameOf) : '';
+    // A phone: a shorter line (it must stay clear of the top buttons).
+    const goalText = this.touch !== null ? goalFull.replace('GOAL: ', '').replace('THE ', '').replace('GOAL DONE: ', 'DONE: ').replace('GOAL LOST: ', 'LOST: ') : goalFull;
+    this.roster.update(rows, this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 4 } : { x: card.x, y: card.y + card.h + 6 }, goalText);
     // D73 AUTO / HEADWIND - TACKING, and the bosun's word below half the hull (24 Nov).
     const route = routeOf(this.sim.world, PLAYER_ID);
     const full = SHIP_CLASSES[myShip.shipClass]?.hullPoints ?? myShip.hull;
     const bosun = myShip.sunk ? '' : bosunNote(this.bosun, myShip.hull / full, myShip.repairing, this.sim.world.tick / 30, viewJson.bosunBelowHull, viewJson.bosunSeconds);
     this.helmNotes.update(
       autoNote(!!route && !myShip.sunk, routeTacking(route)),
-      this.touch !== null ? bosun.replace(', OR ', '\nOR ') : bosun, // a phone: two short lines between the buttons
+      this.sim.world.tick / 30 < this.goalFlashUntil ? goalText : this.touch !== null ? bosun.replace(', OR ', '\nOR ') : bosun, // the goal's result for 8 s, else the bosun; a phone: two short lines between the buttons
       this.touch !== null ? { x: shipBox.x + shipBox.w + 6, y: shipBox.y + 16 } : { x: shipBox.x, y: shipBox.y - 12 },
       this.touch !== null ? { x: this.scale.width / 2, y: this.scale.height - 40 } : undefined, // a phone: bottom middle, clear of the buttons
     );
@@ -690,7 +705,8 @@ export class SeaScene extends Phaser.Scene {
       const sunk = foes.filter((sh) => sh.sunk).length;
       const gone = foes.length - sunk;
       const line = gone > 0 ? `${sunk} sunk, ${gone} trader${gone > 1 ? 's' : ''} got away` : foes.length === 1 ? `Enemy ${foes[0]?.shipClass ?? 'ship'} sunk` : `All ${foes.length} enemies sunk`;
-      this.banner.request('win', line, this.duelStats());
+      const done = goalBannerWord(this.goal, nameOf);
+      this.banner.request('win', line, this.duelStats(), done !== '' ? 'GOAL DONE!' : undefined); // D77: the title tells the goal is done
     }
     this.banner.update(seconds, this.touch !== null);
     if (this.banner.isShown() && Phaser.Input.Keyboard.JustDown(this.enterKey)) this.restart();
@@ -1002,9 +1018,11 @@ export class SeaScene extends Phaser.Scene {
     const botMode = v.targetBehaviour === 'bot';
     const seed = (Date.now() & 0x7fffffff) || 1;
     this.rosterMemory = newRosterMemory();
+    this.goalFlashUntil = -1;
     this.bosun = newBosunMemory();
     this.storeBattleLog(); // the battle that just ended stays downloadable (L) until the next one ends
     this.sim = new Simulation(createWorld(seed, botMode ? enemiesFor(seed, v.enemyCount) : 1));
+    this.goal = botMode ? chooseGoal(seed, this.sim.world.ships, PLAYER_ID) : null; // D77
     if (v.fog) this.sim.world.fog = makeFog(seed); // M4b step 5a
     // M3 step 7d: the classes of the bots (the panel's "bot classes": a mix, or one class for all).
     const classes = battleClasses(seed, this.sim.world.ships.length - 1, botMode ? v.botClasses : v.targetClass);

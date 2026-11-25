@@ -434,6 +434,12 @@ What is in M3 now: the fluyt and the caravel (7a), crew spirit and running (7b),
 
 Set up to 4 points on the chart; the ship follows them by itself. **First version:** straight legs from the ship to point 1, 2, 3, 4; a fifth point wipes the oldest; the autopilot steers only (sails are yours) and stops when you touch the rudder; against a headwind it beats in tacks at any moment of the route (the wind shifts) and says so on the screen (`HEADWIND - TACKING` next to `AUTO`); no avoidance: land and shoals stop the ship by the usual rules. **Later:** a way round islands and shoals on the M3b navigation grid; stop when an enemy is sighted; time acceleration on long passages (M5); routes in saves (M6).
 
+## 15. Ideas of 24 Nov: goals in Solo, sail colours, renegades and false flags
+
+- **A goal in Solo** (D77): each battle gets a random goal: sink the pirate <name>, or sink 3 ships; a banner when done. Later (after M3b, more ports): carry cargo or a passenger from port A to port B without losing it.
+- **Sail colours** (D78): history: sails were undyed linen or hemp, cream when new, grey-brown when old, often patched; navies showed who they were by flags, the long pennant and the hull's paint, not by sail colour; tanned red-brown sails on fishing and small coastal craft; black pirate sails are mostly legend (a pirate wanted to look like a merchant until the last moment). Plan: sails as a separate white sheet from `render_ship.py`, coloured in the game (`setTint`): one more picture per ship, any number of colours; 2-3 patterned sheets per class later. Rare black sails only as a game mark of a "legend" pirate (the developer's choice). Better hulls (a pear-shaped fluyt, a high caravel) in M8; the galleon in Stage 2.
+- **Renegades and false flags** (the developer's answers, for step 5b-2): a renegade (hunts anyone, across the map) is (1) an offender of a port's law, (2) the bot with the most rams; at least one bot of a battle or arena is a pirate by lot. A bot that has sunk nobody in 10 minutes (alive) may, by chance, change its flag (and at a rebirth). The player sees a renegade by its flag and black sails. **Confirmed 24 Nov (night):** black sails give a false flag away, so: a pirate under a false flag keeps ordinary sails and hoists the black flag at about 300 m; black sails only for renegades who no longer hide.
+
 ## History
 
 | Date | What |
@@ -444,3 +450,4 @@ Set up to 4 points on the chart; the ship follows them by itself. **First versio
 | 19 Nov 2026 | Section 12: traders, fear, squadrons, skills; staged by D52–D54 |
 | 19 Nov 2026 (late) | Section 13: fire, island objects |
 | 23 Nov 2026 | Section 14: your route on the chart (D73) |
+| 24 Nov 2026 | Section 15: goal in Solo, sail colours, renegades and false flags (D77, D78, step 5b-2) |
