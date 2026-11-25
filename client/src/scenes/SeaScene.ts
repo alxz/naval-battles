@@ -17,7 +17,7 @@ import type { Nation } from '../view/flags';
 import Phaser from 'phaser';
 import viewJson from '../data/view.json';
 import { bearingDegToHeadingRad, headingRadToBearingDeg } from '../sim/angles';
-import { AMMO, DAMAGE, ISLANDS, SHIP_CLASSES } from '../sim/data';
+import { AMMO, DAMAGE, ISLANDS, SHIP_CLASSES, WORLD } from '../sim/data';
 import { touchesLand } from '../sim/land';
 import { openWaterSpot } from '../sim/spawn';
 import { Simulation } from '../sim/simulation';
@@ -103,8 +103,8 @@ const LOWER_KEY_CODES = [189, 173, 109];
 
 const ELEVATION_DEG_PER_SECOND = 4; // + / - held (the bot uses the same rate, data/bots.json)
 const START_BOT_DISTANCE = 400; // metres, to windward (the panel button "put 400 m upwind")
-const BOT_SPAWN_MIN = 400; // bots appear at random places this far from you...
-const BOT_SPAWN_MAX = 800; // ...at most
+const BOT_SPAWN_MIN = WORLD.spawnMinM ?? 400; // bots appear at random places this far from you (data/world.json)...
+const BOT_SPAWN_MAX = WORLD.spawnMaxM ?? 800; // ...at most
 const SHAKE_COLLISION = { ms: 260, intensity: 0.009 };
 
 /**

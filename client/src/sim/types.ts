@@ -122,6 +122,7 @@ export type SimEvent =
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
+  | { type: 'portBlocked'; shipId: number; port: string; seconds: number } // D74: a bot gives up a port it cannot get into
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number }
   // M4b perception (sim/perception.ts): `shipId` is the watcher, `otherId` the ship it saw / lost / forgot.

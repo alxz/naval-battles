@@ -527,18 +527,19 @@ export function portsForBot(bot: BotState, ports: readonly Port[], params: ShipP
  * (portFailRadiusM) failures add up in a window; at portFailCount the port is closed for this bot for
  * portBlockSeconds and it looks for another.
  */
-export function notePortTrouble(bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams = BOTS): void {
-  if (bot.mode !== 'port') return;
+export function notePortTrouble(bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams = BOTS): string | undefined {
+  if (bot.mode !== 'port') return undefined;
   const near = nearestPort(ship.x, ship.y, portsForBot(bot, portsOf(islands), params, p));
-  if (!near || near.distance > p.portFailRadiusM) return;
+  if (!near || near.distance > p.portFailRadiusM) return undefined;
   const t = bot.portTrouble && bot.portTrouble.port === near.port.name ? bot.portTrouble : { port: near.port.name, count: 0, seconds: 0 };
   t.count += 1;
   bot.portTrouble = t;
-  if (t.count < p.portFailCount) return;
+  if (t.count < p.portFailCount) return undefined;
   delete bot.portTrouble;
   bot.blockedPorts = [...(bot.blockedPorts ?? []).filter((b) => b.port !== near.port.name), { port: near.port.name, seconds: p.portBlockSeconds }];
   delete bot.route;
   bot.waitingBerth = false;
+  return near.port.name;
 }
 
 /** Time passes for the trouble window and the closed ports. */
@@ -626,7 +627,10 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
 
   // D74: a new grounding on the way to a port counts against that port.
   ageBlockedPorts(bot, thinkSeconds, p);
-  if (ship.aground && !bot.wasAground) notePortTrouble(bot, ship, params, islands, p);
+  if (ship.aground && !bot.wasAground) {
+    const blocked = notePortTrouble(bot, ship, params, islands, p);
+    if (blocked) world.events.push({ type: 'portBlocked', shipId: ship.id, port: blocked, seconds: p.portBlockSeconds });
+  }
   bot.wasAground = ship.aground;
 
   // --- Stuck? (M3 step 4c) A bot that wanted to move but did not get anywhere works free first. ---
@@ -1332,7 +1336,8 @@ function workFree(world: World, bot: BotState, ship: ShipState, params: ShipPara
   bot.progress = { x: ship.x, y: ship.y, seconds: 0, travelledM: 0 };
   if (moved >= p.stuckMoveM || !wantsToMove(bot, ship, islands)) return null;
   const heading = unstickHeading(ship, params, islands, world.wind);
-  notePortTrouble(bot, ship, params, islands, p);
+  const blocked = notePortTrouble(bot, ship, params, islands, p);
+  if (blocked) world.events.push({ type: 'portBlocked', shipId: ship.id, port: blocked, seconds: p.portBlockSeconds });
   bot.unstickLeft = p.unstickSeconds;
   bot.unstickHeadingRad = heading;
   bot.tack = 0;

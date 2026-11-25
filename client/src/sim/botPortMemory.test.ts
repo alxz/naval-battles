@@ -26,9 +26,9 @@ describe('notePortTrouble', () => {
   it('portFailCount failures near one port close it for the bot; the other port stays open', () => {
     const bot = portBot();
     const s = ship(1000 - 300, 0);
-    for (let i = 0; i < BOTS.portFailCount - 1; i++) notePortTrouble(bot, s, params, islands);
+    for (let i = 0; i < BOTS.portFailCount - 1; i++) expect(notePortTrouble(bot, s, params, islands)).toBeUndefined();
     expect(bot.blockedPorts).toBeUndefined();
-    notePortTrouble(bot, s, params, islands);
+    expect(notePortTrouble(bot, s, params, islands)).toBe('Near'); // the name goes into the event portBlocked
     expect(bot.blockedPorts).toEqual([{ port: 'Near', seconds: BOTS.portBlockSeconds }]);
     expect(portsForBot(bot, portsOf(islands), params).map((p) => p.name)).toEqual(['Far']);
   });

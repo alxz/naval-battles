@@ -4,6 +4,12 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 24 Nov 2026 — your test of step 5d; fixes 5d2
+
+- **Your test:** foes list, struck-through names, arena tags and the smaller panel work. Isla Verde could not be checked in play.
+- **Found in the logs:** (1) in the battle the bots still started 490-750 m away: the battle places its bots in `SeaScene` with its own 400-800 m, not with `world.json` (my mistake in 5d; my screenshot check missed it). (2) `loser: ?` for the player in `SUNK`. (3) D74 left no line in the log, so it could not be checked. Arena 2249 (3 h 05 min): 1 warning (a sloop stuck 22 s at the Empty Barrel berths), 69 groundings, 20 of them at Isla Verde, 16 by one fleeing caravel in 80 s against the shore (mode flee, so D74 does not apply; a runner's course along a shore → note for later).
+- **Fixed (5d2):** the battle reads `spawnMinM` / `spawnMaxM` (checked: 1237-1784 m); `loser: player`; new log line `PORT BLOCKED: ... gives up <port> for 180 s`. Headless 60 min seed 5150: 0 warnings, 2 ports given up, the caravel then sailed for the other port.
+
 ## 23 Nov 2026 (evening) — your test of step 5c; M4b step 5d: blocked ports, foes list (D74, D75)
 
 - **Found in the logs:** in the Isla Verde fight a caravel grounded 12 times at the same spot of the inlet mouth in 4 minutes: it had no memory of a failed approach. Rams (5c) work: big hits only after a new run-up. Both arenas: 0 warnings. `SUNK` lines showed `killer: ?` for the player.
