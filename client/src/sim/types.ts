@@ -123,6 +123,7 @@ export type SimEvent =
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
   | { type: 'portBlocked'; shipId: number; port: string; seconds: number }
+  | { type: 'routePlanned'; shipId: number; stops: { x: number; y: number }[]; kind: 'ports' | 'islands' } // M4b step 5b-1: a bot got its default route
   | { type: 'routePoint'; shipId: number; left: number } // D73: a route point reached; `left` points still ahead (0: the autopilot is off) // D74: a bot gives up a port it cannot get into
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number }
@@ -416,6 +417,8 @@ export interface BotState {
   weighLeft?: number; // seconds until it weighs its chances again (3-6 s, random)
   weighDistance?: number; // the enemy's distance at the last weighing (is it gaining on us?)
   tradeTo?: { x: number; y: number }; // a trader's next stop on its trade run
+  plan?: { x: number; y: number }[]; // M4b step 5b-1: its default route (stops chosen at birth, sailed round in turn)
+  planIndex?: number; // the next stop of the plan
   // --- M4b step 5d (D74): it remembers a port it cannot get into ---
   wasAground?: boolean; // was aground at the last decision (to count a new grounding once)
   portTrouble?: { port: string; count: number; seconds: number }; // failures (groundings, working free) near that port in the current window
@@ -531,6 +534,7 @@ export interface BotParams {
   traderArriveM: number; // a stop of the trade run is reached this close
   searchArriveM: number; // M4b (D69): this close to an enemy's last known place with nobody in view, the search is over
   traderCruiseSails: number; // sails set on the trade run
+  routeStops: number; // M4b step 5b-1: stops in a bot's default route
   traderIslandOffsetM: number; // a stop off a big island lies this far off its shore
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
   rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach

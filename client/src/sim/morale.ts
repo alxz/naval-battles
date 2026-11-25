@@ -76,9 +76,16 @@ export function odds(ship: ShipState, enemy: ShipState): number {
  * stop to stop at random, so its run is not always the shortest one.
  */
 export function tradeStops(params: ShipParams, islands: readonly Island[], ports: readonly Port[], p: BotParams = BOTS): { x: number; y: number }[] {
+  const sets = tradeStopSets(params, islands, ports, p);
+  return [...sets.ports, ...sets.islands];
+}
+
+/** The same stops in two lists: off the ports, and off the big and medium islands (M4b step 5b-1: routes by kind of ship). */
+export function tradeStopSets(params: ShipParams, islands: readonly Island[], ports: readonly Port[], p: BotParams = BOTS): { ports: { x: number; y: number }[]; islands: { x: number; y: number }[] } {
   // A port up an inlet: the stop is off the inlet's mouth (M3 step 8: traders on a run ground at the mouth
   // when they head for the harbour inside, which they do not enter unless they go there for repairs).
   const stops: { x: number; y: number }[] = [];
+  const byIsland: { x: number; y: number }[] = [];
   for (const port of ports) {
     const a = port.path?.[0];
     const b = port.path?.[1];
@@ -109,9 +116,9 @@ export function tradeStops(params: ShipParams, islands: readonly Island[], ports
     const x = cx + ((midX - cx) / d) * (r + p.traderIslandOffsetM);
     const y = cy + ((midY - cy) / d) * (r + p.traderIslandOffsetM);
     const spot = nearestOpenWater(x, y, params, islands, WORLD, 400);
-    if (spot) stops.push(spot);
+    if (spot) byIsland.push(spot);
   }
-  return stops;
+  return { ports: stops, islands: byIsland };
 }
 
 /** The next stop of a trade run: a random one, not where the ship is now. */

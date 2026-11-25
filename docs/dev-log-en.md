@@ -4,6 +4,14 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (midday) — M4b step 5b-1: default routes (D79)
+- **Your test (Solo, 12:15):** the pirate goal came up (even seed): you sank the pirate FRIGATE 3 at 4:33 (goal done), then were sunk by SLOOP 5 at 6:42. 0 warnings. Big chart buttons on iOS stay as they are.
+- **Built (D79):** a bot gets its route once, when it has nothing else to do: 3 stops by lot (`routeStops` in `bots.json`), sailed round in turn (`sim/routes.ts`; `tradeStopSets` in `morale.ts` splits the stops into ports and islands). Traders go port to port (with fewer than two usable ports: stop to stop; the fluyt has one), warships and pirates island to island. The first stop is not under the ship. Stops are drawn by lot, not by distance. A `ROUTE:` line in the arena and battle log.
+- 555 tests (7 new); tsc, build; headless arena 60 min seed 5150: 27 wins, 0 warnings, 23 collisions (31 routes).
+- **Next:** 5b-2 (renegades, false flags, sail colours D78).
+
+---
+
 ## 25 Nov 2026 (morning) — your test of M3b 2; M3b 2b
 - **Your test:** "sink 3 ships" counts correctly; phone goal line fits. You saw no pirate goal: both logs had odd seeds (316808599, 320264083), and an odd seed always gives "sink 3 ships" (even seed and a pirate: the pirate goal). So not a bug, but the log did not show it. Seeds come from the clock, you cannot pick one.
 - **Logs:** battle logs: 0 warnings except your own grounding at Isla Verde (7:10, off 56 s). Arena 60+ min (seed 321999492): 1 warning (frigate stuck aground, Empty Barrel Land), 63 collisions; groundings stay for M3b.

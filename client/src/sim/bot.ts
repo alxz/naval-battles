@@ -12,7 +12,9 @@
 
 import { ammoGuns, ammoLeftOf, ammoOf, ammoParams, loadableAmmo } from './ammo';
 import { crewShare, gunsManned, sailShare } from './condition';
-import { courageOf, nextTradeStop, odds, tradeStops } from './morale';
+import { courageOf, odds, tradeStopSets } from './morale';
+import { nextRouteStop } from './routes';
+import type { StopSets } from './routes';
 import { believedShip, contactOf, forgetContact } from './perception';
 import { ballBlocked, terrainFor } from './terrain';
 import { isOffenderOf, offenderNear, protectedByPort, safePortIndex } from './law';
@@ -854,9 +856,7 @@ export function thinkBot(world: World, bot: BotState, islands: readonly Island[]
     // M3 step 7b: a trader's run from stop to stop (ports and big islands), at a cruising sail.
     bot.side = null;
     if (!bot.tradeTo || Math.hypot(bot.tradeTo.x - ship.x, bot.tradeTo.y - ship.y) < p.traderArriveM) {
-      const next = nextTradeStop(world, ship, tradeStopsFor(ship.shipClass, params, islands, p), p);
-      if (next) bot.tradeTo = next;
-      else delete bot.tradeTo;
+      pickRouteStop(world, bot, ship, params, islands, p);
     }
     goal = bot.tradeTo ? via(bot.tradeTo) : ship.headingRad;
     sails = p.traderCruiseSails;
@@ -1041,11 +1041,7 @@ function cruise(world: World, bot: BotState, ship: ShipState, params: ShipParams
   bot.mode = 'trade';
   bot.side = null;
   delete bot.quietSeconds;
-  if (!bot.tradeTo || Math.hypot(bot.tradeTo.x - ship.x, bot.tradeTo.y - ship.y) < p.traderArriveM) {
-    const next = nextTradeStop(world, ship, tradeStopsFor(ship.shipClass, params, islands, p), p);
-    if (next) bot.tradeTo = next;
-    else delete bot.tradeTo;
-  }
+  if (!bot.tradeTo || Math.hypot(bot.tradeTo.x - ship.x, bot.tradeTo.y - ship.y) < p.traderArriveM) pickRouteStop(world, bot, ship, params, islands, p);
   let routed = false;
   let goal = ship.headingRad;
   if (bot.tradeTo) {
@@ -1133,10 +1129,10 @@ function traderMode(world: World, bot: BotState, ship: ShipState, enemy: ShipSta
   world.events.push({ type: 'botLeaves', shipId: ship.id, enemyId: enemy.id, reason: 'trader', fear: bot.fear ?? 0, odds: o });
 }
 
-const tradeStopCache = new WeakMap<readonly Island[], Map<string, { x: number; y: number }[]>>();
+const tradeStopCache = new WeakMap<readonly Island[], Map<string, StopSets>>();
 
-/** The stops of a trade run for this class on these islands (made once). */
-function tradeStopsFor(shipClass: string, params: ShipParams, islands: readonly Island[], p: BotParams): { x: number; y: number }[] {
+/** The stops of a trade run for this class on these islands (made once): off the ports, and off the big islands. */
+function tradeStopsFor(shipClass: string, params: ShipParams, islands: readonly Island[], p: BotParams): StopSets {
   let byClass = tradeStopCache.get(islands);
   if (!byClass) {
     byClass = new Map();
@@ -1144,10 +1140,21 @@ function tradeStopsFor(shipClass: string, params: ShipParams, islands: readonly 
   }
   let stops = byClass.get(shipClass);
   if (!stops) {
-    stops = tradeStops(params, islands, portsFor(portsCached(islands), params, p), p);
+    stops = tradeStopSets(params, islands, portsFor(portsCached(islands), params, p), p);
     byClass.set(shipClass, stops);
   }
   return stops;
+}
+
+/** M4b step 5b-1: the next stop of the bot's default route becomes its goal (`tradeTo`); a new route is logged by an event. */
+function pickRouteStop(world: World, bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams): void {
+  const next = nextRouteStop(world, bot, ship, tradeStopsFor(ship.shipClass, params, islands, p), !!SHIP_CLASSES[ship.shipClass]?.trader, p.routeStops, p.traderArriveM);
+  if (!next) {
+    delete bot.tradeTo;
+    return;
+  }
+  bot.tradeTo = next.stop;
+  if (next.planned) world.events.push({ type: 'routePlanned', shipId: ship.id, stops: next.planned.stops, kind: next.planned.kind });
 }
 
 /**
