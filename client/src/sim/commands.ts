@@ -2,7 +2,7 @@ import { onBroadsideFired } from './law';
 import { normalizeAngle } from './angles';
 import { refitShip, rollCargo } from './condition';
 import { nextRandom } from './random';
-import { AMMO, GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
+import { AMMO, AUTOPILOT, GUNS, ISLANDS, SHIP_CLASSES, WORLD } from './data';
 import { newBot } from './bot';
 import { rollSkills } from './skills';
 import { orderBroadside } from './guns';
@@ -44,6 +44,16 @@ export function applyCommand(world: World, command: Command): void {
   switch (command.type) {
     case 'setRudder':
       ship.rudder = clamp(command.value, -1, 1);
+      if (!command.auto && world.routes) world.routes = world.routes.filter((r) => r.shipId !== ship.id); // D73: your hand on the helm ends the autopilot
+      break;
+    case 'setRoute': {
+      const points = command.points.slice(-AUTOPILOT.maxPoints).map((pt) => ({ x: pt.x, y: pt.y }));
+      world.routes = (world.routes ?? []).filter((r) => r.shipId !== ship.id);
+      if (points.length > 0) world.routes.push({ shipId: ship.id, points, tack: 0, tackSeconds: 0 });
+      break;
+    }
+    case 'clearRoute':
+      if (world.routes) world.routes = world.routes.filter((r) => r.shipId !== ship.id);
       break;
     case 'setSails':
       ship.sailLevel = clamp(command.value, 0, 1);

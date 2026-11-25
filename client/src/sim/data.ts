@@ -3,6 +3,7 @@ import botsJson from '../data/bots.json';
 import damageJson from '../data/damage.json';
 import gunsJson from '../data/guns.json';
 import islandsJson from '../data/islands.json';
+import autopilotJson from '../data/autopilot.json';
 import generatedJson from '../data/islandsGenerated.json';
 import polarsJson from '../data/polars.json';
 import shoreJson from '../data/shore.json';
@@ -10,7 +11,7 @@ import skillsJson from '../data/skills.json';
 import shipsJson from '../data/ships.json';
 import windJson from '../data/wind.json';
 import worldJson from '../data/world.json';
-import type { AmmoParams, AmmoType, BotParams, DamageParams, GunParams, Island, Polar, ShipParams, ShoreParams, SkillParams, WorldBounds } from './types';
+import type { AmmoParams, AmmoType, AutopilotParams, BotParams, DamageParams, GunParams, Island, Polar, ShipParams, ShoreParams, SkillParams, WorldBounds } from './types';
 
 /** The three kinds of ammunition (plan 4.5), in the order of the keys 1 / 2 / 3. */
 export const AMMO: { order: AmmoType[]; types: Record<AmmoType, AmmoParams>; startBroadsides: { chain: number; grape: number } } = {
@@ -35,6 +36,9 @@ export const SKILLS: SkillParams = skillsJson;
 
 /** The wind at the start of a new game, and how it drifts. */
 export const WIND = windJson;
+
+/** D73: the autopilot (data/autopilot.json). */
+export const AUTOPILOT: AutopilotParams = autopilotJson;
 
 /** The edges of the sea. */
 export const WORLD: WorldBounds = worldJson;

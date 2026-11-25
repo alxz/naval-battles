@@ -1,5 +1,6 @@
 import { stepArena } from './arena';
 import { thinkBots } from './bot';
+import { thinkAutopilot } from './autopilot';
 import { applyCommand } from './commands';
 import { ISLANDS } from './data';
 import { lerp, lerpAngle } from './interpolate';
@@ -51,6 +52,7 @@ export class Simulation {
       // The bots think after the player's commands and act through commands too.
       this.world.events = []; // (already copied below last step) so the bots' own events are kept apart
       for (const command of thinkBots(this.world, ISLANDS)) applyCommand(this.world, command);
+      for (const command of thinkAutopilot(this.world)) applyCommand(this.world, command); // D73: your route's helmsman
       const botEvents = this.world.events; // a bot works free, decides on a finishing attack, waits for a berth (log only)
       stepWorld(this.world, STEP_SECONDS, this.tuning);
       this.world.events.unshift(...botEvents);

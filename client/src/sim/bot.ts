@@ -137,7 +137,7 @@ export function sailsForSpeed(ship: ShipState, params: ShipParams, wind: WindNow
  * `tackCooldownSeconds` (hysteresis), then goes about if the goal is now on the other side.
  * Updates `bot.tack`; returns the heading.
  */
-export function steerWithTacks(goalRad: number, params: ShipParams, wind: WindNow, bot: BotState, p: BotParams): number {
+export function steerWithTacks(goalRad: number, params: ShipParams, wind: WindNow, bot: Pick<BotState, 'tack' | 'tackSeconds'>, p: BotParams): number {
   const noGo = polarOf(params)?.noGoDeg ?? 0;
   if (twaDeg(goalRad, wind.fromRad) >= noGo + p.tackMarginDeg) {
     bot.tack = 0;

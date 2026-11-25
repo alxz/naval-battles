@@ -122,7 +122,8 @@ export type SimEvent =
   | { type: 'botUnstick'; shipId: number; x: number; y: number; headingRad: number }
   | { type: 'finishDecision'; shipId: number; enemyId: number; go: boolean; canFinish: boolean; expected: number; enemyHull: number }
   | { type: 'berthWait'; shipId: number; port: string; occupied: number; berths: number }
-  | { type: 'portBlocked'; shipId: number; port: string; seconds: number } // D74: a bot gives up a port it cannot get into
+  | { type: 'portBlocked'; shipId: number; port: string; seconds: number }
+  | { type: 'routePoint'; shipId: number; left: number } // D73: a route point reached; `left` points still ahead (0: the autopilot is off) // D74: a bot gives up a port it cannot get into
   | { type: 'ramDecision'; shipId: number; enemyId: number; go: boolean; distance: number; desperate?: boolean } // desperate (M3 step 7b): a runner that cannot get away turns to ram
   | { type: 'rammerLearned'; shipId: number; enemyId: number }
   // M4b perception (sim/perception.ts): `shipId` is the watcher, `otherId` the ship it saw / lost / forgot.
@@ -277,6 +278,8 @@ export interface World {
   nextBallId: number;
   events: SimEvent[]; // cleared at the start of every step
   bots: BotState[]; // ships steered by the computer (sim/bot.ts)
+  /** D73: a ship's own route (autopilot): the helmsman steers it through these points, rudder only (sim/autopilot.ts). */
+  routes?: AutoRoute[];
   /** The shore batteries' timers, one entry per port (sim/shore.ts). Made at the first step if absent. */
   shore?: ShoreBattery[];
   /** The auto-bot arena: every ship is a bot, each fights for itself (sim/arena.ts). Absent in a normal game. */
@@ -544,7 +547,7 @@ export const DEFAULT_TUNING: Tuning = { speedScale: 1, windDrift: true };
 
 /** Everything the player or a bot may do goes through a command. */
 export type Command =
-  | { type: 'setRudder'; shipId: number; value: number }
+  | { type: 'setRudder'; shipId: number; value: number; auto?: boolean } // auto: from the autopilot; a rudder input without it switches the autopilot off (D73)
   | { type: 'setSails'; shipId: number; value: number }
   // Test setup only (scale test, later scenario tests): put a ship somewhere, stopped.
   | { type: 'placeShip'; shipId: number; x: number; y: number; headingRad: number; shipClass?: string }
@@ -557,6 +560,24 @@ export type Command =
   | { type: 'setAmmo'; shipId: number; ammo: AmmoType }
   // Test setup (lil-gui): let the computer steer this ship against `enemyId`, or stop (null).
   | { type: 'setBot'; shipId: number; enemyId: number | null; skilled?: boolean } // skilled: draw bot skills (M3 step 7c)
+  // D73: the ship's route (up to maxPoints, the next point first), or none.
+  | { type: 'setRoute'; shipId: number; points: { x: number; y: number }[] }
+  | { type: 'clearRoute'; shipId: number }
+
+/** D73: the player's route. The autopilot steers the ship to each point in turn (rudder only; the sails stay the player's). */
+export interface AutoRoute {
+  shipId: number;
+  points: { x: number; y: number }[]; // the points still ahead, the next one first
+  tack: -1 | 0 | 1; // beating to the next point (headwind): +1 / -1 the tack, 0 straight at it
+  tackSeconds: number; // how long on this tack (the bots' hysteresis)
+}
+
+/** D73: the autopilot's numbers (data/autopilot.json). */
+export interface AutopilotParams {
+  maxPoints: number; // a route holds at most this many points (a fifth wipes the oldest)
+  arriveM: number; // a point is reached this close
+  thinkEveryTicks: number; // the helmsman decides every this many steps
+}
 
 /** Collisions and repair (data/damage.json). */
 export interface DamageParams {

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { ISLANDS, WORLD } from '../sim/data';
 import type { ShipState } from '../sim/types';
 import { chartFit, fromChart, isKnown, toChart, viewFrame } from '../view/chart';
+import { dashed } from './Chart';
 import type { ChartState } from '../view/chart';
 import { hudLayout, panelCovers } from '../view/hudLayout';
 import type { Rect } from '../view/hudLayout';
@@ -104,6 +105,7 @@ export class Minimap {
     seconds: number,
     coveredRightPx = 0,
     view?: { x: number; y: number; halfW: number; halfH: number },
+    route: readonly { x: number; y: number }[] = [], // D73: your route
   ): void {
     this.place(coveredRightPx);
     const g = this.g;
@@ -142,6 +144,17 @@ export class Minimap {
       const f = viewFrame(fit, WORLD, view, view.halfW, view.halfH);
       g.lineStyle(1, 0xffffff, 0.8);
       g.strokeRect(f.x + 0.5, f.y + 0.5, f.w - 1, f.h - 1);
+    }
+
+    // D73: your route, a dashed line through its points.
+    let from = at(me);
+    for (const pt of route) {
+      const p2 = at(pt);
+      g.lineStyle(1, 0xffe066, 0.8);
+      dashed(g, from.x, from.y, p2.x, p2.y, 3, 2);
+      g.fillStyle(0xffe066, 1);
+      g.fillRect(Math.round(p2.x) - 1, Math.round(p2.y) - 1, 3, 3);
+      from = p2;
     }
 
     // You: a yellow dot and a short line where the bow points.

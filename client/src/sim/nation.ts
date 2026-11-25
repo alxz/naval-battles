@@ -22,3 +22,24 @@ export function nationFor(seed: number, shipId: number): Nation {
 export function isPirate(ship: { nation?: string }): boolean {
   return ship.nation === 'pirates';
 }
+
+/**
+ * Your idea of 24 Nov: a battle has at least one pirate among the bots. `nations[i]` and `isTrader[i]` belong to bot i.
+ * With none, the first warship (else the first bot) becomes a pirate; a pirate on a trader is swapped onto a warship
+ * when there is one that is not a pirate. Pure: returns the new nations (seeded input in, same output).
+ */
+export function withOnePirate(nations: readonly Nation[], isTrader: readonly boolean[]): Nation[] {
+  const out = [...nations];
+  if (out.length === 0) return out;
+  const warships = out.map((_n, i) => i).filter((i) => !isTrader[i]);
+  if (!out.includes('pirates')) {
+    out[warships[0] ?? 0] = 'pirates';
+    return out;
+  }
+  // A black flag only on traders, a warship free: the first such pirate trades places with that warship.
+  if (warships.some((i) => out[i] === 'pirates')) return out;
+  const w = warships[0];
+  const t = out.findIndex((n) => n === 'pirates');
+  if (w !== undefined && t >= 0) [out[w], out[t]] = [out[t]!, out[w]!];
+  return out;
+}

@@ -40,6 +40,8 @@
     3
   ],
   "soloSpeedScale": 1.15,
+  "bosunBelowHull": 0.5,
+  "bosunSeconds": 10,
   "wreck": {
     "minAlpha": 0.2,
     "sinkRate": 0.3,

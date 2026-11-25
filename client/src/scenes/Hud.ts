@@ -403,7 +403,7 @@ export class Hud {
     this.debugText.setVisible(d.debug).setText(d.debug ? d.debugLines.join('\n') : '');
     // In the arena the bot table fills the top left: the help goes to its right (M3 step 7f).
     if (d.debug) this.debugText.setPosition(this.debugBeside ? this.debugBeside.x : this.layoutNow.debugX, this.debugBeside ? this.debugBeside.y : this.layoutNow.debugY);
-    this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   V spyglass   H help');
+    this.hint.setVisible(!d.debug && !this.touch && !l.narrow).setText('C chart   N route   V spyglass   H help');
     if (d.debug) {
       const b = this.debugText.getBounds();
       this.gfx.debug.fillStyle(0x000000, DEBUG_PLATE_ALPHA); // M3 step 7c: lighter, the sea shows through
@@ -583,7 +583,7 @@ export function debugLines(info: {
     'SPACE bow chaser  1 2 3 ammo',
     '+ / - guns up / down',
     'Shift + / - or wheel: zoom',
-    'M sound  C chart  ESC pause  H hide',
+    'M sound  C chart  N route  ESC pause  H hide',
     '',
     `heading ${deg(bearing)} ${compassPoint(bearing)}   sails ${Math.round(info.ship.sailLevel * 100)}%`,
     `speed ${info.ship.speed.toFixed(1)} m/s`,

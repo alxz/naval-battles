@@ -1,6 +1,7 @@
 import { bearingDegToHeadingRad } from './angles';
 import { ENEMIES, ISLANDS, SHIP_CLASSES, WIND, WORLD } from './data';
-import { nationFor } from './nation';
+import { nationFor, withOnePirate } from './nation';
+import type { Nation } from './nation';
 import { nextRandom } from './random';
 import worldJson from '../data/world.json';
 import { openWaterSpot } from './spawn';
@@ -117,5 +118,8 @@ export function createWorld(seed: number = DEFAULT_SEED, enemies = 1): World {
   }
   // M3 step 7d: flags. You are a pirate (D29); the bots sail under random flags of this battle.
   for (const ship of world.ships) ship.nation = ship.id === 1 ? 'pirates' : nationFor(seed, ship.id);
+  // Your idea of 24 Nov: at least one pirate among the bots (the battle puts it on a warship: SeaScene.restart).
+  const bots = world.ships.slice(1);
+  withOnePirate(bots.map((b) => b.nation as Nation), bots.map(() => false)).forEach((n, i) => (bots[i]!.nation = n));
   return world;
 }
