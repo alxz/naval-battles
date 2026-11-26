@@ -30,5 +30,6 @@
   "details": [
     1,
     2
-  ]
+  ],
+  "sails": true
 }

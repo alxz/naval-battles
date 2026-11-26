@@ -24,6 +24,10 @@ function sheetKey(shipClass: string, owner: Owner, directions: number, detail: n
   return `${shipClass}_${owner}_${directions}_${detail}x`;
 }
 
+function sailsKey(shipClass: string, directions: number, detail: number): string {
+  return `${shipClass}_sails_${directions}_${detail}x`;
+}
+
 function boxKey(shipClass: string, owner: Owner): string {
   return `box-${shipClass}-${owner}`;
 }
@@ -38,6 +42,15 @@ export function loadShipSheets(scene: Phaser.Scene): void {
           const size = frameSize(shipClass) * detail;
           scene.load.spritesheet(key, assetUrl(`assets/ships/${key}.png`), { frameWidth: size, frameHeight: size });
         }
+      }
+    }
+    // D78: the cloth alone (white), laid over the hull picture and coloured with setTint.
+    if (!('sails' in artJson) || !artJson.sails) continue;
+    for (const directions of artJson.directions) {
+      for (const detail of artJson.details) {
+        const key = sailsKey(shipClass, directions, detail);
+        const size = frameSize(shipClass) * detail;
+        scene.load.spritesheet(key, assetUrl(`assets/ships/${key}.png`), { frameWidth: size, frameHeight: size });
       }
     }
   }
@@ -114,4 +127,40 @@ export function showShip(
     .setRotation(0)
     .setScale(s / detail)
     .setPosition(x * s, y * s);
+}
+
+/**
+ * D78: puts the cloth layer over a ship's picture, in the same place, size and frame, coloured with `tint`.
+ * `flash` = the hit flash: the cloth goes white with the hull. Boxes and classes without cloth sheets: the layer is hidden.
+ */
+export function showSails(
+  sails: Phaser.GameObjects.Image,
+  hull: Phaser.GameObjects.Image,
+  shipClass: string,
+  art: ArtChoice,
+  detailAtZoom: boolean,
+  s: number,
+  tint: number,
+  flash: boolean,
+): void {
+  const hasSails = 'sails' in artJson && artJson.sails === true;
+  const hasPictures = art !== 0 && hasSails && artJson.classes.includes(shipClass) && artJson.directions.includes(art);
+  if (!hasPictures) {
+    sails.setVisible(false);
+    return;
+  }
+  const detail = detailAtZoom && s >= 1.5 && artJson.details.includes(2) ? 2 : 1;
+  const key = sailsKey(shipClass, art, detail);
+  // The hull image already holds the frame for the heading; the cloth sheet has the same frame layout.
+  const frame = hull.frame.name;
+  if (sails.texture.key !== key || sails.frame.name !== String(frame)) sails.setTexture(key, frame);
+  sails
+    .setOrigin(hull.originX, hull.originY)
+    .setRotation(hull.rotation)
+    .setScale(hull.scaleX, hull.scaleY)
+    .setPosition(hull.x, hull.y)
+    .setAlpha(hull.alpha)
+    .setVisible(hull.visible);
+  if (flash) sails.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+  else sails.setTint(tint).setTintMode(Phaser.TintModes.MULTIPLY);
 }

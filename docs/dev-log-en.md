@@ -4,6 +4,13 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 26 Nov 2026 — your logs 1009 and 1012; M4b step 5b-3: sail colours (D78)
+
+- **Your logs:** arena 1:50, 0 warnings, 34 collisions; RENEGADE and PIRATE (hidden) lines work. The same ship appears twice because it was sunk and respawned in between (a respawn brings the birth flag back). 50 "runs aground" lines, all near Isla Verde and Pelican Cay: the known groundings of fleeing bots (left to M3b). Battle 1012: 0 warnings, the pirate flag seen (SLOOP 2 under a false england flag).
+- **Done:** `tools/render_ship.py` also writes the cloth alone (`<class>_sails_<directions>_<detail>x.png`, 20 files; `--sails-only` writes only these, the hull sheets stay bit for bit the same). The scene lays this layer over each hull and tints it (`ShipArt.showSails`, `view/sailColour.ts`, `data/sails.json`): canvas, cream, grey-brown by an integer hash of seed and ship id; some traders tanned; black only for a renegade, a hidden pirate keeps ordinary sails. The hit flash turns the cloth white too.
+- **Choice:** the black sails of a renegade show whenever the ship is drawn, also beyond flag range (sails are seen from afar, the flag is not). Patched sails and navy colours: not in v1.
+- 581 tests (+4), tsc, build, build:test, arena 60 min seed 5150: 0 warnings; Playwright PC and iPhone 13: layer on every ship, black on forced renegades, no errors. Version `M4b 5b-3`.
+
 ## 25 Nov 2026 (night, last) — your test 2209; 5b-2b3: a test switch for false flags
 
 - **Your log (battle 2209, 9:33):** you sank SLOOP 5, then SLOOP 3 sank you; 0 warnings, 1 collision with BRIGANTINE 2 (the only pirate). The flag could not be checked: by the lot this pirate had no false flag (seed 365639939), and nobody went 10 minutes without a sinking. The log did not say who has a false flag.

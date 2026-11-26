@@ -1,0 +1,43 @@
+{
+  "comment": "D78: sail colours. A tint multiplies the white cloth layer. Weights decide the lot; traders have their own list.",
+  "warship": [
+    {
+      "name": "canvas",
+      "tint": "#ffffff",
+      "weight": 4
+    },
+    {
+      "name": "cream",
+      "tint": "#f0e2bd",
+      "weight": 4
+    },
+    {
+      "name": "grey-brown",
+      "tint": "#b8a688",
+      "weight": 2
+    }
+  ],
+  "trader": [
+    {
+      "name": "canvas",
+      "tint": "#ffffff",
+      "weight": 3
+    },
+    {
+      "name": "cream",
+      "tint": "#f0e2bd",
+      "weight": 3
+    },
+    {
+      "name": "grey-brown",
+      "tint": "#b8a688",
+      "weight": 2
+    },
+    {
+      "name": "tanned",
+      "tint": "#b0643c",
+      "weight": 1
+    }
+  ],
+  "black": "#2e2e34"
+}

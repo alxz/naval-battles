@@ -690,8 +690,11 @@ def fill_triangle(points: np.ndarray, depth: np.ndarray, colour_index: int, imag
     region_c[win] = colour_index
 
 
-def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[float, float], pixels_per_metre: float) -> Image.Image:
-    """One picture of the ship pointing at heading_rad (0 = east, clockwise, like the game)."""
+def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[float, float], pixels_per_metre: float) -> tuple[Image.Image, Image.Image]:
+    """
+    One picture of the ship pointing at heading_rad (0 = east, clockwise, like the game), and a second one with
+    only the sail cloth in it (D78: the game lays it over the first and colours it with setTint).
+    """
     big = frame * SUPERSAMPLE
     scale = pixels_per_metre * SUPERSAMPLE
     cos, sin = math.cos(heading_rad), math.sin(heading_rad)
@@ -702,6 +705,7 @@ def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[flo
     shadow = np.zeros((big, big), dtype=np.int32)
     shadow_z = np.full((big, big), -1e9)
     palette: list[tuple[int, int, int]] = [(0, 0, 0)]
+    is_sail: list[bool] = [False]  # parallel to palette: does this entry belong to sail cloth?
 
     for a, b, c, colour, min_detail in model.triangles:
         if pixels_per_metre < min_detail:
@@ -712,11 +716,15 @@ def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[flo
         if length < 1e-9:
             continue
         shaded = shade(colour, normal / length)
-        if shaded not in palette:
+        cloth = colour in BRIGHT
+        entry = next((k for k in range(1, len(palette)) if palette[k] == shaded and is_sail[k] == cloth), 0)
+        if entry == 0:
             palette.append(shaded)
+            is_sail.append(cloth)
+            entry = len(palette) - 1
         # The game's projection: screen y = world y - HEIGHT_SCALE x height. Nearer to the camera = bigger y + z.
         screen = np.stack([anchor[0] * SUPERSAMPLE + world[:, 0] * scale, anchor[1] * SUPERSAMPLE + (world[:, 1] - HEIGHT_SCALE * world[:, 2]) * scale], axis=1)
-        fill_triangle(screen, world[:, 1] + world[:, 2], palette.index(shaded), image, zbuffer)
+        fill_triangle(screen, world[:, 1] + world[:, 2], entry, image, zbuffer)
         # The shadow: slide every corner along the light down to the water (z = 0).
         ground = world[:, :2] - LIGHT[:2] * (world[:, 2:3] / LIGHT[2])
         flat = np.stack([anchor[0] * SUPERSAMPLE + ground[:, 0] * scale, anchor[1] * SUPERSAMPLE + ground[:, 1] * scale], axis=1)
@@ -742,20 +750,34 @@ def render_frame(model: Model, heading_rad: float, frame: int, anchor: tuple[flo
     padded = np.pad(solid, 1)
     touches = padded[:-2, 1:-1] | padded[2:, 1:-1] | padded[1:-1, :-2] | padded[1:-1, 2:]
     out[touches & ~solid] = (*OUTLINE, 255)
-    return Image.fromarray(out, "RGBA")
+    # The sail layer: the same pixels, but only where the winning colour is cloth (no outline, no shadow).
+    cloth_flags = np.array(is_sail, dtype=bool)
+    cloth_pixels = solid & cloth_flags[winner]
+    sails = np.zeros((frame, frame, 4), dtype=np.uint8)
+    sails[cloth_pixels] = out[cloth_pixels]
+    return Image.fromarray(out, "RGBA"), Image.fromarray(sails, "RGBA")
 
 
-def render_sheet(model: Model, name: str, directions: int, detail: int, frame_size: int = FRAME) -> Path:
-    """All directions of one ship in one picture: COLUMNS frames per row, direction 0 (east) first, clockwise."""
+def render_sheet(model: Model, name: str, directions: int, detail: int, frame_size: int = FRAME, sails_name: str | None = None, write_ship: bool = True) -> Path:
+    """
+    All directions of one ship in one picture: COLUMNS frames per row, direction 0 (east) first, clockwise.
+    With sails_name, the sail-only sheet (D78) is written too, as <sails_name>_<directions>_<detail>x.png.
+    """
     frame = frame_size * detail
     anchor = (frame * ANCHOR[0], frame * ANCHOR[1])
-    sheet = Image.new("RGBA", (frame * COLUMNS, frame * math.ceil(directions / COLUMNS)))
+    size = (frame * COLUMNS, frame * math.ceil(directions / COLUMNS))
+    sheet = Image.new("RGBA", size)
+    cloth = Image.new("RGBA", size)
     for i in range(directions):
-        picture = render_frame(model, 2 * math.pi * i / directions, frame, anchor, detail * SIZE)
+        picture, sails = render_frame(model, 2 * math.pi * i / directions, frame, anchor, detail * SIZE)
         sheet.paste(picture, ((i % COLUMNS) * frame, (i // COLUMNS) * frame))
+        cloth.paste(sails, ((i % COLUMNS) * frame, (i // COLUMNS) * frame))
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUT_DIR / f"{name}_{directions}_{detail}x.png"
-    sheet.save(path)
+    if write_ship:
+        sheet.save(path)
+    if sails_name:
+        cloth.save(OUT_DIR / f"{sails_name}_{directions}_{detail}x.png")
     return path
 
 
@@ -777,16 +799,22 @@ def preview(sheets: list[tuple[Path, int, int]], target: Path) -> None:
 
 def main() -> None:
     models = {"sloop": build_sloop, "brigantine": build_brigantine, "caravel": build_caravel, "fluyt": build_fluyt, "frigate": build_frigate}
-    only = sys.argv[1:]  # e.g. "python tools/render_ship.py frigate" renders only the frigate (faster while tuning)
+    args = sys.argv[1:]
+    sails_only = "--sails-only" in args  # writes only the sail sheets (D78); the hull sheets stay as they are
+    only = [a for a in args if not a.startswith("--")]  # e.g. "python tools/render_ship.py frigate" renders only the frigate (faster while tuning)
     for ship_class, build in models.items():
         if only and ship_class not in only:
             continue
-        for owner, band in OWNERS.items():
+        for index, (owner, band) in enumerate(OWNERS.items()):
+            if sails_only and index > 0:
+                continue  # the sails do not depend on the owner's band
             model = build(band)
             for directions in DIRECTIONS:
                 for detail in DETAILS:
-                    path = render_sheet(model, f"{ship_class}_{owner}", directions, detail, FRAMES[ship_class])
-                    print("written", path.name)
+                    path = render_sheet(model, f"{ship_class}_{owner}", directions, detail, FRAMES[ship_class], f"{ship_class}_sails" if index == 0 else None, not sails_only)
+                    print("written", path.name, "(+ sails)" if index == 0 else "")
+    if sails_only:
+        return
 
     meta = {
         "frame": FRAME,
@@ -800,6 +828,7 @@ def main() -> None:
         "owners": list(OWNERS),
         "directions": list(DIRECTIONS),
         "details": list(DETAILS),
+        "sails": True,  # D78: <class>_sails_<directions>_<detail>x.png sheets exist (cloth only, white, tinted in the game)
     }
     META_FILE.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     print("written", META_FILE.name)

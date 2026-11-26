@@ -65,7 +65,8 @@ import { Islands, loadIslandPictures } from './Islands';
 import { LandingMarkers } from './LandingMarkers';
 import { RangeRings } from './RangeRings';
 import { ScreenFit } from './ScreenFit';
-import { loadShipSheets, makeShipTextures, showShip } from './ShipArt';
+import { loadShipSheets, makeShipTextures, showShip, showSails } from './ShipArt';
+import { sailTint } from '../view/sailColour';
 import { TouchControls } from './TouchControls';
 import { TuningPanel, releaseFocus } from './TuningPanel';
 import { Wake } from './Wake';
@@ -128,6 +129,7 @@ export class SeaScene extends Phaser.Scene {
   private screenFit!: ScreenFit;
   private panel!: TuningPanel;
   private shipImages: Phaser.GameObjects.Image[] = [];
+  private sailImages: Phaser.GameObjects.Image[] = []; // D78: the cloth layer over each ship's picture
   private water!: Phaser.GameObjects.TileSprite;
   private wake!: Wake;
   private islands!: Islands;
@@ -458,6 +460,7 @@ export class SeaScene extends Phaser.Scene {
     // (step 4, B / EYES) only what the watched bot sees, with the same rules as a battle.
     const seeAll = observerSeesAll(this.arena, v.botEyes);
     const known = knownShips(this.sim.world, this.sim.world.ships[this.focusIndex]?.id ?? PLAYER_ID, seeAll);
+    const renegades = new Set(this.sim.world.bots.filter((b) => b.renegade).map((b) => b.shipId));
     this.sim.world.ships.forEach((ship, i) => {
       const pose = poses[i];
       const image = this.shipImages[i];
@@ -474,6 +477,12 @@ export class SeaScene extends Phaser.Scene {
       this.hitFlash[i] = flash;
       if (flash > 0) image.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else image.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      // D78: sail colour. Black only for a renegade; a hidden pirate keeps its ordinary sails.
+      const sails = this.sailImages[i];
+      if (sails) {
+        const trader = SHIP_CLASSES[ship.shipClass]?.trader === true;
+        showSails(sails, image, ship.shipClass, v.shipArt, v.detailAtZoom, s, sailTint(this.arenaSeed, ship.id, trader, renegades.has(ship.id)), flash > 0);
+      }
     });
 
     // Hull bars over the ships; in a duel your own ship has its panel, in the arena every ship gets one.
@@ -1213,10 +1222,13 @@ export class SeaScene extends Phaser.Scene {
   /** One picture per ship of the world (the number of ships can change between duels). */
   private rebuildShipImages(): void {
     for (const image of this.shipImages) image.destroy();
+    for (const image of this.sailImages) image.destroy();
     this.shipImages = this.sim.world.ships.map((ship) => {
       const owner = ship.id === PLAYER_ID ? 'player' : 'enemy';
       return this.add.image(0, 0, `box-${ship.shipClass}-${owner}`).setDepth(2);
     });
+    // D78: a second picture per ship, just above the hull, with the cloth only. Hidden until it has a sheet.
+    this.sailImages = this.sim.world.ships.map((ship) => this.add.image(0, 0, `box-${ship.shipClass}-enemy`).setDepth(2.01).setVisible(false));
   }
 
   /**

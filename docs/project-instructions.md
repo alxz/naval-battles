@@ -23,9 +23,9 @@ Phaser 4 warning: most examples online are Phaser 3. If unsure that an API exist
 - Work on the current milestone only. A new idea gets a small first version and is written to the plan (decision number D<n>, `docs/world-ideas-*`) but NEVER enters a milestone that has already started (D37). If a request conflicts with a confirmed D-number, say so first.
 - Prefer small diffs or single functions over whole-file rewrites. If input is too long or unclear, ask for the specific file or function.
 
-## Status (25 Nov 2026, plan v0.7, version M4b 5b-2b2)
-Done: M0-M3, M2b; M4b "Eyes at Sea" steps 1-4, 5a, 5c, 5d, 5b-1 (default routes, D79), 5b-2a (Solo test aids: time x1/x2/x4, autopilot sails, TEST "bots hunt me", D80), 5b-2b (renegades and false flags, D82, `sim/renegade.ts`, `data/renegade.json`); M3b step 1 (D73 autopilot) and step 2 (D77 goal in Solo) done ahead of time; D76 bosun and a pirate in every battle.
-Order: sail colours (D78: white sail sheet + setTint; black sails only for renegades) -> M3b "Caribbean Sea" (map, navigation grid, third port, route avoids land) -> M4 boarding (D64) -> Squadrons -> M5+.
+## Status (26 Nov 2026, plan v0.7, version M4b 5b-3)
+Done: M0-M3, M2b; M4b "Eyes at Sea" steps 1-4, 5a, 5c, 5d, 5b-1 (default routes, D79), 5b-2a (Solo test aids: time x1/x2/x4, autopilot sails, TEST "bots hunt me", D80), 5b-2b (renegades and false flags, D82, `sim/renegade.ts`, `data/renegade.json`), 5b-3 (sail colours, D78: cloth sheets `<class>_sails_*.png` + `setTint`, `view/sailColour.ts`, `data/sails.json`; black only for renegades); M3b step 1 (D73 autopilot) and step 2 (D77 goal in Solo) done ahead of time; D76 bosun and a pirate in every battle.
+Order: M3b "Caribbean Sea" (map, navigation grid, third port, route avoids land) -> M4 boarding (D64) -> Squadrons -> M5+.
 Parked (D37): 2.5 s pause to change shot type (M4); day/night light and weather pictures (after M3b); sweeps / oars (D81, after M3b); traders' reaction to a false flag; longer contact memory for renegades; frigate balance pass before R2; split bot.ts (~1300 lines) after M4b; groundings of fleeing bots are left to M3b; touch: minimap over the chart's "wind from" text, phone goal line touching the top buttons.
 
 ## Delivery protocol (every step)
