@@ -29,6 +29,7 @@ export interface TuningValues {
   fog: boolean; // drifting fog banks
   shipBars: boolean; // a small hull bar over every ship
   huntPlayer: boolean; // TEST (M4b 5b-2): warships and pirates are told where you are every 20 s
+  hidePirates: boolean; // TEST (M4b 5b-2b3): every bot pirate sails under a false flag (shown beyond 300 m)
   enemyCount: number; // how many bots fight you (1-5; 0 = random 3-5); used when a battle starts
   botClasses: string; // M3 step 7d: the classes of the next battle's bots: 'mix' or one class for all
   sound: boolean; // sound effects on / off (M on a computer)
@@ -58,6 +59,7 @@ export interface TuningCallbacks {
   onWindDrift: (on: boolean) => void;
   /** TEST: bots are told where you are (M4b step 5b-2). */
   onHuntPlayer: (on: boolean) => void;
+  onHidePirates: (on: boolean) => void;
   /** The circle radius changed: start a new circle from where the target is now. */
   onTargetCircle: () => void;
   /** The target behaviour changed (moored / circle / bot). */
@@ -142,6 +144,7 @@ export class TuningPanel {
     // Solo test aids (M4b step 5b-2): off by default, the battle log marks it.
     const solo = this.gui.addFolder('Solo (test)');
     solo.add(v, 'huntPlayer').name('bots hunt me').onChange((on: boolean) => callbacks.onHuntPlayer(on));
+    solo.add(v, 'hidePirates').name('pirates hide (false flag)').onChange((on: boolean) => callbacks.onHidePirates(on));
     solo.close();
 
     const fx = this.gui.addFolder('Sound & effects');

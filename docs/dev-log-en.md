@@ -4,6 +4,12 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (night, last) — your test 2209; 5b-2b3: a test switch for false flags
+
+- **Your log (battle 2209, 9:33):** you sank SLOOP 5, then SLOOP 3 sank you; 0 warnings, 1 collision with BRIGANTINE 2 (the only pirate). The flag could not be checked: by the lot this pirate had no false flag (seed 365639939), and nobody went 10 minutes without a sinking. The log did not say who has a false flag.
+- **Done:** Tuning > Solo (test) > "pirates hide (false flag)": every bot pirate puts up a false flag at once (also in the next battles while it is on), a TEST line in the log; the battle log lists `FALSE FLAG <nation> beyond 300 m` after a ship's name at the start. The `[pirates]` tag in the log is the real flag, for you to read, not what the screen shows. Checked: switch on gives the pirate a false flag, the log line is written. Version `M4b 5b-2b3`.
+- **How to see it:** switch it on, sail to a pirate: beyond 300 m its flag is not black, closer it is.
+
 ## 25 Nov 2026 (night, later) — review of today's work; 5b-2b2
 
 - **Found and fixed (5b-2b):** (1) every collision counted as a ram (the ship that took less damage); now only a bot in mode `ram` whose collision did damage (`rammersIn`). (2) A respawned arena ship kept its pirate or false flag: the `respawn` event comes after the world step, so `stepRenegades` never saw it; now the respawn itself gives the birth flag back (`rebirthFlag`, `arena.seed`). (3) The battle screen chose the flag by distance alone, so a pirate seen black turned "Spanish" again beyond 300 m; now the screen uses the watcher's contact like the bots (`flagSeen` in `view/knownShips.ts`). (4) The H window named a hidden pirate's real flag. (5) False-flag lots used `Math.sin`, which may differ between Chrome and Safari; now an integer hash (`hashUnit`). (6) `BUILD_LABEL` was not updated in 5b-2b, so log headers and the test build said 5b-2a2.

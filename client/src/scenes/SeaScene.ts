@@ -42,6 +42,8 @@ const TRADER_GONE_M = 1500;
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, movePoint, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
+import { RENEGADE } from '../sim/renegade';
+import { falseFlagFor } from '../sim/nation';
 import { flagSeen, knownShips, observerSeesAll, shotSeen } from '../view/knownShips';
 import { makeFog } from '../sim/fog';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
@@ -357,6 +359,7 @@ export class SeaScene extends Phaser.Scene {
         fog: true,
         shipBars: true,
         huntPlayer: false,
+        hidePirates: false,
         enemyCount: 0,
         botClasses: 'mix',
         sound: true,
@@ -376,6 +379,7 @@ export class SeaScene extends Phaser.Scene {
           this.sim.tuning.huntPlayer = on;
           this.battleLog?.add(this.sim.world.tick / 30, on ? 'TEST: "bots hunt me" is ON: warships and pirates are told where you are every 20 s' : 'TEST: "bots hunt me" is off');
         },
+        onHidePirates: (on) => this.hidePirates(on),
         onTargetCircle: () => (this.targetCircle = null),
         onTargetBehaviour: () => (this.targetCircle = null),
         onRestart: () => this.restart(),
@@ -1092,6 +1096,7 @@ export class SeaScene extends Phaser.Scene {
     this.setPaused(false);
     this.hitFlash = [];
     this.chartState.sightings = []; // a new duel: the islands you know stay on the chart, the old ship marks go
+    if (v.hidePirates && botMode) this.hidePirates(true); // TEST switch stays on for the next battle
     this.startBattleLog(seed);
   }
 
@@ -1158,6 +1163,17 @@ export class SeaScene extends Phaser.Scene {
     return SHIP_CLASSES[ship.shipClass]?.trader === true && Math.hypot(ship.x - me.x, ship.y - me.y) > TRADER_GONE_M;
   }
 
+  /** TEST switch (M4b 5b-2b3): every bot pirate puts a false flag up (or takes it down), so the flag rule can be seen in play. */
+  private hidePirates(on: boolean): void {
+    const world = this.sim.world;
+    for (const ship of world.ships) {
+      if (ship.id === PLAYER_ID || ship.nation !== 'pirates' || ship.sunk) continue;
+      if (on) ship.falseFlag = falseFlagFor(7, ship.id);
+      else delete ship.falseFlag;
+    }
+    this.battleLog?.add(world.tick / 30, on ? 'TEST: "pirates hide" is ON: bot pirates show a false flag beyond 300 m' : 'TEST: "pirates hide" is off');
+  }
+
   /** M3 step 7d: a new battle log (you against bots), like the arena's. */
   private startBattleLog(seed: number): void {
     this.battleLog = new ArenaLog();
@@ -1169,7 +1185,7 @@ export class SeaScene extends Phaser.Scene {
     if (this.sim.tuning.huntPlayer) this.battleLog.add(0, 'TEST: "bots hunt me" is ON (warships and pirates are told where you are)');
     if (this.goal) this.battleLog.add(0, goalLine(this.goal, (id) => who(world, id)) + ` (seed ${seed % 2 === 0 ? 'even' : 'odd'})`);
     for (const ship of world.ships) {
-      this.battleLog.add(0, `   ${who(world, ship.id)}${ship.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}, at ${placeText(ship.x, ship.y)}`);
+      this.battleLog.add(0, `   ${who(world, ship.id)}${ship.cargo !== undefined ? ` (hold ${Math.round(ship.cargo * 100)}% full)` : ''}${ship.falseFlag ? ` FALSE FLAG ${ship.falseFlag} beyond ${RENEGADE.hoistM} m` : ''}, at ${placeText(ship.x, ship.y)}`);
     }
   }
 
