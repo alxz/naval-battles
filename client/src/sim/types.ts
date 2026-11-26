@@ -352,6 +352,7 @@ export interface ArenaState {
   peace: boolean; // after winsToPeace wins nobody attacks any more
   respawns: { shipId: number; seconds: number }[]; // sunk ships come back after this many seconds
   retargetSeconds: number; // until the next choice of targets
+  seed?: number; // M4b 5b-2: the arena's seed (a respawn gets its birth flag back)
   /** M3 step 7a: ships under attack: who hit them and how long ago (for "got away alive"). */
   threats?: { shipId: number; byShipId: number; quietSeconds: number }[];
   /** ... and who already got away from whom in this life (one half win per pair and life, not one at every dash into safe water). */

@@ -5,8 +5,10 @@
 // and the gun smoke follow the same lists (rough hull at 200-450 m, a shot reveals the shooter), fog shrinks it all.
 import { ISLANDS, SHIP_CLASSES } from '../sim/data';
 import { fogBetween, fogVisibility } from '../sim/fog';
-import { lineOfSightClear, maxSightM, SIGHT } from '../sim/perception';
-import type { Island, SightLevel, World } from '../sim/types';
+import { contactOf, lineOfSightClear, maxSightM, SIGHT } from '../sim/perception';
+import { shownNation } from '../sim/nation';
+import { RENEGADE } from '../sim/renegade';
+import type { Island, ShipState, SightLevel, World } from '../sim/types';
 
 /** M4b step 4: does the screen show every ship? In a battle never (your ship's eyes); in the arena unless "bot's eyes" is on. */
 export function observerSeesAll(arena: boolean, botEyes: boolean): boolean {
@@ -67,4 +69,17 @@ export function shotSeen(known: readonly Known[], world: World, shooterId: numbe
   const i = world.ships.findIndex((s) => s.id === shooterId);
   const k = known[i];
   return !!k && (k.shown || k.dot);
+}
+
+/**
+ * M4b 5b-2 (D82): the flag the viewer believes a ship sails under. SEE ALL (and the viewer's own ship): the real flag.
+ * Otherwise the viewer's contact (a false flag beyond 300 m; once seen black, known as a pirate, the same rule as the
+ * bots); with no flag in the contact yet, the flag shown at this distance.
+ */
+export function flagSeen(world: World, viewerId: number, target: ShipState, seeAll: boolean, hoistM: number = RENEGADE.hoistM): string | undefined {
+  if (seeAll || target.id === viewerId) return target.nation;
+  const known = contactOf(world, viewerId, target.id)?.nation;
+  if (known) return known;
+  const viewer = world.ships.find((s) => s.id === viewerId);
+  return shownNation(target, viewer ? Math.hypot(target.x - viewer.x, target.y - viewer.y) : 0, hoistM);
 }

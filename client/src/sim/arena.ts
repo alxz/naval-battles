@@ -5,7 +5,7 @@
 
 import { crewShare, refitShip, rollCargo, sailShare } from './condition';
 import { nationFor } from './nation';
-import { hideSomePirates } from './renegade';
+import { hideSomePirates, rebirthFlag } from './renegade';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { crowdWeight, rollSkills } from './skills';
@@ -149,7 +149,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
     nextBallId: 1,
     events: [],
     bots: [],
-    arena: { pilots: [], totalWins: 0, peace: false, respawns: [], retargetSeconds: 0 },
+    arena: { pilots: [], totalWins: 0, peace: false, respawns: [], retargetSeconds: 0, seed },
   };
   const lineup = arenaLineup(world, count);
   for (let i = 0; i < lineup.length; i++) {
@@ -309,6 +309,7 @@ export function stepArena(world: World, dt: number, islands: readonly Island[] =
       offender: undefined,
     });
     refitShip(ship); // full sails and crew, the starting ammunition
+    if (arena.seed !== undefined) rebirthFlag(ship, arena.seed); // M4b 5b-2 (D82): a new crew sails under the birth flag
     loadCargo(world, ship);
     const i = world.bots.findIndex((b) => b.shipId === ship.id);
     const fresh = newBot(ship.id, -1, world);

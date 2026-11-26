@@ -4,6 +4,13 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (night, later) — review of today's work; 5b-2b2
+
+- **Found and fixed (5b-2b):** (1) every collision counted as a ram (the ship that took less damage); now only a bot in mode `ram` whose collision did damage (`rammersIn`). (2) A respawned arena ship kept its pirate or false flag: the `respawn` event comes after the world step, so `stepRenegades` never saw it; now the respawn itself gives the birth flag back (`rebirthFlag`, `arena.seed`). (3) The battle screen chose the flag by distance alone, so a pirate seen black turned "Spanish" again beyond 300 m; now the screen uses the watcher's contact like the bots (`flagSeen` in `view/knownShips.ts`). (4) The H window named a hidden pirate's real flag. (5) False-flag lots used `Math.sin`, which may differ between Chrome and Safari; now an integer hash (`hashUnit`). (6) `BUILD_LABEL` was not updated in 5b-2b, so log headers and the test build said 5b-2a2.
+- **Known, left as is:** a hidden pirate frightens like a pirate (fear comes from hits, mostly within 300 m); the Solo goal may name a hidden pirate.
+- 577 tests (+3), build, build:test, arena 60 min seed 5150: 31 wins, 0 warnings, 18 collisions, 2 renegades (law, rams), 6 hidden pirates; Playwright PC and iPhone 13: far flag spain, close black, far again black, no errors. Version `M4b 5b-2b2`.
+- New text for the Project instructions: `docs/project-instructions.md`.
+
 ## 25 Nov 2026 (night) — your test of 5b-2a2; M4b step 5b-2b: renegades and false flags (D82)
 
 - Your logs of 25 Nov (battle 1841, arena 1856) were clean: no warnings.

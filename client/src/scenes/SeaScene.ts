@@ -18,8 +18,6 @@ import { autoNote, bosunNote, newBosunMemory } from '../view/helmNotes';
 import { effectiveSoloSpeed, nextSoloSpeed, somebodyInView, soloSpeedNote } from '../view/soloSpeed';
 import { routeOf, routeTacking, withPoint } from '../sim/autopilot';
 import { nationFor } from '../view/flags';
-import { shownNation } from '../sim/nation';
-import { RENEGADE } from '../sim/renegade';
 import { PerfMeter } from '../view/perfMeter';
 import type { Nation } from '../view/flags';
 import Phaser from 'phaser';
@@ -44,7 +42,7 @@ const TRADER_GONE_M = 1500;
 import { autoZoom } from '../view/autoZoom';
 import { discover, forget, movePoint, newChart, updateSightings } from '../view/chart';
 import { wheelAction } from '../view/wheelZoom';
-import { knownShips, observerSeesAll, shotSeen } from '../view/knownShips';
+import { flagSeen, knownShips, observerSeesAll, shotSeen } from '../view/knownShips';
 import { makeFog } from '../sim/fog';
 import { speedScaleFor, wreckAlpha, wreckGone } from '../view/wreck';
 import { GEAR_CSS_H, hudLayout, touchButtonRects } from '../view/hudLayout';
@@ -485,13 +483,9 @@ export class SeaScene extends Phaser.Scene {
     // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41,
     // since M4b step 5a by the sight lists): the flag from level 3 (400 m), the rough hull bar to hullGlimpseM
     // (450 m), sails and crew at level 4 (200 m); fog shrinks them; farther than that you cannot tell.
-    // M4b 5b-2 (D82): a pirate under a false flag shows it beyond hoistM; the arena's SEE ALL knows the real flags.
-    const watchedShip = this.sim.world.ships[this.focusIndex];
-    const nationOf = (i: number): Nation => {
-      const sh = ships[i]!;
-      const far = watchedShip && !seeAll ? Math.hypot(sh.x - watchedShip.x, sh.y - watchedShip.y) : 0;
-      return ((shownNation(sh, far, RENEGADE.hoistM) as Nation | undefined) ?? nationFor(this.arenaSeed, sh.id));
-    };
+    // M4b 5b-2 (D82): the flag the watcher believes (its contact: a false flag beyond 300 m, black once seen black); SEE ALL: the real one.
+    const watcherId = this.sim.world.ships[this.focusIndex]?.id ?? PLAYER_ID;
+    const nationOf = (i: number): Nation => (flagSeen(this.sim.world, watcherId, ships[i]!, seeAll) as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
     // M4b step 5a: the flag from the flag level, the bars by the same rule as the bots' lists (knownShips: rough hull
     // at 200-450 m, everything at the deck level), all of it shrunk by fog.
     const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : seeAll || (known[i]?.level ?? 0) >= 3 ? nationOf(i) : null);
@@ -987,7 +981,7 @@ export class SeaScene extends Phaser.Scene {
     return this.sim.world.bots.map((bot) => {
       const ship = this.ship(bot.shipId);
       const pilot = pilots.find((p) => p.shipId === bot.shipId);
-      const name = pilot ? `#${pilot.number} ${pilot.name}` : `${ship?.nation ?? 'bot'} ${bot.shipId}`;
+      const name = pilot ? `#${pilot.number} ${pilot.name}` : `${(ship && flagSeen(this.sim.world, PLAYER_ID, ship, false)) ?? 'bot'} ${bot.shipId}`; // D82: the flag you believe, not the real one
       const head = `${name}, ${ship?.shipClass ?? '?'}`;
       if (ship?.sunk) return `${head}: sunk`;
       const skills = skillsText(ship, bot); // M3 step 7c

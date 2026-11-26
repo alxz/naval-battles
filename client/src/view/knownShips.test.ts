@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { knownShips } from './knownShips';
+import { flagSeen, knownShips } from './knownShips';
 import { createWorld } from '../sim/world';
 import { stepWorld } from '../sim/step';
 import type { World } from '../sim/types';
@@ -36,5 +36,19 @@ describe('knownShips', () => {
     expect(knownShips(w, 1, false)[1]!.shown).toBe(true);
     w.ships[1]!.x = 3000;
     expect(knownShips(w, 1, false)[1]!.shown).toBe(false);
+  });
+  it('flagSeen: SEE ALL the real flag; else the contact, and once seen black it stays black when the ship sails off', () => {
+    const w = pair(250);
+    const pirate = w.ships[1]!;
+    pirate.nation = 'pirates';
+    pirate.falseFlag = 'spain';
+    expect(flagSeen(w, 1, pirate, true)).toBe('pirates');
+    expect(flagSeen(w, 1, pirate, false)).toBe('pirates'); // no contact yet: by distance, 250 m < 300 m
+    pirate.x = 350;
+    expect(flagSeen(w, 1, pirate, false)).toBe('spain'); // still no contact: false flag at 350 m
+    pirate.x = 250;
+    stepWorld(w, 1 / 30, open, []);
+    pirate.x = 350;
+    expect(flagSeen(w, 1, pirate, false)).toBe('pirates'); // the viewer saw it black: known
   });
 });

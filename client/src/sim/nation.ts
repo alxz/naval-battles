@@ -47,7 +47,11 @@ export function withOnePirate(nations: readonly Nation[], isTrader: readonly boo
 /** M4b step 5b-2 (D82): the flag a pirate hides behind: a nation of its own, never the black flag. Same seed and ship, same flag. */
 export function falseFlagFor(seed: number, shipId: number): Nation {
   const honest = NATIONS.filter((n) => n !== 'pirates');
-  return honest[Math.floor(Math.abs(Math.sin(Math.floor(seed) * 12.9898 + (shipId + 1) * 78.233)) * 10000) % honest.length]!;
+  let h = (Math.floor(seed) ^ Math.imul(shipId + 7, 0x9e3779b1)) >>> 0; // integer hash (as nationFor): the same on every engine
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  return honest[h % honest.length]!;
 }
 
 /**

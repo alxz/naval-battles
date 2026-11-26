@@ -1,7 +1,8 @@
 // M4b step 5b-2 (D82): renegades and false flags.
 import { describe, expect, it } from 'vitest';
 import { falseFlagFor, shownNation } from './nation';
-import { hideSomePirates, idleFor, mostRams, rammerOf, startsHidden, stepRenegades, RENEGADE } from './renegade';
+import { hashUnit, hideSomePirates, idleFor, mostRams, rammersIn, rebirthFlag, startsHidden, stepRenegades, RENEGADE } from './renegade';
+import { nationFor } from './nation';
 import { createArenaWorld } from './arena';
 import type { SimEvent } from './types';
 
@@ -26,10 +27,21 @@ describe('shownNation', () => {
 });
 
 describe('rams and idleness', () => {
-  it('the rammer is the one that took less damage; a draw is nobody', () => {
-    expect(rammerOf(hit(2, 3, 5, 40))).toBe(2);
-    expect(rammerOf(hit(2, 3, 40, 5))).toBe(3);
-    expect(rammerOf(hit(2, 3, 10, 10))).toBeNull();
+  it('only a bot ramming on purpose (mode ram) counts, and only when the collision did damage', () => {
+    const bots = [{ shipId: 2, mode: 'ram' as const }, { shipId: 3, mode: 'chase' as const }];
+    expect(rammersIn(hit(2, 3, 5, 40), bots)).toEqual([2]);
+    expect(rammersIn(hit(3, 2, 40, 5), bots)).toEqual([2]);
+    expect(rammersIn(hit(2, 3, 0, 0), bots)).toEqual([]);
+    expect(rammersIn(hit(3, 4, 5, 40), bots)).toEqual([]); // an accidental bump
+  });
+  it('hashUnit is an integer hash in [0, 1), the same for the same input', () => {
+    for (let id = 0; id < 50; id++) {
+      const u = hashUnit(5150, id, 1);
+      expect(u).toBeGreaterThanOrEqual(0);
+      expect(u).toBeLessThan(1);
+      expect(hashUnit(5150, id, 1)).toBe(u);
+    }
+    expect(hashUnit(1, 2, 3)).toBe(hashUnit(1, 2, 3));
   });
   it('mostRams needs the minimum and a single leader', () => {
     expect(mostRams([{ shipId: 2, rams: 2 }, { shipId: 3, rams: 1 }], 3)).toBeUndefined();
@@ -71,10 +83,12 @@ describe('stepRenegades', () => {
     expect(w.bots.find((b) => b.shipId === ship.id)!.renegade).toBe(true);
     expect(w.events.filter((e) => e.type === 'pirateTurn')).toHaveLength(1);
   });
-  it('the ram leader becomes a renegade; collisions are counted for the rammer', () => {
+  it('the ram leader becomes a renegade; only its deliberate rams are counted', () => {
     const w = setup();
     const a = w.ships[0]!.id;
     const b = w.ships[1]!.id;
+    w.bots.find((x) => x.shipId === a)!.mode = 'ram';
+    w.bots.find((x) => x.shipId === b)!.mode = 'chase';
     for (let i = 0; i < 3; i++) {
       w.events = [hit(a, b, 2, 30)];
       stepRenegades(w);
@@ -120,5 +134,14 @@ describe('stepRenegades', () => {
     expect(w.ships[1]!.falseFlag).toBeDefined();
     hideSomePirates(w, 5, { ...RENEGADE, falseFlagShare: 0 });
     expect(w.ships[2]!.falseFlag).toBeUndefined();
+  });
+  it('rebirthFlag: the birth flag back, the false flag gone unless the birth flag is black and the lot hides it', () => {
+    const w = setup();
+    const ship = w.ships[0]!;
+    ship.nation = 'pirates';
+    ship.falseFlag = 'spain';
+    rebirthFlag(ship, 77, { ...RENEGADE, falseFlagShare: 0 });
+    expect(ship.nation).toBe(nationFor(77, ship.id));
+    expect(ship.falseFlag).toBeUndefined();
   });
 });
