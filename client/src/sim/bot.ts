@@ -1148,7 +1148,7 @@ function tradeStopsFor(shipClass: string, params: ShipParams, islands: readonly 
 
 /** M4b step 5b-1: the next stop of the bot's default route becomes its goal (`tradeTo`); a new route is logged by an event. */
 function pickRouteStop(world: World, bot: BotState, ship: ShipState, params: ShipParams, islands: readonly Island[], p: BotParams): void {
-  const next = nextRouteStop(world, bot, ship, tradeStopsFor(ship.shipClass, params, islands, p), !!SHIP_CLASSES[ship.shipClass]?.trader, p.routeStops, p.traderArriveM);
+  const next = nextRouteStop(world, bot, ship, tradeStopsFor(ship.shipClass, params, islands, p), !!SHIP_CLASSES[ship.shipClass]?.trader, bot.renegade ? p.renegadeRouteStops : p.routeStops, p.traderArriveM);
   if (!next) {
     delete bot.tradeTo;
     return;

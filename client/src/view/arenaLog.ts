@@ -331,6 +331,10 @@ export class ArenaLog {
         this.add(now, `${who(world, e.shipId)} finds the berths of ${e.port} full (${e.occupied}/${e.berths}): waits off the port`);
       } else if (e.type === 'routePlanned') {
         this.add(now, `ROUTE: ${who(world, e.shipId)} sails ${e.kind === 'ports' ? 'port to port' : 'island to island'}: ${e.stops.map((s) => `(${Math.round(s.x)}, ${Math.round(s.y)})`).join(' > ')}`);
+      } else if (e.type === 'pirateTurn') {
+        this.add(now, e.renegade
+          ? `RENEGADE: ${who(world, e.shipId)} (${e.was}) ${e.reason === 'law' ? 'broke a port\'s law' : 'rams more than anybody'}: black flag up, it hunts anyone now`
+          : `PIRATE (hidden): ${who(world, e.shipId)} sank nobody for 10 minutes and turns pirate under a false ${e.falseFlag} flag`);
       } else if (e.type === 'portBlocked') {
         this.add(now, `PORT BLOCKED: ${who(world, e.shipId)} gives up ${e.port} for ${Math.round(e.seconds)} s (D74: failed to get in)`);
       }

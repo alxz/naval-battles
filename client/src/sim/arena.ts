@@ -5,6 +5,7 @@
 
 import { crewShare, refitShip, rollCargo, sailShare } from './condition';
 import { nationFor } from './nation';
+import { hideSomePirates } from './renegade';
 import arenaJson from '../data/arena.json';
 import { newBot } from './bot';
 import { crowdWeight, rollSkills } from './skills';
@@ -182,6 +183,7 @@ export function createArenaWorld(seed: number, count: number = ARENA.bots, islan
     rollSkills(world.ships[world.ships.length - 1]!, bot, world); // M3 step 7c
     world.bots.push(bot);
   }
+  hideSomePirates(world, seed); // M4b 5b-2 (D82): some pirates sail under a false flag
   return world;
 }
 

@@ -4,6 +4,13 @@ Short record of what was done, what went wrong and how it was fixed. Newest entr
 
 ---
 
+## 25 Nov 2026 (night) — your test of 5b-2a2; M4b step 5b-2b: renegades and false flags (D82)
+
+- Your logs of 25 Nov (battle 1841, arena 1856) were clean: no warnings.
+- **Done:** `sim/renegade.ts` (+11 tests, `data/renegade.json`). A renegade is an offender of a port's law or the bot with the most rams (3 or more, alone in the lead); it keeps the black flag, patrols 5 stops instead of 3. A bot with no sinking for 10 minutes may turn pirate, hidden under its old flag. Half of the starting pirates are hidden too. A false flag is shown beyond 300 m (`perception.ts` for the bots, `SeaScene` for the screen; the arena's SEE ALL shows real flags). Log lines `RENEGADE:` and `PIRATE (hidden):`.
+- Not changed: sail colours (D78, next delivery), how traders treat a false flag, the goal line still names the real pirate.
+- Version `M4b 5b-2b`.
+
 ## 25 Nov 2026 (late evening) — your test of 5b-2a; M4b step 5b-2a2
 - **Your test:** all works. Two requests, both done:
 - **Time speed:** it was held at x1 by a ship at the edge of sight (1,000+ m), too early. Now only a ship within `soloSlowRangeM` (600 m, `data/view.json`) holds it back; the note says `SLOW: SHIP NEAR`. Checked: a ship at 900 m: x4 runs; at 400 m: x1.

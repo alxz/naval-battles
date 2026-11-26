@@ -123,6 +123,7 @@
   "searchArriveM": 80,
   "traderCruiseSails": 0.85,
   "routeStops": 3,
+  "renegadeRouteStops": 5,
   "traderIslandOffsetM": 250,
   "fearNearMissWarship": 0.004,
   "traderSafeM": 900,

@@ -1,0 +1,8 @@
+{
+  "checkEverySeconds": 60,
+  "idleSeconds": 600,
+  "idleChance": 0.2,
+  "hoistM": 300,
+  "falseFlagShare": 0.5,
+  "ramsMin": 3
+}

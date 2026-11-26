@@ -43,3 +43,17 @@ export function withOnePirate(nations: readonly Nation[], isTrader: readonly boo
   if (w !== undefined && t >= 0) [out[w], out[t]] = [out[t]!, out[w]!];
   return out;
 }
+
+/** M4b step 5b-2 (D82): the flag a pirate hides behind: a nation of its own, never the black flag. Same seed and ship, same flag. */
+export function falseFlagFor(seed: number, shipId: number): Nation {
+  const honest = NATIONS.filter((n) => n !== 'pirates');
+  return honest[Math.floor(Math.abs(Math.sin(Math.floor(seed) * 12.9898 + (shipId + 1) * 78.233)) * 10000) % honest.length]!;
+}
+
+/**
+ * The flag an observer sees. A pirate under a false flag shows it until it comes within `hoistM`, then runs up the black
+ * one. A ship with no false flag shows its own.
+ */
+export function shownNation(ship: { nation?: string; falseFlag?: string }, distanceM: number, hoistM: number): string | undefined {
+  return ship.falseFlag && distanceM > hoistM ? ship.falseFlag : ship.nation;
+}

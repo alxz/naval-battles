@@ -18,6 +18,8 @@ import { autoNote, bosunNote, newBosunMemory } from '../view/helmNotes';
 import { effectiveSoloSpeed, nextSoloSpeed, somebodyInView, soloSpeedNote } from '../view/soloSpeed';
 import { routeOf, routeTacking, withPoint } from '../sim/autopilot';
 import { nationFor } from '../view/flags';
+import { shownNation } from '../sim/nation';
+import { RENEGADE } from '../sim/renegade';
 import { PerfMeter } from '../view/perfMeter';
 import type { Nation } from '../view/flags';
 import Phaser from 'phaser';
@@ -483,7 +485,13 @@ export class SeaScene extends Phaser.Scene {
     // The arena (D47): sails and crew bars and a flag over every ship. A battle (M3 step 7d, D41,
     // since M4b step 5a by the sight lists): the flag from level 3 (400 m), the rough hull bar to hullGlimpseM
     // (450 m), sails and crew at level 4 (200 m); fog shrinks them; farther than that you cannot tell.
-    const nationOf = (i: number): Nation => (ships[i]!.nation as Nation | undefined) ?? nationFor(this.arenaSeed, ships[i]!.id);
+    // M4b 5b-2 (D82): a pirate under a false flag shows it beyond hoistM; the arena's SEE ALL knows the real flags.
+    const watchedShip = this.sim.world.ships[this.focusIndex];
+    const nationOf = (i: number): Nation => {
+      const sh = ships[i]!;
+      const far = watchedShip && !seeAll ? Math.hypot(sh.x - watchedShip.x, sh.y - watchedShip.y) : 0;
+      return ((shownNation(sh, far, RENEGADE.hoistM) as Nation | undefined) ?? nationFor(this.arenaSeed, sh.id));
+    };
     // M4b step 5a: the flag from the flag level, the bars by the same rule as the bots' lists (knownShips: rough hull
     // at 200-450 m, everything at the deck level), all of it shrunk by fog.
     const flag = (i: number): Nation | null => (!ships[i] || !known[i]?.shown ? null : seeAll || (known[i]?.level ?? 0) >= 3 ? nationOf(i) : null);

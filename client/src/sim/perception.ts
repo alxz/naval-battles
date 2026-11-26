@@ -1,6 +1,8 @@
 // M4b (D41), step 1: what a ship can see. Every ship keeps a list of the ships it has seen; the list is
 // updated 3 times a second. Here are only the rules and the lists: the bots and the screen start to use them
 // in the next steps. No random numbers: the same world gives the same lists.
+import { shownNation } from './nation';
+import { RENEGADE } from './renegade';
 import sightJson from '../data/sight.json';
 import { ISLANDS, SHIP_CLASSES } from './data';
 import { terrainFor, ballBlocked } from './terrain';
@@ -148,7 +150,11 @@ export function stepPerception(world: World, islands: readonly Island[] = ISLAND
         c.speed = target.speed;
         c.shipClass = target.shipClass;
       }
-      if (level >= 3 && target.nation) c.nation = target.nation;
+      if (level >= 3 && target.nation) {
+        // M4b 5b-2 (D82): a pirate under a false flag shows it from afar; once seen black, it is known as a pirate.
+        const shown = shownNation(target, distance, RENEGADE.hoistM);
+        if (c.nation !== 'pirates' || shown === 'pirates') c.nation = shown;
+      }
       const share = Math.max(0, Math.min(1, target.hull / tParams.hullPoints));
       if (level >= 4) c.hullShare = share;
       else if (level >= 2 && distance <= p.hullGlimpseM * vis) c.hullShare = roughHull(share, p); // M4b step 5a: the overall look of the ship

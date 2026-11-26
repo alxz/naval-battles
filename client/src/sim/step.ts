@@ -1,3 +1,4 @@
+import { stepRenegades } from './renegade';
 import { noteGunfire, rumourOfPlayer, stepPerception } from './perception';
 import { stepFog } from './fog';
 import { cargoSpeedFactor, crewAccelFactor, crewSpeedFactor, crewTurnFactor, sailSpeedFactor } from './condition';
@@ -179,6 +180,7 @@ export function stepWorld(
   stepShore(world, dt); // the shore guns fire at offenders
   stepGunsAndBalls(world, dt, undefined, islands);
   if (world.fog) stepFog(world.fog, world.wind, dt); // M4b step 5a: fog banks drift down the wind
+  stepRenegades(world); // M4b 5b-2: counts sinkings and rams; a bot may turn pirate or renegade (every 60 s)
   noteGunfire(world); // M4b step 5a: a shot gives the shooter away
   stepPerception(world, islands); // M4b: every ship's list of what it has seen (3 times a second)
   if (tuning.huntPlayer && !world.arena) rumourOfPlayer(world, 1); // TEST switch "bots hunt me" (M4b 5b-2)

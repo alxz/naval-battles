@@ -107,6 +107,7 @@ export type SimEvent =
   | { type: 'collision'; shipA: number; shipB: number; damageA: number; damageB: number; x: number; y: number }
   // Port law (sim/law.ts, sim/shore.ts). `port` = index into the list of ports.
   | { type: 'offender'; shipId: number; port: number; reason: 'fired' | 'hit' }
+  | { type: 'pirateTurn'; shipId: number; reason: 'idle' | 'law' | 'rams'; renegade: boolean; was: string; falseFlag?: string } // M4b 5b-2: a bot turns pirate (hidden under a false flag, or a renegade with the black one)
   | { type: 'pardoned'; shipId: number; port: number }
   | { type: 'shoreFired'; port: number; x: number; y: number }
   // The auto-bot arena (sim/arena.ts):
@@ -176,6 +177,7 @@ export interface ShipState {
    * Absent = a law-abiding ship.
    */
   offender?: { port: number; forgiveLeft: number };
+  falseFlag?: string; // M4b step 5b-2 (D82): a pirate shows this flag from afar and hoists the black one close in (until it is a renegade)
   // M3 step 4. Absent = as good as new (a full rigging, a full crew, round shot, the starting stock).
   // Read them through sim/condition.ts and sim/ammo.ts, which fill in those defaults.
   sails?: number; // sail points left (0 .. the class's sailPoints)
@@ -423,6 +425,10 @@ export interface BotState {
   wasAground?: boolean; // was aground at the last decision (to count a new grounding once)
   portTrouble?: { port: string; count: number; seconds: number }; // failures (groundings, working free) near that port in the current window
   blockedPorts?: { port: string; seconds: number }[]; // ports it gives up on, and for how long still
+  // --- M4b step 5b-2 (D82): renegades ---
+  sinceTick?: number; // the tick of its last sinking, or of its birth / rebirth (for "sank nobody for 10 minutes")
+  rams?: number; // collisions in which it was the rammer
+  renegade?: boolean; // hunts anyone, across the map; hides no more (black flag, wider patrol)
 }
 
 /** Bot behaviour numbers (data/bots.json). */
@@ -535,6 +541,7 @@ export interface BotParams {
   searchArriveM: number; // M4b (D69): this close to an enemy's last known place with nobody in view, the search is over
   traderCruiseSails: number; // sails set on the trade run
   routeStops: number; // M4b step 5b-1: stops in a bot's default route
+  renegadeRouteStops: number; // M4b 5b-2: stops in a renegade's route (a wider patrol)
   traderIslandOffsetM: number; // a stop off a big island lies this far off its shore
   harbourLengthShare: number; // a ship may use a harbour up an inlet if its length is at most this share of the harbour's radius
   rammerChainShare: number; // and chain shot (to tear the sails) within this share of the chain shot's reach
@@ -649,4 +656,14 @@ export interface DamageParams {
       forgiveSeconds: number; // an offender must stay beyond that range this long to be pardoned
     };
   };
+}
+
+/** Renegades and false flags (data/renegade.json, D82). */
+export interface RenegadeParams {
+  checkEverySeconds: number; // how often the rules look at every bot
+  idleSeconds: number; // a bot that sank nobody this long (and is alive) may change its flag
+  idleChance: number; // ... with this chance at each check
+  hoistM: number; // a false flag comes down this close (the black flag goes up)
+  falseFlagShare: number; // share of the pirates that start under a false flag
+  ramsMin: number; // the bot with the most rams is a renegade, if it has at least this many
 }
